@@ -1,0 +1,455 @@
+import { useState, useEffect, useCallback } from "react";
+
+// ── Supabase ──────────────────────────────────────────────────
+const SUPABASE_URL = "https://nxztffulmvohduvudbhg.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54enRmZnVsbXZvaGR1dnVkYmhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODY5ODMsImV4cCI6MjA5NTA2Mjk4M30.CwEmjukApMTJhkbKh1jlp4Q-IYrM26u-5SYx9p20nsg";
+
+let SESSION_TOKEN = sessionStorage.getItem("ndc_super_token") || null;
+
+async function sbAuth(path, body) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
+    method: "POST",
+    headers: { apikey: SUPABASE_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+async function sb(path, opts = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SESSION_TOKEN || SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: opts.prefer || "return=representation",
+      ...opts.headers,
+    },
+    ...opts,
+  });
+  if (!res.ok) { const e = await res.text(); throw new Error(e); }
+  const txt = await res.text();
+  return txt ? JSON.parse(txt) : null;
+}
+
+const api = {
+  get:    (p)      => sb(p),
+  post:   (p, b)   => sb(p, { method:"POST",   body:JSON.stringify(b) }),
+  patch:  (p, b)   => sb(p, { method:"PATCH",  body:JSON.stringify(b) }),
+  delete: (p)      => sb(p, { method:"DELETE", prefer:"return=minimal" }),
+};
+
+// ── Paleta ────────────────────────────────────────────────────
+const C = {
+  bg:"#0B1A2E", surface:"#0F2340", surf2:"#163060",
+  border:"#1E3A5F", gold:"#E8A020", cream:"#F0E8D0",
+  dim:"#7A9ABF", win:"#4CAF50", loss:"#E53935",
+};
+
+// ── Atoms ─────────────────────────────────────────────────────
+function Card({ children, style: s = {} }) {
+  return <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, ...s }}>{children}</div>;
+}
+function Btn({ children, variant="primary", onClick, disabled, style:s={} }) {
+  const bg = disabled?C.surf2:variant==="primary"?C.gold:variant==="danger"?C.loss:C.surf2;
+  const color = disabled?C.dim:variant==="primary"?"#0B1A2E":C.cream;
+  return <button onClick={onClick} disabled={disabled} style={{ background:bg, color, border:"none", borderRadius:8, padding:"9px 18px", fontFamily:"inherit", fontWeight:700, fontSize:13, cursor:disabled?"not-allowed":"pointer", textTransform:"uppercase", letterSpacing:"0.06em", ...s }}>{children}</button>;
+}
+function Input({ label, error, style:s={}, ...p }) {
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:5, ...s }}>
+      {label && <label style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>{label}</label>}
+      <input {...p} style={{ background:C.surf2, border:`1px solid ${error?C.loss:C.border}`, borderRadius:8, padding:"9px 12px", color:C.cream, fontFamily:"inherit", fontSize:14, outline:"none", width:"100%" }}/>
+      {error && <span style={{ color:C.loss, fontSize:12 }}>{error}</span>}
+    </div>
+  );
+}
+function Select({ label, children, style:s={}, ...p }) {
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:5, ...s }}>
+      {label && <label style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>{label}</label>}
+      <select {...p} style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px", color:C.cream, fontFamily:"inherit", fontSize:14, outline:"none", width:"100%" }}>{children}</select>
+    </div>
+  );
+}
+function Spinner() {
+  return (
+    <div style={{ display:"flex", justifyContent:"center", padding:60 }}>
+      <div style={{ width:36, height:36, border:`3px solid ${C.border}`, borderTop:`3px solid ${C.gold}`, borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+}
+function Toast({ msg, type }) {
+  if (!msg) return null;
+  const cor = type==="error"?C.loss:C.win;
+  return <div style={{ position:"fixed", bottom:24, right:24, background:C.surf2, border:`1px solid ${cor}`, borderRadius:10, padding:"12px 20px", color:cor, fontWeight:700, fontSize:14, zIndex:9999 }}>{type==="error"?"❌":"✅"} {msg}</div>;
+}
+function Modal({ title, children, onClose }) {
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#00000088", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:24 }}>
+      <Card style={{ width:"100%", maxWidth:560, maxHeight:"90vh", overflowY:"auto" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:`1px solid ${C.border}` }}>
+          <span style={{ fontWeight:700, fontSize:16, textTransform:"uppercase", letterSpacing:"0.06em", color:C.cream }}>{title}</span>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:C.dim, fontSize:20, cursor:"pointer" }}>✕</button>
+        </div>
+        <div style={{ padding:20 }}>{children}</div>
+      </Card>
+    </div>
+  );
+}
+
+function useQuery(fetcher, deps=[]) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+  const load = useCallback(async () => {
+    setLoading(true); setError(null);
+    try { setData(await fetcher()); }
+    catch(e) { setError(e.message); }
+    finally { setLoading(false); }
+  }, deps);
+  useEffect(() => { load(); }, [load]);
+  return { data, loading, error, reload: load };
+}
+
+function useToast() {
+  const [toast, setToast] = useState(null);
+  const show = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
+  return { toast, show };
+}
+
+// ── LOGIN SUPER ───────────────────────────────────────────────
+function LoginSuper({ onLogin }) {
+  const [email, setEmail]   = useState("");
+  const [senha, setSenha]   = useState("");
+  const [erro, setErro]     = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleLogin() {
+    setErro(""); setLoading(true);
+    const res = await sbAuth("token?grant_type=password", { email, password: senha });
+    setLoading(false);
+    if (res.access_token) {
+      SESSION_TOKEN = res.access_token;
+      sessionStorage.setItem("ndc_super_token", res.access_token);
+      // Verificar se é superadmin
+      try {
+        const check = await api.get(`usuario_time?user_id=eq.${res.user.id}&role=eq.superadmin`);
+        if (check?.length > 0) { onLogin(res); }
+        else { SESSION_TOKEN = null; sessionStorage.removeItem("ndc_super_token"); setErro("Acesso negado. Você não é super-admin."); }
+      } catch(e) { setErro("Erro ao verificar permissões."); }
+    } else { setErro("E-mail ou senha incorretos."); }
+  }
+
+  return (
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif" }}>
+      <Card style={{ width:380, padding:40 }}>
+        <div style={{ textAlign:"center", marginBottom:32 }}>
+          <div style={{ fontSize:28, fontWeight:800, color:C.cream, textTransform:"uppercase", letterSpacing:"0.08em" }}>⚙️ Super Admin</div>
+          <div style={{ fontSize:12, color:C.gold, marginTop:4, textTransform:"uppercase", letterSpacing:"0.12em" }}>Nerd do Campo</div>
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          <Input label="E-mail" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="seu@email.com"/>
+          <Input label="Senha" type="password" value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+          {erro && <div style={{ color:C.loss, fontSize:13, textAlign:"center" }}>{erro}</div>}
+          <Btn onClick={handleLogin} disabled={loading} style={{ marginTop:8, padding:"12px" }}>{loading?"Entrando...":"Entrar"}</Btn>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ── DASHBOARD SUPER ───────────────────────────────────────────
+function DashboardSuper() {
+  const { data: times, loading, reload } = useQuery(() => api.get(`time?select=*,temporada(id_temporada,nome),usuario_time(user_id,role)&order=nome.asc`));
+  const { data: usuarios } = useQuery(() => api.get(`usuario_time?select=*&order=criado_em.desc`));
+  const { toast, show } = useToast();
+  const [modalNovoTime, setModalNovoTime]   = useState(false);
+  const [modalNovoUser, setModalNovoUser]   = useState(false);
+  const [timeSelecionado, setTimeSelecionado] = useState(null);
+
+  const totalTimes    = (times||[]).length;
+  const totalUsuarios = (usuarios||[]).length;
+  const totalAdmins   = (usuarios||[]).filter(u=>u.role==="admin").length;
+
+  if (loading) return <Spinner/>;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
+      <Toast {...(toast||{msg:null})}/>
+
+      {/* Stats */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+        {[
+          { label:"Times cadastrados", value:totalTimes,    cor:C.gold },
+          { label:"Usuários totais",   value:totalUsuarios, cor:C.win },
+          { label:"Admins ativos",     value:totalAdmins,   cor:C.cream },
+        ].map(s => (
+          <Card key={s.label} style={{ padding:"20px 24px", textAlign:"center" }}>
+            <div style={{ fontSize:40, fontWeight:800, color:s.cor, lineHeight:1 }}>{s.value}</div>
+            <div style={{ fontSize:12, color:C.dim, marginTop:8, textTransform:"uppercase", letterSpacing:"0.08em" }}>{s.label}</div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Times */}
+      <Card style={{ padding:0, overflow:"hidden" }}>
+        <div style={{ padding:"18px 24px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ fontSize:16, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.cream }}>Times Cadastrados</div>
+          <Btn onClick={()=>setModalNovoTime(true)}>+ Novo Time</Btn>
+        </div>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+          <thead><tr style={{ background:C.surf2 }}>
+            {["Time","Temporadas","Admins","Fundação","Ações"].map(h => <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {(times||[]).map((t,i) => (
+              <tr key={t.id_time} style={{ background:i%2===0?C.surface:C.bg }}>
+                <td style={{ padding:"13px 16px", fontWeight:700, color:C.cream }}>{t.nome}</td>
+                <td style={{ padding:"13px 16px", color:C.dim }}>{t.temporada?.length||0}</td>
+                <td style={{ padding:"13px 16px", color:C.dim }}>{(t.usuario_time||[]).filter(u=>u.role==="admin").length}</td>
+                <td style={{ padding:"13px 16px", color:C.dim, fontSize:13 }}>{t.data_fundacao?new Date(t.data_fundacao).getFullYear():"—"}</td>
+                <td style={{ padding:"13px 16px" }}>
+                  <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>{ setTimeSelecionado(t); setModalNovoUser(true); }}>
+                    + Admin
+                  </Btn>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+
+      {/* Usuários */}
+      <Card style={{ padding:0, overflow:"hidden" }}>
+        <div style={{ padding:"18px 24px", borderBottom:`1px solid ${C.border}` }}>
+          <div style={{ fontSize:16, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.cream }}>Usuários e Acessos</div>
+        </div>
+        <UsuariosTable times={times||[]} reload={reload} show={show}/>
+      </Card>
+
+      {/* Modal Novo Time */}
+      {modalNovoTime && (
+        <Modal title="Novo Time" onClose={()=>setModalNovoTime(false)}>
+          <FormNovoTime onSalvo={()=>{ setModalNovoTime(false); reload(); show("Time criado!"); }} show={show}/>
+        </Modal>
+      )}
+
+      {/* Modal Novo Admin */}
+      {modalNovoUser && timeSelecionado && (
+        <Modal title={`Criar Admin — ${timeSelecionado.nome}`} onClose={()=>{ setModalNovoUser(false); setTimeSelecionado(null); }}>
+          <FormNovoAdmin time={timeSelecionado} onSalvo={()=>{ setModalNovoUser(false); setTimeSelecionado(null); reload(); show("Admin criado! Envie o acesso para o time."); }} show={show}/>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── TABELA DE USUÁRIOS ────────────────────────────────────────
+function UsuariosTable({ times, reload, show }) {
+  const { data: vinculos, loading, reload: reloadVinculos } = useQuery(() =>
+    api.get(`usuario_time?select=*,time(nome)&order=criado_em.desc`)
+  );
+
+  async function revogar(id) {
+    if (!confirm("Revogar acesso deste usuário?")) return;
+    try { await api.delete(`usuario_time?id=eq.${id}`); show("Acesso revogado."); reloadVinculos(); }
+    catch(e) { show(e.message, "error"); }
+  }
+
+  if (loading) return <Spinner/>;
+
+  return (
+    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+      <thead><tr style={{ background:C.surf2 }}>
+        {["User ID","Time","Role","Criado em","Ações"].map(h => <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
+      </tr></thead>
+      <tbody>
+        {(vinculos||[]).map((v,i) => (
+          <tr key={v.id} style={{ background:i%2===0?C.surface:C.bg }}>
+            <td style={{ padding:"12px 16px", color:C.dim, fontSize:12, fontFamily:"monospace" }}>{v.user_id?.substring(0,8)}...</td>
+            <td style={{ padding:"12px 16px", fontWeight:700, color:C.cream }}>{v.time?.nome||"—"}</td>
+            <td style={{ padding:"12px 16px" }}>
+              <span style={{ background:v.role==="superadmin"?C.gold+"33":v.role==="admin"?C.win+"33":C.surf2, color:v.role==="superadmin"?C.gold:v.role==="admin"?C.win:C.dim, border:`1px solid ${v.role==="superadmin"?C.gold:v.role==="admin"?C.win:C.border}55`, borderRadius:6, padding:"2px 10px", fontSize:11, fontWeight:700, textTransform:"uppercase" }}>
+                {v.role}
+              </span>
+            </td>
+            <td style={{ padding:"12px 16px", color:C.dim, fontSize:13 }}>{new Date(v.criado_em).toLocaleDateString("pt-BR")}</td>
+            <td style={{ padding:"12px 16px" }}>
+              {v.role !== "superadmin" && (
+                <Btn variant="danger" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>revogar(v.id)}>Revogar</Btn>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+// ── FORM NOVO TIME ────────────────────────────────────────────
+function FormNovoTime({ onSalvo, show }) {
+  const { data: campos } = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
+  const [form, setForm] = useState({ nome:"", data_fundacao:"", numero_titulares:"11", quantidade_periodos:"2", minutos_padrao_periodo:"45", permite_acrescimos:"N", tecnico:"", presidente:"", id_campo:"" });
+  const [saving, setSaving] = useState(false);
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+
+  async function salvar() {
+    if (!form.nome) { show("Nome obrigatório.", "error"); return; }
+    setSaving(true);
+    try {
+      const time = await api.post("time", {
+        nome: form.nome,
+        data_fundacao: form.data_fundacao||null,
+        numero_titulares: Number(form.numero_titulares)||11,
+        quantidade_periodos: Number(form.quantidade_periodos)||2,
+        minutos_padrao_periodo: Number(form.minutos_padrao_periodo)||45,
+        permite_acrescimos: form.permite_acrescimos,
+        tecnico: form.tecnico||null,
+        presidente: form.presidente||null,
+        id_campo: form.id_campo?Number(form.id_campo):null,
+      });
+      // Criar temporada inicial automaticamente
+      const ano = new Date().getFullYear();
+      await api.post("temporada", {
+        nome: `Temporada ${ano}`,
+        id_time: time[0].id_time,
+        data_inicio: `${ano}-01-01`,
+        data_fim: `${ano}-12-31`,
+        tecnico: form.tecnico||null,
+        presidente: form.presidente||null,
+      });
+      onSalvo();
+    } catch(e) { show(e.message, "error"); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <Input label="Nome do Time *" value={form.nome} onChange={e=>set("nome",e.target.value)} placeholder="Ex: Flamengo FC Amador"/>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <Input label="Data Fundação" type="date" value={form.data_fundacao} onChange={e=>set("data_fundacao",e.target.value)}/>
+        <Select label="Campo Principal" value={form.id_campo} onChange={e=>set("id_campo",e.target.value)}>
+          <option value="">Selecione...</option>
+          {(campos||[]).map(c=><option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
+        </Select>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+        <Input label="Nº Titulares" type="number" value={form.numero_titulares} onChange={e=>set("numero_titulares",e.target.value)}/>
+        <Input label="Períodos" type="number" value={form.quantidade_periodos} onChange={e=>set("quantidade_periodos",e.target.value)}/>
+        <Input label="Min/Período" type="number" value={form.minutos_padrao_periodo} onChange={e=>set("minutos_padrao_periodo",e.target.value)}/>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <Input label="Técnico" value={form.tecnico} onChange={e=>set("tecnico",e.target.value)}/>
+        <Input label="Presidente" value={form.presidente} onChange={e=>set("presidente",e.target.value)}/>
+      </div>
+      <div style={{ background:C.surf2, borderRadius:8, padding:"12px 16px", fontSize:13, color:C.dim }}>
+        ℹ️ Uma <strong style={{color:C.cream}}>Temporada {new Date().getFullYear()}</strong> será criada automaticamente para este time.
+      </div>
+      <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
+        <Btn onClick={salvar} disabled={saving}>{saving?"Criando...":"Criar Time"}</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── FORM NOVO ADMIN ───────────────────────────────────────────
+function FormNovoAdmin({ time, onSalvo, show }) {
+  const [email, setEmail]   = useState("");
+  const [senha, setSenha]   = useState("");
+  const [saving, setSaving] = useState(false);
+  const [criado, setCriado] = useState(null);
+
+  async function criar() {
+    if (!email || !senha) { show("E-mail e senha são obrigatórios.", "error"); return; }
+    if (senha.length < 6)  { show("Senha deve ter ao menos 6 caracteres.", "error"); return; }
+    setSaving(true);
+    try {
+      // Criar usuário via Supabase Admin API
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SESSION_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password: senha, email_confirm: true }),
+      });
+      const user = await res.json();
+      if (!user.id) throw new Error(user.message || "Erro ao criar usuário");
+
+      // Vincular ao time
+      await api.post("usuario_time", { user_id: user.id, id_time: time.id_time, role: "admin" });
+
+      setCriado({ email, senha, time: time.nome });
+    } catch(e) { show(e.message, "error"); }
+    finally { setSaving(false); }
+  }
+
+  if (criado) return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <div style={{ background:C.win+"22", border:`1px solid ${C.win}55`, borderRadius:10, padding:20, textAlign:"center" }}>
+        <div style={{ fontSize:32, marginBottom:8 }}>✅</div>
+        <div style={{ fontWeight:700, color:C.win, fontSize:16, marginBottom:4 }}>Admin criado com sucesso!</div>
+        <div style={{ color:C.dim, fontSize:13 }}>Envie as credenciais abaixo para o time</div>
+      </div>
+      <Card style={{ padding:20 }}>
+        <div style={{ fontSize:12, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12, fontWeight:700 }}>Credenciais de acesso</div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 14px", background:C.surf2, borderRadius:8 }}>
+            <span style={{ color:C.dim }}>Time</span>
+            <span style={{ fontWeight:700, color:C.cream }}>{criado.time}</span>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 14px", background:C.surf2, borderRadius:8 }}>
+            <span style={{ color:C.dim }}>URL</span>
+            <span style={{ fontWeight:700, color:C.gold }}>nerd-do-campo.vercel.app/admin</span>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 14px", background:C.surf2, borderRadius:8 }}>
+            <span style={{ color:C.dim }}>E-mail</span>
+            <span style={{ fontWeight:700, color:C.cream }}>{criado.email}</span>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 14px", background:C.surf2, borderRadius:8 }}>
+            <span style={{ color:C.dim }}>Senha</span>
+            <span style={{ fontWeight:700, color:C.cream }}>{criado.senha}</span>
+          </div>
+        </div>
+      </Card>
+      <Btn onClick={onSalvo}>Concluir</Btn>
+    </div>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ background:C.surf2, borderRadius:8, padding:"12px 16px", fontSize:13, color:C.dim }}>
+        Criando admin para <strong style={{color:C.cream}}>{time.nome}</strong>. Este usuário só terá acesso aos dados deste time.
+      </div>
+      <Input label="E-mail do Admin *" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="admin@juventusfc.com"/>
+      <Input label="Senha *" type="text" value={senha} onChange={e=>setSenha(e.target.value)} placeholder="Mínimo 6 caracteres"/>
+      <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
+        <Btn onClick={criar} disabled={saving}>{saving?"Criando...":"Criar Admin"}</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── APP SUPER ─────────────────────────────────────────────────
+export default function SuperApp() {
+  const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
+
+  if (!session) return <LoginSuper onLogin={setSession}/>;
+
+  return (
+    <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream }}>
+      <header style={{ background:"#060F1E", borderBottom:`3px solid ${C.gold}`, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:64, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 20px #00000066" }}>
+        <div style={{ fontSize:18, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream }}>⚙️ Nerd do Campo</div>
+        <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"2px 8px" }}>Super Admin</div>
+        <div style={{ marginLeft:"auto" }}>
+          <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>{ SESSION_TOKEN=null; sessionStorage.removeItem("ndc_super_token"); setSession(null); }}>Sair</Btn>
+        </div>
+      </header>
+      <main style={{ maxWidth:1100, margin:"0 auto", padding:"28px 24px" }}>
+        <DashboardSuper/>
+      </main>
+    </div>
+  );
+}

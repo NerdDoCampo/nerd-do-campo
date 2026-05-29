@@ -1,13 +1,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import AdminAppCompleto from './Admin';
 import App from './App';
+import { default as AdminApp } from './Admin';
+import SuperApp from './Super';
 
-const isAdmin = window.location.pathname.startsWith('/admin');
+const path = window.location.pathname;
+const isAdmin = path.startsWith('/admin');
+const isSuper = path.startsWith('/super');
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    {isAdmin ? <AdminAppCompleto /> : <App />}
+    {isSuper ? <SuperApp /> : isAdmin ? <AdminApp /> : <App />}
   </React.StrictMode>
 );
