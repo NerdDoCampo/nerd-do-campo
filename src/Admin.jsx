@@ -214,8 +214,9 @@ function ListaPartidas({ temporada, onSelect, onNova }) {
           const res = resultado(p);
           const pendente = p.gols_marcados === null && p.cancelada !== "S";
           return (
-            <Card key={p.id_partida} style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "background 0.15s" }}
-              onClick={() => onSelect(p)}
+            <div key={p.id_partida}
+              onClick={() => { console.log("clicou", p.id_partida); onSelect(p); }}
+              style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "background 0.15s", background: C.surface, borderRadius: 12, border: `1px solid ${C.border}` }}
               onMouseEnter={e => e.currentTarget.style.background = C.surf2}
               onMouseLeave={e => e.currentTarget.style.background = C.surface}>
               <div style={{ minWidth: 80 }}>
@@ -233,7 +234,7 @@ function ListaPartidas({ temporada, onSelect, onNova }) {
                 <Badge label={res.label} cor={res.cor} />
               </div>
               <div style={{ color: C.dim, fontSize: 18 }}>›</div>
-            </Card>
+            </div>
           );
         })}
         {lista.length === 0 && <div style={{ textAlign: "center", color: C.dim, padding: 40 }}>Nenhuma partida encontrada</div>}
