@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 // ── Supabase ──────────────────────────────────────────────────
 const URL  = "https://nxztffulmvohduvudbhg.supabase.co";
@@ -35,6 +35,73 @@ const api = {
   patch:  (path, body)   => sb(path, { method: "PATCH",  body: JSON.stringify(body) }),
   delete: (path)         => sb(path, { method: "DELETE",  prefer: "return=minimal" }),
 };
+
+// ── Upload de imagem para Supabase Storage ────────────────────
+async function uploadImagem(bucket, file, nomeArquivo) {
+  const ext = file.name.split(".").pop();
+  const path = `${nomeArquivo}.${ext}`;
+  const res = await fetch(`${URL}/storage/v1/object/${bucket}/${path}`, {
+    method: "POST",
+    headers: {
+      apikey: ANON,
+      Authorization: `Bearer ${SESSION_TOKEN}`,
+      "Content-Type": file.type,
+      "x-upsert": "true",
+    },
+    body: file,
+  });
+  if (!res.ok) throw new Error("Erro ao fazer upload da imagem");
+  return `${URL}/storage/v1/object/public/${bucket}/${path}`;
+}
+
+// ── Componente de upload de imagem ────────────────────────────
+function ImageUpload({ label, value, onUpload, bucket, nomeArquivo }) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = React.useRef();
+
+  async function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!["image/jpeg","image/png","image/webp","image/gif"].includes(file.type)) {
+      alert("Use imagens JPG, PNG ou WebP"); return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Imagem muito grande. Máximo 2MB."); return;
+    }
+    setUploading(true);
+    try {
+      const url = await uploadImagem(bucket, file, nomeArquivo);
+      onUpload(url);
+    } catch(e) { alert(e.message); }
+    finally { setUploading(false); }
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+      {label && <label style={{ fontSize:11, color:"#8FAF9A", textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>{label}</label>}
+      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+        {value ? (
+          <img src={value} alt="preview" style={{ width:64, height:64, borderRadius:8, objectFit:"cover", border:"2px solid #1F5C3E" }}/>
+        ) : (
+          <div style={{ width:64, height:64, borderRadius:8, background:"#174D36", border:"2px dashed #1F5C3E", display:"flex", alignItems:"center", justifyContent:"center", fontSize:24 }}>📷</div>
+        )}
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          <button onClick={() => inputRef.current?.click()} disabled={uploading}
+            style={{ background:"#174D36", border:"1px solid #1F5C3E", borderRadius:8, padding:"7px 14px", color:"#F0E8D0", fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:uploading?"not-allowed":"pointer", textTransform:"uppercase" }}>
+            {uploading ? "Enviando..." : value ? "Trocar Imagem" : "Escolher Imagem"}
+          </button>
+          {value && (
+            <button onClick={() => onUpload("")}
+              style={{ background:"none", border:"none", color:"#E53935", fontSize:12, cursor:"pointer", fontFamily:"inherit", textAlign:"left" }}>
+              ✕ Remover
+            </button>
+          )}
+        </div>
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} style={{ display:"none" }}/>
+    </div>
+  );
+}
 
 // ── Paleta ────────────────────────────────────────────────────
 const C = {
@@ -754,6 +821,10 @@ export default function AdminAppCompleto() {
         <div style={{ fontSize:18, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream }}>⚽ Nerd do Campo</div>
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"2px 8px" }}>Admin</div>
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
+          {time?.escudo_url
+            ? <img src={time.escudo_url} alt={time.nome} style={{ width:32, height:32, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
+            : null
+          }
           <span style={{ fontSize:12, color:C.dim }}>{time?.nome || ""}</span>
           {(temporadas||[]).length > 1 && (
             <select value={temporadaSel?.id_temporada||""} onChange={e => setTemporadaSel(temporadas.find(t=>t.id_temporada===Number(e.target.value)))}
@@ -851,7 +922,7 @@ function CrudJogadores({ show }) {
     setSaving(true);
     try {
       const utData = await api.get(`usuario_time?select=id_time&limit=1`);
-      const body = { nome: form.nome, apelido: form.apelido||null, camisa: form.camisa||null, id_posicao: form.id_posicao ? Number(form.id_posicao) : null, telefone: form.telefone||null, email: form.email||null, data_inicio: form.data_inicio||null, observacoes: form.observacoes||null, id_time: utData?.[0]?.id_time||null };
+      const body = { nome: form.nome, apelido: form.apelido||null, camisa: form.camisa||null, id_posicao: form.id_posicao ? Number(form.id_posicao) : null, telefone: form.telefone||null, email: form.email||null, data_inicio: form.data_inicio||null, observacoes: form.observacoes||null, foto_url: form.foto_url||null, id_time: utData?.[0]?.id_time||null };
       if (modal === "novo") await api.post("jogador", body);
       else await api.patch(`jogador?id_jogador=eq.${form.id_jogador}`, body);
       show(modal === "novo" ? "Jogador criado!" : "Jogador atualizado!"); setModal(null); reload();
@@ -904,7 +975,14 @@ function CrudJogadores({ show }) {
         <Modal title={modal === "novo" ? "Novo Jogador" : "Editar Jogador"} onClose={() => setModal(null)}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-              <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} />
+              <ImageUpload
+              label="Foto do Jogador"
+              value={form.foto_url||""}
+              onUpload={url => set("foto_url", url)}
+              bucket="jogadores"
+              nomeArquivo={`jogador_${form.id_jogador||"novo_"+Date.now()}`}
+            />
+            <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} />
               <Input label="Apelido" value={form.apelido||""} onChange={e => set("apelido", e.target.value)} />
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
@@ -1338,7 +1416,7 @@ function ConfigTime({ show }) {
     if (!form?.nome) { show("Nome obrigatório.", "error"); return; }
     setSaving(true);
     try {
-      const body = { nome: form.nome, telefone: form.telefone||null, id_campo: form.id_campo ? Number(form.id_campo) : null, data_fundacao: form.data_fundacao||null, numero_titulares: form.numero_titulares ? Number(form.numero_titulares) : null, quantidade_periodos: form.quantidade_periodos ? Number(form.quantidade_periodos) : null, minutos_padrao_periodo: form.minutos_padrao_periodo ? Number(form.minutos_padrao_periodo) : null, permite_acrescimos: form.permite_acrescimos||"N", tecnico: form.tecnico||null, presidente: form.presidente||null, vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null, vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null, resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null, observacoes: form.observacoes||null };
+      const body = { nome: form.nome, telefone: form.telefone||null, escudo_url: form.escudo_url||null, id_campo: form.id_campo ? Number(form.id_campo) : null, data_fundacao: form.data_fundacao||null, numero_titulares: form.numero_titulares ? Number(form.numero_titulares) : null, quantidade_periodos: form.quantidade_periodos ? Number(form.quantidade_periodos) : null, minutos_padrao_periodo: form.minutos_padrao_periodo ? Number(form.minutos_padrao_periodo) : null, permite_acrescimos: form.permite_acrescimos||"N", tecnico: form.tecnico||null, presidente: form.presidente||null, vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null, vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null, resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null, observacoes: form.observacoes||null };
       await api.patch(`time?id_time=eq.${form.id_time}`, body);
       show("Configurações salvas!"); reload();
     } catch (e) { show(e.message, "error"); }

@@ -122,9 +122,10 @@ function SeletorTimes({ onSelect }) {
                 style={{ background:C.surface, borderRadius:16, padding:"28px 24px", border:`1px solid ${C.border}`, cursor:"pointer", transition:"all 0.2s", textAlign:"center" }}
                 onMouseEnter={e => { e.currentTarget.style.background = C.surf2; e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.transform = "translateY(-2px)"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = C.surface; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = "none"; }}>
-                <div style={{ width:72, height:72, borderRadius:"50%", background:C.surf2, border:`2px solid ${C.gold}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", fontSize:28 }}>
-                  ⚽
-                </div>
+                {t.escudo_url
+                  ? <img src={t.escudo_url} alt={t.nome} style={{ width:72, height:72, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, margin:"0 auto 16px", display:"block" }}/>
+                  : <div style={{ width:72, height:72, borderRadius:"50%", background:C.surf2, border:`2px solid ${C.gold}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", fontSize:28 }}>⚽</div>
+                }
                 <div style={{ fontSize:18, fontWeight:800, textTransform:"uppercase", marginBottom:6 }}>{t.nome}</div>
                 {temp && <div style={{ fontSize:12, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em" }}>{temp.nome}</div>}
                 {t.data_fundacao && <div style={{ fontSize:11, color:C.dim, marginTop:4 }}>Fundado em {new Date(t.data_fundacao).getFullYear()}</div>}
@@ -325,13 +326,16 @@ function Elenco({ time }) {
             <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>{grupo}</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(190px,1fr))", gap:10 }}>
               {jogs.map(j => (
-                <Card key={j.id_jogador} style={{ padding:"14px 16px", display:"flex", alignItems:"center", gap:14 }}>
-                  <div style={{ width:44, height:44, borderRadius:"50%", background:C.surf2, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, color:C.gold, fontSize:18, flexShrink:0 }}>{j.camisa}</div>
+                <div key={j.id_jogador} style={{ background:C.surface, borderRadius:12, padding:"14px 16px", display:"flex", alignItems:"center", gap:14, border:`1px solid ${C.border}` }}>
+                  {j.foto_url
+                    ? <img src={j.foto_url} alt={j.nome} style={{ width:44, height:44, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }}/>
+                    : <div style={{ width:44, height:44, borderRadius:"50%", background:C.surf2, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, color:C.gold, fontSize:18, flexShrink:0 }}>{j.camisa}</div>
+                  }
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontWeight:700, fontSize:14, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{j.apelido||j.nome}</div>
                     {j.apelido && <div style={{ fontSize:11, color:C.dim, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{j.nome}</div>}
                   </div>
-                </Card>
+                </div>
               ))}
             </div>
           </div>
@@ -484,9 +488,12 @@ function TimeApp({ time, onVoltar }) {
       <header style={{ background:"#091F15", borderBottom:`3px solid ${C.gold}`, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:68, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 24px #00000066" }}>
         <button onClick={onVoltar} style={{ background:"none", border:"none", cursor:"pointer", padding:4, color:C.dim, fontSize:20, lineHeight:1 }} title="Voltar">‹</button>
         <Logo size={42}/>
-        <div>
-          <div style={{ fontSize:20, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream, lineHeight:1 }}>Nerd do Campo</div>
-          <div style={{ fontSize:11, color:C.gold, letterSpacing:"0.1em", textTransform:"uppercase" }}>{time.nome} · {temporadaSel?.nome||""}</div>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          {time.escudo_url && <img src={time.escudo_url} alt={time.nome} style={{ width:40, height:40, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>}
+          <div>
+            <div style={{ fontSize:20, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream, lineHeight:1 }}>Nerd do Campo</div>
+            <div style={{ fontSize:11, color:C.gold, letterSpacing:"0.1em", textTransform:"uppercase" }}>{time.nome} · {temporadaSel?.nome||""}</div>
+          </div>
         </div>
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
           {(temporadas||[]).length > 1 && (
