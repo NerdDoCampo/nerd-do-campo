@@ -5,8 +5,8 @@ const SUPABASE_URL = "https://nxztffulmvohduvudbhg.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54enRmZnVsbXZvaGR1dnVkYmhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODY5ODMsImV4cCI6MjA5NTA2Mjk4M30.CwEmjukApMTJhkbKh1jlp4Q-IYrM26u-5SYx9p20nsg";
 
 async function sb(path) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+  const res = await fetch(${SUPABASE_URL}/rest/v1/${path}, {
+    headers: { apikey: SUPABASE_KEY, Authorization: Bearer ${SUPABASE_KEY}, "Content-Type": "application/json" },
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -38,7 +38,7 @@ function Logo({ size = 44 }) {
 }
 
 function Card({ children, style: s = {} }) {
-  return <div style={{ background: C.surface, borderRadius: 12, padding: "20px 24px", border: `1px solid ${C.border}`, ...s }}>{children}</div>;
+  return <div style={{ background: C.surface, borderRadius: 12, padding: "20px 24px", border: 1px solid ${C.border}, ...s }}>{children}</div>;
 }
 function SecTitle({ children, accent }) {
   return (
@@ -49,14 +49,14 @@ function SecTitle({ children, accent }) {
   );
 }
 function Badge({ label, cor }) {
-  return <span style={{ background: cor+"22", color: cor, border:`1px solid ${cor}55`, borderRadius:6, padding:"2px 8px", fontSize:11, fontWeight:700, textTransform:"uppercase" }}>{label}</span>;
+  return <span style={{ background: cor+"22", color: cor, border:1px solid ${cor}55, borderRadius:6, padding:"2px 8px", fontSize:11, fontWeight:700, textTransform:"uppercase" }}>{label}</span>;
 }
 function Spinner() {
   return (
     <div style={{ display:"flex", justifyContent:"center", alignItems:"center", padding:80, flexDirection:"column", gap:16 }}>
-      <div style={{ width:44, height:44, border:`3px solid ${C.border}`, borderTop:`3px solid ${C.gold}`, borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/>
+      <div style={{ width:44, height:44, border:3px solid ${C.border}, borderTop:3px solid ${C.gold}, borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/>
       <div style={{ color:C.dim, fontSize:13, textTransform:"uppercase", letterSpacing:"0.1em" }}>Carregando...</div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{@keyframes spin{to{transform:rotate(360deg)}}}</style>
     </div>
   );
 }
@@ -87,7 +87,7 @@ function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { ho
 
 // ── SELETOR DE TIMES ──────────────────────────────────────────
 function SeletorTimes({ onSelect }) {
-  const { data: times, loading } = useQuery(() => sb(`time?select=*,temporada(nome,data_inicio,data_fim)&data_fim=is.null&order=nome.asc`));
+  const { data: times, loading } = useQuery(() => sb(time?select=*,temporada(nome,data_inicio,data_fim)&data_fim=is.null&order=nome.asc));
 
   if (loading) return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif" }}>
@@ -97,7 +97,7 @@ function SeletorTimes({ onSelect }) {
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream }}>
-      <header style={{ background:"#091F15", borderBottom:`3px solid ${C.gold}`, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:68, boxShadow:"0 4px 20px #00000066" }}>
+      <header style={{ background:"#091F15", borderBottom:3px solid ${C.gold}, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:68, boxShadow:"0 4px 20px #00000066" }}>
         <Logo size={42}/>
         <div>
           <div style={{ fontSize:20, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream, lineHeight:1 }}>Nerd do Campo</div>
@@ -119,12 +119,12 @@ function SeletorTimes({ onSelect }) {
             return (
               <div key={t.id_time}
                 onClick={() => onSelect(t)}
-                style={{ background:C.surface, borderRadius:16, padding:"28px 24px", border:`1px solid ${C.border}`, cursor:"pointer", transition:"all 0.2s", textAlign:"center" }}
+                style={{ background:C.surface, borderRadius:16, padding:"28px 24px", border:1px solid ${C.border}, cursor:"pointer", transition:"all 0.2s", textAlign:"center" }}
                 onMouseEnter={e => { e.currentTarget.style.background = C.surf2; e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.transform = "translateY(-2px)"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = C.surface; e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = "none"; }}>
                 {t.escudo_url
-                  ? <img src={t.escudo_url} alt={t.nome} style={{ width:72, height:72, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, margin:"0 auto 16px", display:"block" }}/>
-                  : <div style={{ width:72, height:72, borderRadius:"50%", background:C.surf2, border:`2px solid ${C.gold}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", fontSize:28 }}>⚽</div>
+                  ? <img src={t.escudo_url} alt={t.nome} style={{ width:72, height:72, borderRadius:"50%", objectFit:"cover", border:2px solid ${C.gold}, margin:"0 auto 16px", display:"block" }}/>
+                  : <div style={{ width:72, height:72, borderRadius:"50%", background:C.surf2, border:2px solid ${C.gold}, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", fontSize:28 }}>⚽</div>
                 }
                 <div style={{ fontSize:18, fontWeight:800, textTransform:"uppercase", marginBottom:6 }}>{t.nome}</div>
                 {temp && <div style={{ fontSize:12, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em" }}>{temp.nome}</div>}
@@ -135,7 +135,7 @@ function SeletorTimes({ onSelect }) {
         </div>
       </main>
 
-      <footer style={{ textAlign:"center", padding:"20px", color:C.dim, fontSize:12, borderTop:`1px solid ${C.border}`, marginTop:40 }}>
+      <footer style={{ textAlign:"center", padding:"20px", color:C.dim, fontSize:12, borderTop:1px solid ${C.border}, marginTop:40 }}>
         ⚽ Nerd do Campo — Estatísticas de Futebol Amador
       </footer>
     </div>
@@ -145,11 +145,11 @@ function SeletorTimes({ onSelect }) {
 // ── VISÃO GERAL ───────────────────────────────────────────────
 function VisaoGeral({ temporada }) {
   const { data: partidas, loading } = useQuery(
-    () => sb(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo(nome)&order=data.asc`),
+    () => sb(partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo(nome)&order=data.asc),
     [temporada.id_temporada]
   );
-  const { data: topGols }   = useQuery(() => sb(`vw_estatisticas_jogadores?gols_marcados=not.is.null&order=gols_marcados.desc&limit=5`), []);
-  const { data: topAssist } = useQuery(() => sb(`vw_estatisticas_jogadores?assistencias=not.is.null&order=assistencias.desc&limit=5`), []);
+  const { data: topGols }   = useQuery(() => sb(vw_estatisticas_jogadores?gols_marcados=not.is.null&order=gols_marcados.desc&limit=5), []);
+  const { data: topAssist } = useQuery(() => sb(vw_estatisticas_jogadores?assistencias=not.is.null&order=assistencias.desc&limit=5), []);
 
   if (loading) return <Spinner />;
 
@@ -187,7 +187,7 @@ function VisaoGeral({ temporada }) {
             </div>
             <span style={{ fontSize:22, fontWeight:800, color:cor }}>{j[valKey]}</span>
             <div style={{ width:60, height:5, background:C.surf2, borderRadius:3, overflow:"hidden" }}>
-              <div style={{ width:`${(j[valKey]/max)*100}%`, height:"100%", background:cor, borderRadius:3 }}/>
+              <div style={{ width:${(j[valKey]/max)*100}%, height:"100%", background:cor, borderRadius:3 }}/>
             </div>
           </div>
         ))}
@@ -197,7 +197,7 @@ function VisaoGeral({ temporada }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-      <style>{`.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}@media(max-width:480px){.stat-grid{grid-template-columns:repeat(2,1fr)}}`}</style>
+      <style>{.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}@media(max-width:480px){.stat-grid{grid-template-columns:repeat(2,1fr)}}}</style>
       <div className="stat-grid">
         <StatCard label="Jogos" value={jogadas.length}/>
         <StatCard label="Vitórias" value={v} cor={C.win}/>
@@ -208,10 +208,10 @@ function VisaoGeral({ temporada }) {
         <StatCard label="Pontos" value={pts} cor={C.gold}/>
         <StatCard label="Gols Pró" value={gm}/>
         <StatCard label="Gols Contra" value={gs} cor={C.dim}/>
-        <StatCard label="Aproveit." value={`${pct}%`} cor={pct>=60?C.win:pct>=40?C.draw:C.loss}/>
+        <StatCard label="Aproveit." value={${pct}%} cor={pct>=60?C.win:pct>=40?C.draw:C.loss}/>
       </div>
 
-      <style>{`.duo-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:480px){.duo-grid{grid-template-columns:1fr}}`}</style>
+      <style>{.duo-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:480px){.duo-grid{grid-template-columns:1fr}}}</style>
       <div className="duo-grid">
         <Card>
           <SecTitle accent>Último Jogo</SecTitle>
@@ -231,7 +231,7 @@ function VisaoGeral({ temporada }) {
             <div style={{ fontSize:13, color:C.dim, marginBottom:4 }}>{fmtData(proxima.data)} · {fmtHora(proxima.data)} · {proxima.em_casa==="S"?"Em Casa":"Fora"}</div>
             <div style={{ fontSize:20, fontWeight:700, marginBottom:8 }}>{proxima.adversario?.nome||"A definir"}</div>
             <div style={{ fontSize:12, color:C.dim }}>🏟️ {proxima.campo?.nome}</div>
-            <div style={{ marginTop:12, padding:"8px 14px", background:C.gold+"22", border:`1px solid ${C.gold}55`, borderRadius:8, display:"inline-block" }}>
+            <div style={{ marginTop:12, padding:"8px 14px", background:C.gold+"22", border:1px solid ${C.gold}55, borderRadius:8, display:"inline-block" }}>
               <span style={{ color:C.gold, fontWeight:700, fontSize:13 }}>⏰ Aguardando</span>
             </div>
           </>) : <div style={{color:C.dim}}>Sem jogos agendados</div>}
@@ -250,7 +250,7 @@ function VisaoGeral({ temporada }) {
 function Calendario({ temporada }) {
   const [filtro, setFiltro] = useState("pendentes");
   const { data: partidas, loading } = useQuery(
-    () => sb(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo(nome)&order=data.asc`),
+    () => sb(partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo(nome)&order=data.asc),
     [temporada.id_temporada]
   );
   if (loading) return <Spinner />;
@@ -262,7 +262,7 @@ function Calendario({ temporada }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
       <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-        {[["todos",`Todos (${all.length})`],["jogados",`Jogados (${jogados.length})`],["pendentes",`Pendentes (${pendentes.length})`],["casa","Em Casa"],["fora","Fora"]].map(([v,l]) => (
+        {[["todos",Todos (${all.length})],["jogados",Jogados (${jogados.length})],["pendentes",Pendentes (${pendentes.length})],["casa","Em Casa"],["fora","Fora"]].map(([v,l]) => (
           <button key={v} onClick={()=>setFiltro(v)} style={{ background:filtro===v?C.gold:C.surf2, color:filtro===v?"#0B3D2E":C.dim, border:"none", padding:"6px 14px", borderRadius:8, fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>{l}</button>
         ))}
       </div>
@@ -289,7 +289,7 @@ function Calendario({ temporada }) {
                     </td>
                     <td style={{ padding:"12px 14px", color:C.dim, fontSize:12, maxWidth:160, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.campo?.nome}</td>
                     <td style={{ padding:"12px 14px", fontWeight:800, fontSize:16, whiteSpace:"nowrap", color:p.gols_marcados!==null?C.cream:C.dim }}>
-                      {p.cancelada==="S"?"—":p.gols_marcados!==null?`${p.gols_marcados} × ${p.gols_sofridos}`:"— × —"}
+                      {p.cancelada==="S"?"—":p.gols_marcados!==null?${p.gols_marcados} × ${p.gols_sofridos}:"— × —"}
                     </td>
                     <td style={{ padding:"12px 14px" }}><Badge {...res}/></td>
                   </tr>
@@ -298,7 +298,7 @@ function Calendario({ temporada }) {
             </tbody>
           </table>
         </div>
-        <div style={{ padding:"10px 16px", borderTop:`1px solid ${C.border}`, fontSize:12, color:C.dim }}>{lista.length} partida{lista.length!==1?"s":""} exibida{lista.length!==1?"s":""}</div>
+        <div style={{ padding:"10px 16px", borderTop:1px solid ${C.border}, fontSize:12, color:C.dim }}>{lista.length} partida{lista.length!==1?"s":""} exibida{lista.length!==1?"s":""}</div>
       </Card>
     </div>
   );
@@ -307,7 +307,7 @@ function Calendario({ temporada }) {
 // ── ELENCO ────────────────────────────────────────────────────
 function Elenco({ time }) {
   const { data: jogadores, loading } = useQuery(
-    () => sb(`jogador?id_jogador=gt.0&id_time=eq.${time.id_time}&select=*,posicao(nome)&order=camisa.asc`),
+    () => sb(jogador?id_jogador=gt.0&id_time=eq.${time.id_time}&select=*,posicao(nome)&order=camisa.asc),
     [time.id_time]
   );
   if (loading) return <Spinner />;
@@ -325,12 +325,12 @@ function Elenco({ time }) {
         const jogs = ativos.filter(j => j.posicao?.nome === grupo);
         return (
           <div key={grupo}>
-            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>{grupo}</div>
+            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, marginBottom:10, borderLeft:3px solid ${C.gold}, paddingLeft:10 }}>{grupo}</div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(190px,1fr))", gap:10 }}>
               {jogs.map(j => (
-                <div key={j.id_jogador} style={{ background:C.surface, borderRadius:12, padding:"14px 16px", display:"flex", alignItems:"center", gap:14, border:`1px solid ${C.border}` }}>
+                <div key={j.id_jogador} style={{ background:C.surface, borderRadius:12, padding:"14px 16px", display:"flex", alignItems:"center", gap:14, border:1px solid ${C.border} }}>
                   {j.foto_url
-                    ? <img src={j.foto_url} alt={j.nome} style={{ width:44, height:44, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }}/>
+                    ? <img src={j.foto_url} alt={j.nome} style={{ width:44, height:44, borderRadius:"50%", objectFit:"cover", border:2px solid ${C.gold}, flexShrink:0 }}/>
                     : <div style={{ width:44, height:44, borderRadius:"50%", background:C.surf2, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, color:C.gold, fontSize:18, flexShrink:0 }}>{j.camisa}</div>
                   }
                   <div style={{ minWidth:0 }}>
@@ -352,7 +352,7 @@ function Estatisticas({ time }) {
   const [sortKey, setSortKey] = useState("gols_marcados");
   const [asc, setAsc] = useState(false);
   const { data: stats, loading } = useQuery(
-    () => sb(`vw_estatisticas_jogadores?select=*`), [time.id_time]
+    () => sb(vw_estatisticas_jogadores?select=*), [time.id_time]
   );
   if (loading) return <Spinner />;
   const sorted = [...(stats||[])].sort((a,b) => {
@@ -372,7 +372,7 @@ function Estatisticas({ time }) {
   ];
   return (
     <Card style={{ padding:0, overflow:"hidden" }}>
-      <div style={{ padding:"20px 24px 12px", borderBottom:`1px solid ${C.border}` }}>
+      <div style={{ padding:"20px 24px 12px", borderBottom:1px solid ${C.border} }}>
         <SecTitle accent>Estatísticas dos Jogadores</SecTitle>
       </div>
       <div style={{ overflowX:"auto" }}>
@@ -396,7 +396,7 @@ function Estatisticas({ time }) {
           </tbody>
         </table>
       </div>
-      <div style={{ padding:"12px 24px", borderTop:`1px solid ${C.border}`, fontSize:12, color:C.dim }}>
+      <div style={{ padding:"12px 24px", borderTop:1px solid ${C.border}, fontSize:12, color:C.dim }}>
         PJ = Partidas Jogadas · TIT = Titular · Pen = Pênaltis · GC = Gols Contra · Clique no cabeçalho para ordenar
       </div>
     </Card>
@@ -406,9 +406,9 @@ function Estatisticas({ time }) {
 // ── GOLS ──────────────────────────────────────────────────────
 function Gols({ temporada }) {
   const [filtroPartida, setFiltroPartida] = useState("todos");
-  const { data: gols, loading } = useQuery(() => sb(`vw_gols_partida?select=*&order=data_partida.asc,periodo.asc,minuto.asc`), []);
+  const { data: gols, loading } = useQuery(() => sb(vw_gols_partida?select=*&order=data_partida.asc,periodo.asc,minuto.asc), []);
   const { data: partidas } = useQuery(
-    () => sb(`partida?id_temporada=eq.${temporada.id_temporada}&select=id_partida,data,adversario(nome)&cancelada=eq.N&gols_marcados=not.is.null&order=data.asc`),
+    () => sb(partida?id_temporada=eq.${temporada.id_temporada}&select=id_partida,data,adversario(nome)&cancelada=eq.N&gols_marcados=not.is.null&order=data.asc),
     [temporada.id_temporada]
   );
   if (loading) return <Spinner />;
@@ -417,7 +417,7 @@ function Gols({ temporada }) {
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
       <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
         <span style={{ fontSize:12, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em" }}>Filtrar:</span>
-        <select value={filtroPartida} onChange={e=>setFiltroPartida(e.target.value)} style={{ background:C.surf2, color:C.cream, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 14px", fontFamily:"inherit", fontSize:13 }}>
+        <select value={filtroPartida} onChange={e=>setFiltroPartida(e.target.value)} style={{ background:C.surf2, color:C.cream, border:1px solid ${C.border}, borderRadius:8, padding:"6px 14px", fontFamily:"inherit", fontSize:13 }}>
           <option value="todos">Todos os jogos ({(gols||[]).length} gols)</option>
           {(partidas||[]).map(p => {
             const qtd = (gols||[]).filter(g=>g.id_partida===p.id_partida).length;
@@ -447,13 +447,13 @@ function Gols({ temporada }) {
                   <td style={{ padding:"12px 14px", textAlign:"center", fontWeight:700 }}>{g.minuto}'</td>
                   <td style={{ padding:"12px 14px", textAlign:"center" }}>{g.penalti==="Sim"?<Badge label="Sim" cor={C.draw}/>:<span style={{color:C.dim,fontSize:13}}>Não</span>}</td>
                   <td style={{ padding:"12px 14px", textAlign:"center" }}>{g.gol_contra==="Sim"?<Badge label="Sim" cor={C.loss}/>:<span style={{color:C.dim,fontSize:13}}>Não</span>}</td>
-                  <td style={{ padding:"12px 14px", color:g.assistente?C.win:C.dim }}>{g.assistente?`🅰️ ${g.assistente}`:"—"}</td>
+                  <td style={{ padding:"12px 14px", color:g.assistente?C.win:C.dim }}>{g.assistente?🅰️ ${g.assistente}:"—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div style={{ padding:"10px 16px", borderTop:`1px solid ${C.border}`, fontSize:12, color:C.dim }}>{lista.length} gol{lista.length!==1?"s":""} exibido{lista.length!==1?"s":""}</div>
+        <div style={{ padding:"10px 16px", borderTop:1px solid ${C.border}, fontSize:12, color:C.dim }}>{lista.length} gol{lista.length!==1?"s":""} exibido{lista.length!==1?"s":""}</div>
       </Card>
     </div>
   );
@@ -471,7 +471,7 @@ const TABS = [
 function TimeApp({ time, onVoltar }) {
   const [tab, setTab] = useState(0);
   const { data: temporadas } = useQuery(
-    () => sb(`temporada?id_time=eq.${time.id_time}&select=*&order=data_inicio.desc`),
+    () => sb(temporada?id_time=eq.${time.id_time}&select=*&order=data_inicio.desc),
     [time.id_time]
   );
   const [temporadaSel, setTemporadaSel] = useState(null);
@@ -486,55 +486,48 @@ function TimeApp({ time, onVoltar }) {
   ] : [<Spinner key="s"/>];
 
   return (
-    <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream }}>
-      <header style={{ background:"#091F15", borderBottom:`3px solid ${C.gold}`, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:68, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 24px #00000066" }}>
-        <button onClick={onVoltar} style={{ background:"none", border:"none", cursor:"pointer", padding:4, color:C.dim, fontSize:20, lineHeight:1 }} title="Voltar">‹</button>
-        <Logo size={42}/>
-        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          {time.escudo_url && <img src={time.escudo_url} alt={time.nome} style={{ width:40, height:40, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>}
-          <div>
-            <div style={{ fontSize:20, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream, lineHeight:1 }}>Nerd do Campo</div>
-            <div style={{ fontSize:11, color:C.gold, letterSpacing:"0.1em", textTransform:"uppercase" }}>{time.nome} · {temporadaSel?.nome||""}</div>
-          </div>
+    <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream, paddingBottom:70 }}>
+
+      {/* Header compacto */}
+      <header style={{ background:"#091F15", borderBottom:3px solid ${C.gold}, padding:"0 12px", display:"flex", alignItems:"center", gap:10, height:56, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 24px #00000066" }}>
+        <button onClick={onVoltar} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 8px 4px 0", color:C.dim, fontSize:24, lineHeight:1, flexShrink:0 }}>‹</button>
+        {time.escudo_url && <img src={time.escudo_url} alt={time.nome} style={{ width:32, height:32, borderRadius:"50%", objectFit:"cover", border:2px solid ${C.gold}, flexShrink:0 }}/>}
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:14, fontWeight:800, textTransform:"uppercase", color:C.cream, lineHeight:1.1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{time.nome}</div>
+          <div style={{ fontSize:10, color:C.gold, textTransform:"uppercase", letterSpacing:"0.06em" }}>{temporadaSel?.nome||""}</div>
         </div>
-        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8 }}>
-          {(temporadas||[]).length > 1 && (
-            <select value={temporadaSel?.id_temporada||""} onChange={e=>setTemporadaSel(temporadas.find(t=>t.id_temporada===Number(e.target.value)))}
-              style={{ background:C.surf2, color:C.cream, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 12px", fontFamily:"inherit", fontSize:12 }}>
-              {(temporadas||[]).map(t=><option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
-            </select>
-          )}
-          <nav style={{ display:"flex", gap:4 }}>
-            {TABS.map((t,i) => (
-              <button key={t.label} onClick={()=>setTab(i)} style={{ background:tab===i?C.gold:"transparent", color:tab===i?"#0B3D2E":C.dim, border:"none", padding:"7px 14px", borderRadius:8, fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em", transition:"all 0.15s", display:"flex", alignItems:"center", gap:5 }}>
-                <span>{t.icon}</span><span>{t.label}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
+        {(temporadas||[]).length > 1 && (
+          <select value={temporadaSel?.id_temporada||""} onChange={e=>setTemporadaSel(temporadas.find(t=>t.id_temporada===Number(e.target.value)))}
+            style={{ background:C.surf2, color:C.cream, border:1px solid ${C.border}, borderRadius:6, padding:"4px 8px", fontFamily:"inherit", fontSize:11, maxWidth:120, flexShrink:0 }}>
+            {(temporadas||[]).map(t=><option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
+          </select>
+        )}
       </header>
 
-      {temporadaSel && (
-        <div style={{ background:"linear-gradient(135deg,#103D2A 0%,#174D36 50%,#1A5C40 100%)", borderBottom:`1px solid ${C.border}`, padding:"12px 16px" }}>
-          <div style={{ fontSize:10, color:C.gold, textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:2 }}>{temporadaSel.nome}</div>
-          <div style={{ fontSize:18, fontWeight:800, textTransform:"uppercase", lineHeight:1.2 }}>{time.nome}</div>
-          {(temporadaSel.tecnico || temporadaSel.presidente) && (
-            <div style={{ fontSize:11, color:C.dim, marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-              {temporadaSel.tecnico && <>Técnico: <strong style={{color:C.cream}}>{temporadaSel.tecnico}</strong></>}
-              {temporadaSel.tecnico && temporadaSel.presidente && " · "}
-              {temporadaSel.presidente && <>Presidente: <strong style={{color:C.cream}}>{temporadaSel.presidente}</strong></>}
-            </div>
-          )}
-        </div>
-      )}
-
-      <main style={{ maxWidth:1200, margin:"0 auto", padding:"16px 12px" }}>
+      {/* Conteúdo */}
+      <main style={{ maxWidth:1200, margin:"0 auto", padding:"12px 10px 20px" }}>
         {screens[tab]}
       </main>
 
-      <footer style={{ textAlign:"center", padding:"20px", color:C.dim, fontSize:12, borderTop:`1px solid ${C.border}`, marginTop:40 }}>
-        ⚽ Nerd do Campo · {time.nome} · Dados em tempo real
-      </footer>
+      {/* Menu inferior fixo */}
+      <nav style={{ position:"fixed", bottom:0, left:0, right:0, background:"#091F15", borderTop:2px solid ${C.gold}, display:"flex", zIndex:100, boxShadow:"0 -4px 20px #00000066" }}>
+        {TABS.map((t,i) => (
+          <button key={t.label} onClick={()=>setTab(i)} style={{
+            flex:1, background:"transparent",
+            color: tab===i ? C.gold : C.dim,
+            border:"none", padding:"8px 4px 10px",
+            fontFamily:"inherit", fontWeight:700, fontSize:9,
+            cursor:"pointer", textTransform:"uppercase",
+            letterSpacing:"0.04em", display:"flex",
+            flexDirection:"column", alignItems:"center", gap:3,
+            borderTop: tab===i ? 2px solid ${C.gold} : "2px solid transparent",
+            marginTop:-2,
+          }}>
+            <span style={{ fontSize:20 }}>{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
