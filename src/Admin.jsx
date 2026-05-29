@@ -158,7 +158,11 @@ function Login({ onLogin }) {
     setErro(""); setLoading(true);
     const res = await sbAuth("token?grant_type=password", { email, password: senha });
     setLoading(false);
-    if (res.access_token) { SESSION_TOKEN = res.access_token; sessionStorage.setItem("ndc_token", res.access_token); onLogin(res); }
+    if (res.access_token) {
+      SESSION_TOKEN = res.access_token;
+      sessionStorage.setItem("ndc_token", res.access_token);
+      onLogin(res);
+    }
     else setErro("E-mail ou senha incorretos.");
   }
 
@@ -698,8 +702,31 @@ export default function AdminAppCompleto() {
   const [novaPartida, setNovaPartida] = useState(false);
   const { toast, show }         = useToast();
 
-  const { data: times }      = useQuery(() => api.get(`time?select=*&limit=1`), [session]);
-  const { data: temporadas } = useQuery(() => api.get(`temporada?select=*&order=data_inicio.desc`), [session]);
+  // Buscar time do usuário logado
+  useEffect(() => {
+    if (!session) return;
+    api.get(`usuario_time?user_id=eq.${session.user?.id || ''}&select=*,time(*)`)
+      .then(data => {
+        if (data?.length) {
+          const ut = data[0];
+          if (ut.role === 'superadmin') {
+            setIsSuperadmin(true);
+            setIdTime(null); // superadmin vê tudo
+          } else {
+            setIdTime(ut.id_time);
+          }
+        }
+      }).catch(() => {});
+  }, [session]);
+
+  const { data: times }      = useQuery(() => 
+    idTime ? api.get(`time?id_time=eq.${idTime}&select=*&limit=1`) : api.get(`time?select=*&limit=1`),
+    [session, idTime]
+  );
+  const { data: temporadas } = useQuery(() => 
+    idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*&order=data_inicio.desc`) : api.get(`temporada?select=*&order=data_inicio.desc`),
+    [session, idTime]
+  );
   const [temporadaSel, setTemporadaSel] = useState(null);
   useEffect(() => { if (temporadas?.length && !temporadaSel) setTemporadaSel(temporadas[0]); }, [temporadas]);
 
@@ -802,7 +829,12 @@ export default function AdminAppCompleto() {
 
 // ── CRUD JOGADORES ────────────────────────────────────────────
 function CrudJogadores({ show }) {
-  const { data: jogadores, loading, reload } = useQuery(() => api.get(`jogador?id_jogador=gt.0&select=*,posicao(nome)&order=camisa.asc`));
+  const { data: _utj } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
+  const _idTimeJ = _utj?.[0]?.id_time;
+  const { data: jogadores, loading, reload } = useQuery(() => 
+    _idTimeJ ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${_idTimeJ}&select=*,posicao(nome)&order=camisa.asc`) : api.get(`jogador?id_jogador=gt.0&select=*,posicao(nome)&order=camisa.asc`),
+    [_idTimeJ]
+  );
   const { data: posicoes } = useQuery(() => api.get(`posicao?id_posicao_pai=not.is.null&select=*&order=nome.asc`));
   const [modal, setModal] = useState(null);
   const [form, setForm]   = useState({});
@@ -816,7 +848,8 @@ function CrudJogadores({ show }) {
     if (!form.nome) { show("Nome obrigatório.", "error"); return; }
     setSaving(true);
     try {
-      const body = { nome: form.nome, apelido: form.apelido||null, camisa: form.camisa||null, id_posicao: form.id_posicao ? Number(form.id_posicao) : null, telefone: form.telefone||null, email: form.email||null, data_inicio: form.data_inicio||null, observacoes: form.observacoes||null };
+      const utData = await api.get(`usuario_time?select=id_time&limit=1`);
+      const body = { nome: form.nome, apelido: form.apelido||null, camisa: form.camisa||null, id_posicao: form.id_posicao ? Number(form.id_posicao) : null, telefone: form.telefone||null, email: form.email||null, data_inicio: form.data_inicio||null, observacoes: form.observacoes||null, id_time: utData?.[0]?.id_time||null };
       if (modal === "novo") await api.post("jogador", body);
       else await api.patch(`jogador?id_jogador=eq.${form.id_jogador}`, body);
       show(modal === "novo" ? "Jogador criado!" : "Jogador atualizado!"); setModal(null); reload();
@@ -898,7 +931,12 @@ function CrudJogadores({ show }) {
 
 // ── CRUD ADVERSÁRIOS ──────────────────────────────────────────
 function CrudAdversarios({ show }) {
-  const { data: adversarios, loading, reload } = useQuery(() => api.get(`adversario?select=*,campo(nome),cidade(nome,estado)&order=nome.asc`));
+  const { data: _uta } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
+  const _idTimeA = _uta?.[0]?.id_time;
+  const { data: adversarios, loading, reload } = useQuery(() => 
+    _idTimeA ? api.get(`adversario?id_time=eq.${_idTimeA}&select=*,campo(nome),cidade(nome,estado)&order=nome.asc`) : api.get(`adversario?select=*,campo(nome),cidade(nome,estado)&order=nome.asc`),
+    [_idTimeA]
+  );
   const { data: campos }  = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
   const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
   const [modal, setModal]   = useState(null);
@@ -913,7 +951,8 @@ function CrudAdversarios({ show }) {
     if (!form.nome) { show("Nome obrigatório.", "error"); return; }
     setSaving(true);
     try {
-      const body = { nome: form.nome, id_campo: form.id_campo?Number(form.id_campo):null, id_cidade: form.id_cidade?Number(form.id_cidade):null, contato: form.contato||null, observacoes: form.observacoes||null };
+      const utDataA = await api.get(`usuario_time?select=id_time&limit=1`);
+      const body = { nome: form.nome, id_campo: form.id_campo?Number(form.id_campo):null, id_cidade: form.id_cidade?Number(form.id_cidade):null, contato: form.contato||null, observacoes: form.observacoes||null, id_time: utDataA?.[0]?.id_time||null };
       if (modal === "novo") await api.post("adversario", body);
       else await api.patch(`adversario?id_adversario=eq.${form.id_adversario}`, body);
       show("Salvo!"); setModal(null); reload();
