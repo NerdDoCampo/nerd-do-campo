@@ -1453,6 +1453,8 @@ function CrudJogadores({ show }) {
 
   const [loadingImport, setLoadingImport] = useState(null);
   const [resultadoImport, setResultadoImport] = useState(null);
+  const [_sk, _setSk] = useState("camisa");
+  const [_asc, _setAsc] = useState(true);
 
   async function confirmarImport() {
     setSaving(true);
@@ -1490,7 +1492,6 @@ function CrudJogadores({ show }) {
   if (loading) return <Spinner />;
   const ativos   = (jogadores||[]).filter(j => !j.data_fim);
   const inativos = (jogadores||[]).filter(j =>  j.data_fim);
-  const [_sk, _setSk] = useState("camisa"); const [_asc, _setAsc] = useState(true);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
