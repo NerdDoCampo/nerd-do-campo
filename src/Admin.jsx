@@ -1456,18 +1456,25 @@ function CrudJogadores({ show }) {
             <Card style={{ padding:0, overflow:"hidden" }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
                 <thead><tr style={{ background:C.surf2 }}>
-                  {["#","Nome","Apelido","Posição",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>)}
+                  {["#","Nome","Apelido","Posição","Telefone","E-mail","Início","Saída","Obs.",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {lista.map((j,i) => (
                     <tr key={j.id_jogador} style={{ background: i%2===0?C.surface:C.bg }}>
-                      <td style={{ padding:"11px 14px", fontWeight:800, color:C.gold }}>{j.camisa}</td>
-                      <td style={{ padding:"11px 14px", fontWeight:700 }}>{j.nome}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim }}>{j.apelido || "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{j.posicao?.nome || "—"}</td>
-                      <td style={{ padding:"11px 14px", display:"flex", gap:8 }}>
-                        <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(j)}>Editar</Btn>
-                        {!j.data_fim && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => inativar(j)}>Inativar</Btn>}
+                      <td style={{ padding:"11px 14px", fontWeight:800, color:C.gold, whiteSpace:"nowrap" }}>{j.camisa}</td>
+                      <td style={{ padding:"11px 14px", fontWeight:700, whiteSpace:"nowrap" }}>{j.nome}</td>
+                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.apelido || "—"}</td>
+                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.posicao?.nome || "—"}</td>
+                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.telefone || "—"}</td>
+                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.email || "—"}</td>
+                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_inicio ? new Date(j.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
+                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_fim ? new Date(j.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
+                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, maxWidth:150, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={j.observacoes||""}>{j.observacoes || "—"}</td>
+                      <td style={{ padding:"11px 14px", whiteSpace:"nowrap" }}>
+                        <div style={{ display:"flex", gap:6 }}>
+                          <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(j)}>Editar</Btn>
+                          {!j.data_fim && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => inativar(j)}>Inativar</Btn>}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1605,15 +1612,17 @@ function CrudAdversarios({ show }) {
       <Card style={{ padding:0, overflow:"hidden" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
-            {["Nome","Campo","Cidade","Contato",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>)}
+            {["Nome","Campo","Cidade","Contato","Observações","Inativo em",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>)}
           </tr></thead>
           <tbody>
-            {(adversarios||[]).filter(a=>!a.data_fim).map((a,i) => (
+            {(adversarios||[]).map((a,i) => (
               <tr key={a.id_adversario} style={{ background: i%2===0?C.surface:C.bg }}>
                 <td style={{ padding:"11px 14px", fontWeight:700 }}>{a.nome}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{a.campo?.nome || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{a.cidade ? `${a.cidade.nome}/${a.cidade.estado}` : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{a.contato || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{a.campo?.nome || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{a.cidade ? `${a.cidade.nome}/${a.cidade.estado}` : "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{a.contato || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={a.observacoes||""}>{a.observacoes || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{a.data_fim ? new Date(a.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
                 <td style={{ padding:"11px 14px" }}><Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(a)}>Editar</Btn></td>
               </tr>
             ))}
@@ -1727,14 +1736,15 @@ function CrudCampos({ show }) {
       <Card style={{ padding:0, overflow:"hidden" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
-            {["Nome","Endereço","Cidade",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>)}
+            {["Nome","Endereço","Cidade","Inativo em",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>)}
           </tr></thead>
           <tbody>
-            {(campos||[]).filter(c=>!c.data_fim).map((c,i) => (
+            {(campos||[]).map((c,i) => (
               <tr key={c.id_campo} style={{ background: i%2===0?C.surface:C.bg }}>
                 <td style={{ padding:"11px 14px", fontWeight:700 }}>{c.nome}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{c.endereco || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{c.cidade ? `${c.cidade.nome}/${c.cidade.estado}` : "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{c.endereco || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{c.cidade ? `${c.cidade.nome}/${c.cidade.estado}` : "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{c.data_fim ? new Date(c.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
                 <td style={{ padding:"11px 14px" }}><Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(c)}>Editar</Btn></td>
               </tr>
             ))}
@@ -1965,7 +1975,7 @@ function CrudPosicoes({ show }) {
             <Card style={{ padding:0, overflow:"hidden" }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
                 <thead><tr style={{ background:C.surf2 }}>
-                  {["Nome","Descrição","Ordem","Grupo pai",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
+                  {["Nome","Descrição","Ordem","Grupo pai","Inativo em",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {lista.map((p, i) => (
@@ -1973,7 +1983,8 @@ function CrudPosicoes({ show }) {
                       <td style={{ padding:"11px 14px", fontWeight:700 }}>{p.nome}</td>
                       <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{p.descricao || "—"}</td>
                       <td style={{ padding:"11px 14px", color:C.dim, textAlign:"center" }}>{p.ordem ?? "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{p.posicao_pai?.nome || "—"}</td>
+                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{p.posicao_pai?.nome || "—"}</td>
+                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{p.data_fim ? new Date(p.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
                       <td style={{ padding:"11px 14px", display:"flex", gap:8 }}>
                         <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(p)}>Editar</Btn>
                         {!p.data_fim && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => inativar(p)}>Inativar</Btn>}
@@ -2104,17 +2115,23 @@ function CrudTemporadas({ show }) {
       <Card style={{ padding:0, overflow:"hidden" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
-            {["Temporada","Time","Início","Fim","Técnico","Presidente",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
+            {["Temporada","Time","Início","Fim","Técnico","Presidente","Vice-Pres.","Financeiro","Vice-Fin.","Marca Jogos","Redes","Eventos",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>)}
           </tr></thead>
           <tbody>
             {(temporadas||[]).map((t,i) => (
               <tr key={t.id_temporada} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:700, color:C.gold }}>{t.nome}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{t.time?.nome || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{t.data_inicio ? new Date(t.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{t.data_fim   ? new Date(t.data_fim  ).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{t.tecnico    || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{t.presidente || "—"}</td>
+                <td style={{ padding:"11px 14px", fontWeight:700, color:C.gold, whiteSpace:"nowrap" }}>{t.nome}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.time?.nome || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_inicio ? new Date(t.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_fim ? new Date(t.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.tecnico || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.presidente || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.vice_presidente || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.financeiro || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.vice_financeiro || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.marca_jogos || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.resp_redes_sociais || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.resp_eventos || "—"}</td>
                 <td style={{ padding:"11px 14px" }}><Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(t)}>Editar</Btn></td>
               </tr>
             ))}
