@@ -1373,6 +1373,55 @@ export default function AdminAppCompleto() {
 
 
 // ── CRUD JOGADORES ────────────────────────────────────────────
+
+function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar }) {
+  if (!lista.length) return null;
+  const S = k => <ThSortable colKey={k} sortKey={sk} asc={asc} onSort={onSort}/>;
+  return (
+    <div>
+      <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>{grupo} ({lista.length})</div>
+      <Card style={{ padding:0, overflow:"hidden" }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <thead><tr style={{ background:C.surf2 }}>
+            <ThSortable colKey="camisa"      sortKey={sk} asc={asc} onSort={onSort}>#</ThSortable>
+            <ThSortable colKey="nome"        sortKey={sk} asc={asc} onSort={onSort}>Nome</ThSortable>
+            <ThSortable colKey="apelido"     sortKey={sk} asc={asc} onSort={onSort}>Apelido</ThSortable>
+            <ThSortable colKey="posicao.nome" sortKey={sk} asc={asc} onSort={onSort}>Posição</ThSortable>
+            <ThSortable colKey="telefone"    sortKey={sk} asc={asc} onSort={onSort}>Telefone</ThSortable>
+            <ThSortable colKey="email"       sortKey={sk} asc={asc} onSort={onSort}>E-mail</ThSortable>
+            <ThSortable colKey="data_inicio" sortKey={sk} asc={asc} onSort={onSort}>Início</ThSortable>
+            <ThSortable colKey="data_fim"    sortKey={sk} asc={asc} onSort={onSort}>Saída</ThSortable>
+            <ThSortable sortKey={sk} asc={asc} onSort={()=>{}}>Obs.</ThSortable>
+            <ThSortable sortKey={sk} asc={asc} onSort={()=>{}}></ThSortable>
+          </tr></thead>
+          <tbody>
+            {lista.map((j,i) => (
+              <tr key={j.id_jogador} style={{ background: i%2===0?C.surface:C.bg }}>
+                <td style={{ padding:"11px 14px", fontWeight:800, color:C.gold, whiteSpace:"nowrap" }}>{j.camisa}</td>
+                <td style={{ padding:"11px 14px", fontWeight:700, whiteSpace:"nowrap" }}>{j.nome}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.apelido || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.posicao?.nome || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.telefone || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.email || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_inicio ? new Date(j.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_fim ? new Date(j.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, maxWidth:150, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={j.observacoes||""}>{j.observacoes || "—"}</td>
+                <td style={{ padding:"11px 14px", whiteSpace:"nowrap" }}>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onEditar(j)}>Editar</Btn>
+                    {!j.data_fim && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onInativar(j)}>Inativar</Btn>}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+
 function CrudJogadores({ show }) {
   const { data: _utj } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
   const _idTimeJ = _utj?.[0]?.id_time;
@@ -1491,51 +1540,16 @@ function CrudJogadores({ show }) {
         <Btn onClick={abrirNovo}>+ Novo Jogador</Btn>
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
-      {[["Ativos", sortData(ativos, _sk, _asc)], ["Inativos", sortData(inativos, _sk, _asc)]].map(([grupo, lista]) => {
-        if (!lista.length) return null;
-        return (
-          <div key={grupo}>
-            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>{grupo} ({lista.length})</div>
-            <Card style={{ padding:0, overflow:"hidden" }}>
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-                <thead><tr style={{ background:C.surf2 }}>
-                  <ThSortable colKey="camisa" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>#</ThSortable>
-                  <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
-                  <ThSortable colKey="apelido" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Apelido</ThSortable>
-                  <ThSortable colKey="posicao.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Posição</ThSortable>
-                  <ThSortable colKey="telefone" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Telefone</ThSortable>
-                  <ThSortable colKey="email" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>E-mail</ThSortable>
-                  <ThSortable colKey="data_inicio" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Início</ThSortable>
-                  <ThSortable colKey="data_fim" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Saída</ThSortable>
-                  <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}>Obs.</ThSortable>
-                  <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
-                </tr></thead>
-                <tbody>
-                  {lista.map((j,i) => (
-                    <tr key={j.id_jogador} style={{ background: i%2===0?C.surface:C.bg }}>
-                      <td style={{ padding:"11px 14px", fontWeight:800, color:C.gold, whiteSpace:"nowrap" }}>{j.camisa}</td>
-                      <td style={{ padding:"11px 14px", fontWeight:700, whiteSpace:"nowrap" }}>{j.nome}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.apelido || "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.posicao?.nome || "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.telefone || "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.email || "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_inicio ? new Date(j.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_fim ? new Date(j.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, maxWidth:150, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={j.observacoes||""}>{j.observacoes || "—"}</td>
-                      <td style={{ padding:"11px 14px", whiteSpace:"nowrap" }}>
-                        <div style={{ display:"flex", gap:6 }}>
-                          <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(j)}>Editar</Btn>
-                          {!j.data_fim && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => inativar(j)}>Inativar</Btn>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
-          </div>
-        );
-      })}
+      {ativos.length > 0 && (
+        <TabelaJogadores grupo="Ativos" lista={sortData(ativos, _sk, _asc)} sk={_sk} asc={_asc}
+          onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
+          onEditar={abrirEditar} onInativar={inativar}/>
+      )}
+      {inativos.length > 0 && (
+        <TabelaJogadores grupo="Inativos" lista={sortData(inativos, _sk, _asc)} sk={_sk} asc={_asc}
+          onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
+          onEditar={abrirEditar} onInativar={inativar}/>
+      )}
       {modal && (
         <Modal title={modal === "novo" ? "Novo Jogador" : "Editar Jogador"} onClose={() => setModal(null)}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
