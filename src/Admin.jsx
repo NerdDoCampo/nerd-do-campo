@@ -277,9 +277,65 @@ function ListaPartidas({ temporada, onSelect, onNova }) {
             <button key={v} onClick={() => setFiltro(v)} style={{ background: filtro === v ? C.gold : C.surf2, color: filtro === v ? "#0B3D2E" : C.dim, border: "none", padding: "6px 14px", borderRadius: 8, fontFamily: "inherit", fontWeight: 700, fontSize: 12, cursor: "pointer", textTransform: "uppercase" }}>{l}</button>
           ))}
         </div>
-        <Btn onClick={onNova}>+ Nova Partida</Btn>
+        <div style={{ display:"flex", gap:8 }}>
+          <BotoesImportExport
+            onExportar={() => exportarExcel(
+              (partidas||[]).map(p => ({
+                id_partida: p.id_partida,
+                adversario: p.adversario?.nome||"",
+                data: p.data ? new Date(p.data).toLocaleDateString("pt-BR") : "",
+                hora: p.data ? new Date(p.data).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "",
+                em_casa: p.em_casa==="S"?"SIM":"NAO",
+                cancelada: p.cancelada==="S"?"SIM":"NAO",
+                campo: p.campo?.nome||"",
+                gols_marcados: p.gols_marcados??(""),
+                gols_sofridos: p.gols_sofridos??(""),
+                observacoes: p.observacoes||"",
+              })),
+              [
+                { key:"id_partida",    label:"id",            width:8,  descricao:"NÃO altere. Vazio = nova partida." },
+                { key:"adversario",    label:"adversario",    width:25, descricao:"Nome exato do adversário cadastrado. OBRIGATÓRIO." },
+                { key:"data",          label:"data",          width:14, descricao:"Data no formato DD/MM/AAAA. OBRIGATÓRIO." },
+                { key:"hora",          label:"hora",          width:8,  descricao:"Hora no formato HH:MM. OBRIGATÓRIO." },
+                { key:"em_casa",       label:"em_casa",       width:8,  descricao:"SIM ou NAO." },
+                { key:"cancelada",     label:"cancelada",     width:8,  descricao:"SIM ou NAO." },
+                { key:"campo",         label:"campo",         width:25, descricao:"Nome exato do campo cadastrado." },
+                { key:"gols_marcados", label:"gols_marcados", width:12, descricao:"Número de gols do time. Deixe vazio se pendente." },
+                { key:"gols_sofridos", label:"gols_sofridos", width:12, descricao:"Número de gols sofridos. Deixe vazio se pendente." },
+                { key:"observacoes",   label:"observacoes",   width:40, descricao:"Observações da partida." },
+              ],
+              "partidas",
+              ["- id preenchido = atualiza partida existente", "- id vazio = cria nova partida", "- Adversário e Campo devem estar cadastrados", "- Data: DD/MM/AAAA | Hora: HH:MM"]
+            )}
+            onImportar={async (file) => {
+              setLoadingImportPartida(true);
+              try {
+                const rows = await lerExcel(file);
+                const erros = []; const validos = [];
+                rows.forEach((row, i) => {
+                  const linha = i + 2;
+                  const advNome = String(row["adversario"]||"").trim();
+                  if (!advNome) { erros.push({ linha, mensagem: "Campo 'adversario' é obrigatório." }); return; }
+                  const advOk = (adversarios||[]).find(a => a.nome.toUpperCase() === advNome.toUpperCase());
+                  if (!advOk) { erros.push({ linha, mensagem: `Adversário '${advNome}' não encontrado.` }); return; }
+                  if (!String(row["data"]||"").trim()) { erros.push({ linha, mensagem: "Campo 'data' é obrigatório." }); return; }
+                  if (!String(row["hora"]||"").trim()) { erros.push({ linha, mensagem: "Campo 'hora' é obrigatório." }); return; }
+                  const gm = row["gols_marcados"] !== "" ? Number(row["gols_marcados"]) : null;
+                  const gs = row["gols_sofridos"] !== "" ? Number(row["gols_sofridos"]) : null;
+                  if (gm !== null && isNaN(gm)) erros.push({ linha, mensagem: "gols_marcados deve ser número." });
+                  if (gs !== null && isNaN(gs)) erros.push({ linha, mensagem: "gols_sofridos deve ser número." });
+                  if (!erros.find(e => e.linha === linha)) validos.push({...row, _adv: advOk});
+                });
+                setResultadoImportPartida({ erros, validos: validos.length, mensagem: `${validos.filter(r=>r.id_partida).length} atualizações + ${validos.filter(r=>!r.id_partida).length} novas.`, _dados: validos });
+              } catch(e) { onShow(e.message, "error"); } finally { setLoadingImportPartida(false); }
+            }}
+            loadingImport={loadingImportPartida}
+          />
+          <Btn onClick={onNova}>+ Nova Partida</Btn>
+        </div>
       </div>
 
+      <ModalImportacao resultado={resultadoImportPartida} onClose={() => setResultadoImportPartida(null)} onConfirmar={confirmarImportPartidas} salvando={false}/>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {lista.map(p => {
           const res = resultado(p);
@@ -752,6 +808,7 @@ function FormGol({ partida, participacoes, jogadores, onSalvo, show }) {
 
 // ── APP ADMIN ─────────────────────────────────────────────────
 const MENU = [
+  { id:"inicio",      label:"Início",      icon:"🏠", grupo:"" },
   { id:"partidas",    label:"Partidas",    icon:"📅", grupo:"Jogos" },
   { id:"jogadores",   label:"Jogadores",   icon:"👕", grupo:"Cadastros" },
   { id:"adversarios", label:"Adversários", icon:"⚔️", grupo:"Cadastros" },
@@ -762,11 +819,221 @@ const MENU = [
   { id:"time",        label:"Meu Time",    icon:"⚙️", grupo:"Configurações" },
 ];
 
+
+// ══════════════════════════════════════════════════════════════
+// PÁGINA DE INÍCIO / ONBOARDING
+// ══════════════════════════════════════════════════════════════
+function PaginaInicio({ dados, onNavegar }) {
+  const { cidades, campos, posicoes, adversarios, jogadores, temporadas, partidas } = dados;
+
+  const etapas = [
+    {
+      numero: 1,
+      titulo: "Cidades",
+      icone: "📍",
+      menu: "cidades",
+      descricao: "Cadastre as cidades onde os jogos acontecem.",
+      exemplo: "Ex: Sapiranga, Ivoti, Novo Hamburgo",
+      concluido: (cidades||[]).length > 0,
+      obrigatorio: true,
+      dica: "Necessário antes de cadastrar campos.",
+    },
+    {
+      numero: 2,
+      titulo: "Campos",
+      icone: "🏟️",
+      menu: "campos",
+      descricao: "Cadastre os campos/locais onde os jogos são realizados.",
+      exemplo: "Ex: Assoc. Esp. Sapiranga, CT do XV",
+      concluido: (campos||[]).length > 0,
+      obrigatorio: true,
+      dica: "Necessário antes de cadastrar adversários e partidas.",
+    },
+    {
+      numero: 3,
+      titulo: "Posições",
+      icone: "🎯",
+      menu: "posicoes",
+      descricao: "Configure as posições dos jogadores (já vêm pré-cadastradas).",
+      exemplo: "Ex: Goleiro, Zagueiro, Meia, Atacante",
+      concluido: (posicoes||[]).length > 0,
+      obrigatorio: true,
+      dica: "Necessário antes de cadastrar jogadores.",
+    },
+    {
+      numero: 4,
+      titulo: "Adversários",
+      icone: "⚔️",
+      menu: "adversarios",
+      descricao: "Cadastre os times adversários que vocês enfrentam.",
+      exemplo: "Ex: Trianon, Valencia, Borussia",
+      concluido: (adversarios||[]).length > 0,
+      obrigatorio: true,
+      dica: "Necessário antes de cadastrar partidas.",
+    },
+    {
+      numero: 5,
+      titulo: "Jogadores",
+      icone: "👕",
+      menu: "jogadores",
+      descricao: "Cadastre o elenco do time com nome, camisa e posição.",
+      exemplo: "Ex: Dudu (camisa 9), Leo (camisa 5)",
+      concluido: (jogadores||[]).length > 0,
+      obrigatorio: true,
+      dica: "Necessário para registrar escalações e gols.",
+    },
+    {
+      numero: 6,
+      titulo: "Temporada",
+      icone: "📆",
+      menu: "temporadas",
+      descricao: "Configure a temporada atual com datas e comissão técnica.",
+      exemplo: "Ex: Temporada 2025 (Jan/2025 - Dez/2025)",
+      concluido: (temporadas||[]).length > 0,
+      obrigatorio: true,
+      dica: "Necessário antes de cadastrar partidas.",
+    },
+    {
+      numero: 7,
+      titulo: "Partidas",
+      icone: "📅",
+      menu: "partidas",
+      descricao: "Monte o calendário com todos os jogos da temporada.",
+      exemplo: "Ex: Juventus x Trianon — 21/06/2025 14:00",
+      concluido: (partidas||[]).length > 0,
+      obrigatorio: true,
+      dica: "Após cadastrar, registre o placar e escalação após cada jogo.",
+    },
+  ];
+
+  const concluidas = etapas.filter(e => e.concluido).length;
+  const pct = Math.round((concluidas / etapas.length) * 100);
+  const proxima = etapas.find(e => !e.concluido);
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+      {/* Header de boas-vindas */}
+      <Card style={{ padding:"24px 28px", background:"linear-gradient(135deg,#103D2A,#174D36)" }}>
+        <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:6 }}>
+          Bem-vindo ao Nerd do Campo
+        </div>
+        <div style={{ fontSize:22, fontWeight:800, color:C.cream, marginBottom:12 }}>
+          {pct === 100 ? "✅ Configuração completa!" : `Configure seu time em ${etapas.length} passos`}
+        </div>
+
+        {/* Barra de progresso */}
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12 }}>
+          <div style={{ flex:1, height:10, background:C.bg, borderRadius:5, overflow:"hidden" }}>
+            <div style={{ width:`${pct}%`, height:"100%", background:C.gold, borderRadius:5, transition:"width 0.4s" }}/>
+          </div>
+          <span style={{ fontSize:14, fontWeight:800, color:C.gold, minWidth:40 }}>{pct}%</span>
+        </div>
+
+        <div style={{ fontSize:13, color:C.dim }}>
+          {concluidas} de {etapas.length} etapas concluídas
+          {proxima && <> · <span style={{ color:C.cream }}>Próxima: {proxima.titulo}</span></>}
+        </div>
+      </Card>
+
+      {/* Dica de importação */}
+      <Card style={{ padding:"14px 20px", background:C.surf2, border:`1px solid ${C.gold}44`, display:"flex", gap:14, alignItems:"flex-start" }}>
+        <span style={{ fontSize:24, flexShrink:0 }}>💡</span>
+        <div>
+          <div style={{ fontWeight:700, color:C.gold, marginBottom:4, fontSize:14 }}>Dica: Use a importação por planilha!</div>
+          <div style={{ fontSize:13, color:C.dim, lineHeight:1.5 }}>
+            Em cada cadastro, clique em <strong style={{color:C.cream}}>📥 Exportar</strong> para baixar uma planilha modelo.
+            Preencha no Excel e clique em <strong style={{color:C.cream}}>📤 Importar</strong> para cadastrar tudo de uma vez — muito mais rápido do que cadastrar um por um!
+          </div>
+        </div>
+      </Card>
+
+      {/* Lista de etapas */}
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {etapas.map((etapa, i) => {
+          const anterior = i > 0 ? etapas[i-1] : null;
+          const bloqueado = anterior && !anterior.concluido;
+
+          return (
+            <div key={etapa.numero}
+              onClick={() => !bloqueado && onNavegar(etapa.menu)}
+              style={{
+                background: etapa.concluido ? C.surf2 : C.surface,
+                border: `1px solid ${etapa.concluido ? C.win+"55" : bloqueado ? C.border : C.gold+"44"}`,
+                borderRadius: 12,
+                padding: "16px 20px",
+                cursor: bloqueado ? "not-allowed" : "pointer",
+                opacity: bloqueado ? 0.5 : 1,
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { if (!bloqueado) e.currentTarget.style.background = C.surf2; }}
+              onMouseLeave={e => { e.currentTarget.style.background = etapa.concluido ? C.surf2 : C.surface; }}
+            >
+              {/* Número/check */}
+              <div style={{
+                width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+                background: etapa.concluido ? C.win+"33" : bloqueado ? C.surf2 : C.gold+"22",
+                border: `2px solid ${etapa.concluido ? C.win : bloqueado ? C.border : C.gold}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: etapa.concluido ? 20 : 18,
+              }}>
+                {etapa.concluido ? "✅" : bloqueado ? "🔒" : etapa.icone}
+              </div>
+
+              {/* Conteúdo */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 3 }}>
+                  <span style={{ fontWeight: 800, fontSize: 15, color: etapa.concluido ? C.win : C.cream }}>
+                    {etapa.numero}. {etapa.titulo}
+                  </span>
+                  {etapa.concluido && (
+                    <span style={{ fontSize: 11, color: C.win, background: C.win+"22", border:`1px solid ${C.win}44`, borderRadius:4, padding:"1px 6px", fontWeight:700 }}>
+                      CONCLUÍDO
+                    </span>
+                  )}
+                  {!etapa.concluido && !bloqueado && proxima?.numero === etapa.numero && (
+                    <span style={{ fontSize: 11, color: C.gold, background: C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:4, padding:"1px 6px", fontWeight:700 }}>
+                      PRÓXIMO
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 13, color: C.dim, marginBottom: 3 }}>{etapa.descricao}</div>
+                <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>{etapa.exemplo}</div>
+                {!etapa.concluido && !bloqueado && (
+                  <div style={{ fontSize: 11, color: C.gold, marginTop: 4 }}>ℹ️ {etapa.dica}</div>
+                )}
+              </div>
+
+              {/* Seta */}
+              {!bloqueado && (
+                <span style={{ color: etapa.concluido ? C.win : C.gold, fontSize: 20, flexShrink: 0 }}>›</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {pct === 100 && (
+        <Card style={{ padding:"20px 24px", textAlign:"center", background:C.win+"11", border:`1px solid ${C.win}44` }}>
+          <div style={{ fontSize:32, marginBottom:8 }}>🎉</div>
+          <div style={{ fontWeight:800, fontSize:18, color:C.win, marginBottom:6 }}>Sistema configurado!</div>
+          <div style={{ fontSize:13, color:C.dim }}>
+            Agora vá em <strong style={{color:C.cream}}>Partidas</strong> para registrar os resultados dos jogos e acompanhar as estatísticas em tempo real.
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function AdminAppCompleto() {
   const [session, setSession]       = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [idTime, setIdTime]         = useState(null);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
-  const [menu, setMenu]             = useState("partidas");
+  const [menu, setMenu]             = useState("inicio");
   const [partida, setPartida]   = useState(null);
   const [novaPartida, setNovaPartida] = useState(false);
   const { toast, show }         = useToast();
@@ -796,6 +1063,13 @@ export default function AdminAppCompleto() {
     idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*&order=data_inicio.desc`) : api.get(`temporada?select=*&order=data_inicio.desc`),
     [session, idTime]
   );
+  // Dados para onboarding
+  const { data: _cidades }    = useQuery(() => api.get(`cidade?select=id_cidade&limit=1`), [session]);
+  const { data: _campos }     = useQuery(() => api.get(`campo?select=id_campo&limit=1`), [session]);
+  const { data: _posicoes }   = useQuery(() => api.get(`posicao?select=id_posicao&limit=1`), [session]);
+  const { data: _adversarios } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario&limit=1`) : api.get(`adversario?select=id_adversario&limit=1`), [session, idTime]);
+  const { data: _jogadores }  = useQuery(() => idTime ? api.get(`jogador?id_time=eq.${idTime}&id_jogador=gt.0&select=id_jogador&limit=1`) : api.get(`jogador?id_jogador=gt.0&select=id_jogador&limit=1`), [session, idTime]);
+  const { data: _partidas }   = useQuery(() => api.get(`partida?select=id_partida&limit=1`), [session]);
   const [temporadaSel, setTemporadaSel] = useState(null);
   useEffect(() => { if (temporadas?.length && !temporadaSel) setTemporadaSel(temporadas[0]); }, [temporadas]);
 
@@ -909,6 +1183,7 @@ function CrudJogadores({ show }) {
     [_idTimeJ]
   );
   const { data: posicoes } = useQuery(() => api.get(`posicao?id_posicao_pai=not.is.null&select=*&order=nome.asc`));
+  const posicoesLista = posicoes || [];
   const [modal, setModal] = useState(null);
   const [form, setForm]   = useState({});
   const [saving, setSaving] = useState(false);
@@ -929,6 +1204,33 @@ function CrudJogadores({ show }) {
     } catch (e) { show(e.message, "error"); } finally { setSaving(false); }
   }
 
+  const [loadingImport, setLoadingImport] = useState(null);
+  const [resultadoImport, setResultadoImport] = useState(null);
+
+  async function confirmarImport() {
+    setSaving(true);
+    try {
+      const utData = await api.get(`usuario_time?select=id_time&limit=1`);
+      const id_time_val = utData?.[0]?.id_time || null;
+      for (const row of resultadoImport._dados) {
+        const pos = (_idTimeJ ? posicoes : posicoes||[]).find ? 
+          (posicoes||[]).find(p => p.nome.toUpperCase() === String(row.posicao||"").trim().toUpperCase()) : null;
+        const body = {
+          nome: String(row.nome||"").trim(),
+          apelido: row.apelido||null,
+          camisa: row.camisa ? String(row.camisa) : null,
+          id_posicao: pos?.id_posicao || null,
+          telefone: row.telefone||null,
+          data_inicio: row.data_inicio||null,
+          id_time: id_time_val,
+        };
+        if (row.id_jogador) await api.patch(`jogador?id_jogador=eq.${row.id_jogador}`, body);
+        else await api.post("jogador", body);
+      }
+      show(`${resultadoImport._dados.length} jogador(es) importado(s)!`); setResultadoImport(null); reload();
+    } catch(e) { show(e.message, "error"); } finally { setSaving(false); }
+  }
+
   async function inativar(j) {
     if (!confirm(`Inativar ${j.apelido || j.nome}?`)) return;
     try { await api.patch(`jogador?id_jogador=eq.${j.id_jogador}`, { data_fim: new Date().toISOString().split("T")[0] }); show("Jogador inativado."); reload(); }
@@ -941,7 +1243,49 @@ function CrudJogadores({ show }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"flex", justifyContent:"flex-end" }}><Btn onClick={abrirNovo}>+ Novo Jogador</Btn></div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+        <BotoesImportExport
+          onExportar={() => exportarExcel(
+            (jogadores||[]).filter(j=>!j.data_fim).map(j => ({...j, posicao_nome: j.posicao?.nome||""})),
+            [
+              { key:"id_jogador",    label:"id",          width:8,  descricao:"NÃO altere. Vazio = novo." },
+              { key:"nome",          label:"nome",        width:25, descricao:"Nome completo. OBRIGATÓRIO." },
+              { key:"apelido",       label:"apelido",     width:20, descricao:"Apelido/nome de guerra." },
+              { key:"camisa",        label:"camisa",      width:8,  descricao:"Número da camisa." },
+              { key:"posicao_nome",  label:"posicao",     width:20, descricao:"Nome exato da posição cadastrada." },
+              { key:"telefone",      label:"telefone",    width:18, descricao:"Telefone do jogador." },
+              { key:"data_inicio",   label:"data_inicio", width:14, descricao:"Data de entrada no time (DD/MM/AAAA)." },
+            ],
+            "jogadores",
+            ["- id preenchido = atualiza", "- id vazio = cria novo", "- Posição deve estar cadastrada no sistema"]
+          )}
+          onImportar={async (file) => {
+            setLoadingImport("jogadores");
+            try {
+              const rows = await lerExcel(file);
+              const erros = []; const validos = [];
+              const camisasVistas = new Set((jogadores||[]).filter(j=>!j.data_fim).map(j=>j.camisa));
+              rows.forEach((row, i) => {
+                const linha = i + 2;
+                const nome = String(row["nome"]||"").trim();
+                if (!nome) { erros.push({ linha, mensagem: "Campo 'nome' é obrigatório." }); return; }
+                const posNome = String(row["posicao"]||"").trim();
+                if (posNome && !posicoesLista.find(p => p.nome.toUpperCase() === posNome.toUpperCase()))
+                  erros.push({ linha, mensagem: `Posição '${posNome}' não encontrada.` });
+                const camisa = row["camisa"] ? String(row["camisa"]).trim() : null;
+                if (camisa && !row["id_jogador"] && camisasVistas.has(camisa))
+                  erros.push({ linha, mensagem: `Camisa '${camisa}' já está em uso por outro jogador.` });
+                if (camisa && !row["id_jogador"]) camisasVistas.add(camisa);
+                if (!erros.find(e => e.linha === linha)) validos.push(row);
+              });
+              setResultadoImport({ erros, validos: validos.length, mensagem: `${validos.filter(r=>r.id_jogador).length} atualizações + ${validos.filter(r=>!r.id_jogador).length} novos.`, _dados: validos });
+            } catch(e) { show(e.message, "error"); } finally { setLoadingImport(null); }
+          }}
+          loadingImport={loadingImport==="jogadores"}
+        />
+        <Btn onClick={abrirNovo}>+ Novo Jogador</Btn>
+      </div>
+      <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       {[["Ativos", ativos], ["Inativos", inativos]].map(([grupo, lista]) => {
         if (!lista.length) return null;
         return (
@@ -1022,7 +1366,24 @@ function CrudAdversarios({ show }) {
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
   const [saving, setSaving] = useState(false);
+  const [loadingImport, setLoadingImport] = useState(null);
+  const [resultadoImport, setResultadoImport] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function confirmarImport() {
+    setSaving(true);
+    try {
+      const utData = await api.get(`usuario_time?select=id_time&limit=1`);
+      const id_time_val = utData?.[0]?.id_time || null;
+      for (const row of resultadoImport._dados) {
+        const campo = (campos||[]).find(c => c.nome.toUpperCase() === String(row.campo||"").trim().toUpperCase());
+        const body = { nome: String(row.nome||"").trim(), id_campo: campo?.id_campo||null, contato: row.contato||null, id_time: id_time_val };
+        if (row.id_adversario) await api.patch(`adversario?id_adversario=eq.${row.id_adversario}`, body);
+        else await api.post("adversario", body);
+      }
+      show(`${resultadoImport._dados.length} registro(s) importado(s)!`); setResultadoImport(null); reload();
+    } catch(e) { show(e.message, "error"); } finally { setSaving(false); }
+  }
 
   function abrirNovo() { setForm({ nome:"", id_campo:"", id_cidade:"", contato:"", observacoes:"" }); setModal("novo"); }
   function abrirEditar(a) { setForm({ ...a, id_campo: a.id_campo?String(a.id_campo):"", id_cidade: a.id_cidade?String(a.id_cidade):"" }); setModal(a); }
@@ -1043,7 +1404,41 @@ function CrudAdversarios({ show }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"flex", justifyContent:"flex-end" }}><Btn onClick={abrirNovo}>+ Novo Adversário</Btn></div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+        <BotoesImportExport
+          onExportar={() => exportarExcel(
+            (adversarios||[]).filter(a=>!a.data_fim).map(a => ({...a, campo: a.campo?.nome||""})),
+            [
+              { key:"id_adversario", label:"id",      width:8,  descricao:"NÃO altere. Vazio = novo." },
+              { key:"nome",          label:"nome",    width:30, descricao:"Nome do adversário. OBRIGATÓRIO." },
+              { key:"campo",         label:"campo",   width:30, descricao:"Nome exato do campo cadastrado." },
+              { key:"contato",       label:"contato", width:30, descricao:"Telefone ou nome do contato." },
+            ],
+            "adversarios",
+            ["- id preenchido = atualiza", "- id vazio = cria novo", "- Campo deve estar cadastrado"]
+          )}
+          onImportar={async (file) => {
+            setLoadingImport("adversarios");
+            try {
+              const rows = await lerExcel(file);
+              const erros = []; const validos = [];
+              rows.forEach((row, i) => {
+                const linha = i + 2;
+                const nome = String(row["nome"]||"").trim();
+                if (!nome) { erros.push({ linha, mensagem: "Campo 'nome' é obrigatório." }); return; }
+                const campoNome = String(row["campo"]||"").trim();
+                if (campoNome && !(campos||[]).find(c => c.nome.toUpperCase() === campoNome.toUpperCase()))
+                  erros.push({ linha, mensagem: `Campo '${campoNome}' não encontrado. Cadastre primeiro.` });
+                if (!erros.find(e => e.linha === linha)) validos.push(row);
+              });
+              setResultadoImport({ erros, validos: validos.length, mensagem: `${validos.filter(r=>r.id_adversario).length} atualizações + ${validos.filter(r=>!r.id_adversario).length} novos.`, _dados: validos });
+            } catch(e) { show(e.message, "error"); } finally { setLoadingImport(null); }
+          }}
+          loadingImport={loadingImport==="adversarios"}
+        />
+        <Btn onClick={abrirNovo}>+ Novo Adversário</Btn>
+      </div>
+      <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
@@ -1094,7 +1489,22 @@ function CrudCampos({ show }) {
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
   const [saving, setSaving] = useState(false);
+  const [loadingImport, setLoadingImport] = useState(null);
+  const [resultadoImport, setResultadoImport] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function confirmarImport() {
+    setSaving(true);
+    try {
+      for (const row of resultadoImport._dados) {
+        const cidade = (cidades||[]).find(c => c.nome.toUpperCase() === String(row.cidade||"").trim().toUpperCase());
+        const body = { nome: String(row.nome||"").trim(), endereco: row.endereco||null, id_cidade: cidade?.id_cidade||null };
+        if (row.id_campo) await api.patch(`campo?id_campo=eq.${row.id_campo}`, body);
+        else await api.post("campo", body);
+      }
+      show(`${resultadoImport._dados.length} registro(s) importado(s)!`); setResultadoImport(null); reload();
+    } catch(e) { show(e.message, "error"); } finally { setSaving(false); }
+  }
 
   function abrirNovo() { setForm({ nome:"", endereco:"", id_cidade:"", observacoes:"" }); setModal("novo"); }
   function abrirEditar(c) { setForm({ ...c, id_cidade: c.id_cidade?String(c.id_cidade):"" }); setModal(c); }
@@ -1114,7 +1524,43 @@ function CrudCampos({ show }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"flex", justifyContent:"flex-end" }}><Btn onClick={abrirNovo}>+ Novo Campo</Btn></div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+        <BotoesImportExport
+          onExportar={() => exportarExcel(
+            (campos||[]).map(c => ({...c, cidade: c.cidade ? `${c.cidade.nome}` : ""})),
+            [
+              { key:"id_campo",  label:"id",       width:8,  descricao:"NÃO altere. Vazio = novo registro." },
+              { key:"nome",      label:"nome",     width:30, descricao:"Nome do campo. OBRIGATÓRIO." },
+              { key:"endereco",  label:"endereco", width:40, descricao:"Endereço do campo." },
+              { key:"cidade",    label:"cidade",   width:25, descricao:"Nome exato da cidade cadastrada no sistema." },
+            ],
+            "campos",
+            ["- id preenchido = atualiza", "- id vazio = cria novo", "- Cidade deve estar cadastrada no sistema"]
+          )}
+          onImportar={async (file) => {
+            setLoadingImport("campos");
+            try {
+              const rows = await lerExcel(file);
+              const erros = []; const validos = [];
+              rows.forEach((row, i) => {
+                const linha = i + 2;
+                const nome = String(row["nome"]||"").trim();
+                if (!nome) { erros.push({ linha, mensagem: "Campo 'nome' é obrigatório." }); return; }
+                const cidadeNome = String(row["cidade"]||"").trim();
+                if (cidadeNome) {
+                  const cidadeOk = (cidades||[]).find(c => c.nome.toUpperCase() === cidadeNome.toUpperCase());
+                  if (!cidadeOk) erros.push({ linha, mensagem: `Cidade '${cidadeNome}' não encontrada. Cadastre primeiro.` });
+                }
+                if (!erros.find(e => e.linha === linha)) validos.push(row);
+              });
+              setResultadoImport({ erros, validos: validos.length, mensagem: `${validos.filter(r=>r.id_campo).length} atualizações + ${validos.filter(r=>!r.id_campo).length} novos.`, _dados: validos });
+            } catch(e) { show(e.message, "error"); } finally { setLoadingImport(null); }
+          }}
+          loadingImport={loadingImport==="campos"}
+        />
+        <Btn onClick={abrirNovo}>+ Novo Campo</Btn>
+      </div>
+      <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
@@ -1158,8 +1604,23 @@ function CrudCidades({ show }) {
   const { data: cidades, loading, reload } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]           = useState(false);
+  const [loadingImport, setLoadingImport] = useState(null);
+  const [resultadoImport, setResultadoImport] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function confirmarImport() {
+    const { _dados, _tipo } = resultadoImport;
+    setSaving(true);
+    try {
+      for (const row of _dados) {
+        const body = { nome: String(row.nome||"").trim(), estado: String(row.estado||"").trim().toUpperCase() };
+        if (row.id_cidade) await api.patch(`cidade?id_cidade=eq.${row.id_cidade}`, body);
+        else await api.post("cidade", body);
+      }
+      show(`${_dados.length} registro(s) importado(s)!`); setResultadoImport(null); reload();
+    } catch(e) { show(e.message, "error"); } finally { setSaving(false); }
+  }
 
   function abrirNovo() { setForm({ nome:"", estado:"", observacoes:"" }); setModal("novo"); }
   function abrirEditar(c) { setForm({ ...c }); setModal(c); }
@@ -1179,7 +1640,41 @@ function CrudCidades({ show }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"flex", justifyContent:"flex-end" }}><Btn onClick={abrirNovo}>+ Nova Cidade</Btn></div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+        <BotoesImportExport
+          onExportar={() => exportarExcel(
+            cidades||[],
+            [
+              { key:"id_cidade",    label:"id",     width:8,  descricao:"NÃO altere este campo. Deixe vazio para criar nova cidade." },
+              { key:"nome",         label:"nome",   width:25, descricao:"Nome da cidade. OBRIGATÓRIO." },
+              { key:"estado",       label:"estado", width:8,  descricao:"UF com 2 letras. Ex: RS, SP. OBRIGATÓRIO." },
+            ],
+            "cidades",
+            ["Regras:", "- id preenchido = atualiza registro existente", "- id vazio = cria novo registro", "- Todos os erros devem ser corrigidos antes de importar"]
+          )}
+          onImportar={async (file) => {
+            setLoadingImport("cidades");
+            try {
+              const rows = await lerExcel(file);
+              const erros = [];
+              const validos = [];
+              rows.forEach((row, i) => {
+                const linha = i + 2;
+                const nome = String(row["nome"]||"").trim();
+                const estado = String(row["estado"]||"").trim().toUpperCase();
+                if (!nome) erros.push({ linha, mensagem: "Campo 'nome' é obrigatório." });
+                if (!estado) erros.push({ linha, mensagem: "Campo 'estado' é obrigatório." });
+                else if (estado.length !== 2) erros.push({ linha, mensagem: `Estado '${estado}' inválido. Use 2 letras (ex: RS).` });
+                if (!erros.find(e => e.linha === linha)) validos.push({ ...row, nome, estado });
+              });
+              setResultadoImport({ erros, validos: validos.length, mensagem: `${validos.filter(r=>r.id_cidade).length} atualizações + ${validos.filter(r=>!r.id_cidade).length} novos registros.`, _dados: validos, _tipo: "cidades" });
+            } catch(e) { show(e.message, "error"); }
+            finally { setLoadingImport(null); }
+          }}
+          loadingImport={loadingImport==="cidades"}
+        />
+        <Btn onClick={abrirNovo}>+ Nova Cidade</Btn>
+      </div>
       <Card style={{ padding:0, overflow:"hidden" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
@@ -1196,6 +1691,7 @@ function CrudCidades({ show }) {
           </tbody>
         </table>
       </Card>
+      <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       {modal && (
         <Modal title={modal === "novo" ? "Nova Cidade" : "Editar Cidade"} onClose={() => setModal(null)}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -1251,7 +1747,36 @@ function CrudPosicoes({ show }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"flex", justifyContent:"flex-end" }}><Btn onClick={abrirNovo}>+ Nova Posição</Btn></div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+        <BotoesImportExport
+          onExportar={() => exportarExcel(
+            posicoes||[],
+            [
+              { key:"id_posicao",     label:"id",       width:8,  descricao:"NÃO altere. Vazio = novo." },
+              { key:"nome",           label:"nome",     width:25, descricao:"Nome da posição. OBRIGATÓRIO." },
+              { key:"id_posicao_pai", label:"id_grupo", width:8,  descricao:"ID do grupo (Goleiro=1, Defesa=2, Meio=3, Ataque=4). Deixe vazio se for grupo." },
+            ],
+            "posicoes",
+            ["- Grupos não têm id_grupo", "- Posições específicas devem ter id_grupo preenchido"]
+          )}
+          onImportar={async (file) => {
+            setLoadingImport("posicoes");
+            try {
+              const rows = await lerExcel(file);
+              const erros = []; const validos = [];
+              rows.forEach((row, i) => {
+                const linha = i + 2;
+                const nome = String(row["nome"]||"").trim();
+                if (!nome) erros.push({ linha, mensagem: "Campo 'nome' é obrigatório." });
+                else validos.push(row);
+              });
+              setResultadoImport({ erros, validos: validos.length, mensagem: `${validos.filter(r=>r.id_posicao).length} atualizações + ${validos.filter(r=>!r.id_posicao).length} novos.`, _dados: validos });
+            } catch(e) { show(e.message, "error"); } finally { setLoadingImport(null); }
+          }}
+          loadingImport={loadingImport==="posicoes"}
+        />
+        <Btn onClick={abrirNovo}>+ Nova Posição</Btn>
+      </div>
       {["Grupos (pai)","Posições detalhadas"].map((titulo, gi) => {
         const lista = gi === 0 ? grupos : filhas;
         if (!lista.length) return null;
@@ -1282,6 +1807,7 @@ function CrudPosicoes({ show }) {
           </div>
         );
       })}
+      <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       {modal && (
         <Modal title={modal === "novo" ? "Nova Posição" : "Editar Posição"} onClose={() => setModal(null)}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -1339,7 +1865,41 @@ function CrudTemporadas({ show }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"flex", justifyContent:"flex-end" }}><Btn onClick={abrirNovo}>+ Nova Temporada</Btn></div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+        <BotoesImportExport
+          onExportar={() => exportarExcel(
+            temporadas||[],
+            [
+              { key:"id_temporada",  label:"id",          width:8,  descricao:"NÃO altere. Vazio = nova temporada." },
+              { key:"nome",          label:"nome",        width:25, descricao:"Nome da temporada. OBRIGATÓRIO." },
+              { key:"data_inicio",   label:"data_inicio", width:14, descricao:"Data de início (AAAA-MM-DD). OBRIGATÓRIO." },
+              { key:"data_fim",      label:"data_fim",    width:14, descricao:"Data de fim (AAAA-MM-DD). OBRIGATÓRIO." },
+              { key:"tecnico",       label:"tecnico",     width:20, descricao:"Nome do técnico." },
+              { key:"presidente",    label:"presidente",  width:20, descricao:"Nome do presidente." },
+            ],
+            "temporadas",
+            ["- id preenchido = atualiza", "- id vazio = cria nova temporada", "- Datas no formato AAAA-MM-DD"]
+          )}
+          onImportar={async (file) => {
+            setLoadingImport("temporadas");
+            try {
+              const rows = await lerExcel(file);
+              const erros = []; const validos = [];
+              rows.forEach((row, i) => {
+                const linha = i + 2;
+                if (!String(row["nome"]||"").trim()) erros.push({ linha, mensagem: "Campo 'nome' é obrigatório." });
+                if (!String(row["data_inicio"]||"").trim()) erros.push({ linha, mensagem: "Campo 'data_inicio' é obrigatório." });
+                if (!String(row["data_fim"]||"").trim()) erros.push({ linha, mensagem: "Campo 'data_fim' é obrigatório." });
+                if (!erros.find(e => e.linha === linha)) validos.push(row);
+              });
+              setResultadoImport({ erros, validos: validos.length, mensagem: `${validos.filter(r=>r.id_temporada).length} atualizações + ${validos.filter(r=>!r.id_temporada).length} novas.`, _dados: validos });
+            } catch(e) { show(e.message, "error"); } finally { setLoadingImport(null); }
+          }}
+          loadingImport={loadingImport==="temporadas"}
+        />
+        <Btn onClick={abrirNovo}>+ Nova Temporada</Btn>
+      </div>
+      <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
