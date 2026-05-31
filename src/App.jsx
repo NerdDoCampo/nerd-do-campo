@@ -87,16 +87,26 @@ function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { ho
 
 // ── SELETOR DE TIMES ──────────────────────────────────────────
 function SeletorTimes({ onSelect }) {
-  const hoje = new Date().toISOString().split('T')[0];
-  const [dataRef, setDataRef] = useState(hoje);
+  const [dataRef, setDataRef] = useState(""); // vazio = sem filtro de data
 
   const { data: allTimes, loading } = useQuery(() => sb(`time?select=*,temporada(id_temporada,nome,data_inicio,data_fim,publico)&publico=eq.true&order=nome.asc`));
 
-  // Só mostrar times com pelo menos 1 temporada pública
+  // Filtrar times
   const times = useMemo(() => {
     if (!allTimes) return [];
-    return allTimes.filter(t => (t.temporada||[]).some(temp => temp.publico === true));
-  }, [allTimes]);
+    return allTimes.filter(t => {
+      const tempsPublicas = (t.temporada||[]).filter(temp => temp.publico === true);
+      if (!tempsPublicas.length) return false; // sem temporada pública = some
+      if (!dataRef) return true; // sem filtro de data = mostra todos com temporada pública
+      // Com data: só se alguma temporada pública engloba a data
+      return tempsPublicas.some(temp => {
+        const inicio = temp.data_inicio ? new Date(temp.data_inicio) : null;
+        const fim    = temp.data_fim    ? new Date(temp.data_fim)    : null;
+        const ref    = new Date(dataRef);
+        return (!inicio || ref >= inicio) && (!fim || ref <= fim);
+      });
+    });
+  }, [allTimes, dataRef]);
 
   if (loading) return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif" }}>
@@ -122,17 +132,21 @@ function SeletorTimes({ onSelect }) {
           <div style={{ fontSize:15, color:C.dim }}>Selecione o time para ver as estatísticas da temporada</div>
         </div>
 
-        {/* Filtro de data de referência */}
+        {/* Filtro de data de referência — opcional */}
         <div style={{ display:"flex", justifyContent:"center", marginBottom:24 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, background:C.surface, borderRadius:10, padding:"10px 20px", border:`1px solid ${C.border}` }}>
-            <span style={{ fontSize:13, color:C.dim, fontWeight:700, textTransform:"uppercase" }}>📅 Data de referência:</span>
+          <div style={{ display:"flex", alignItems:"center", gap:10, background:C.surface, borderRadius:10, padding:"10px 20px", border:`1px solid ${dataRef ? C.gold : C.border}`, transition:"border 0.2s" }}>
+            <span style={{ fontSize:13, color:dataRef ? C.gold : C.dim, fontWeight:700, textTransform:"uppercase" }}>📅</span>
+            <span style={{ fontSize:12, color:C.dim, whiteSpace:"nowrap" }}>Filtrar por data:</span>
             <input type="date" value={dataRef} onChange={e => setDataRef(e.target.value)}
               style={{ background:"transparent", border:"none", color:C.gold, fontFamily:"inherit", fontSize:14, fontWeight:700, cursor:"pointer", outline:"none" }}/>
-            {dataRef !== hoje && (
-              <button onClick={() => setDataRef(hoje)}
-                style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, color:C.dim, cursor:"pointer", fontSize:11, padding:"3px 8px", fontFamily:"inherit" }}>
-                Hoje
+            {dataRef && (
+              <button onClick={() => setDataRef("")}
+                style={{ background:C.loss+"22", border:`1px solid ${C.loss}44`, borderRadius:6, color:C.loss, cursor:"pointer", fontSize:11, padding:"3px 8px", fontFamily:"inherit", fontWeight:700 }}>
+                ✕ Limpar
               </button>
+            )}
+            {!dataRef && (
+              <span style={{ fontSize:11, color:C.dim, fontStyle:"italic" }}>Sem filtro — todos os times</span>
             )}
           </div>
         </div>
