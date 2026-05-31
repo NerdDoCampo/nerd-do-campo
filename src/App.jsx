@@ -175,6 +175,11 @@ function SeletorTimes({ onSelect }) {
                     📞 <span style={{ color:C.cream }}>{t.telefone}</span>
                   </div>
                 )}
+                {t.resp_redes_sociais && (
+                  <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>
+                    📱 <span style={{ color:C.cream }}>{t.resp_redes_sociais}</span>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -465,7 +470,7 @@ function Calendario({ temporada }) {
 }
 
 // ── ELENCO ────────────────────────────────────────────────────
-function Elenco({ time }) {
+function Elenco({ time, temporada }) {
   const { data: jogadores, loading } = useQuery(
     () => sb(`jogador?id_jogador=gt.0&id_time=eq.${time.id_time}&select=*,posicao(nome)&order=camisa.asc`),
     [time.id_time]
@@ -473,8 +478,47 @@ function Elenco({ time }) {
   if (loading) return <Spinner />;
   const ativos = (jogadores||[]).filter(j => !j.data_fim);
   const grupos = [...new Set(ativos.map(j => j.posicao?.nome).filter(Boolean))];
+  const uniformes = [
+    { url: temporada?.uniforme_1_url, label:"Uniforme 1" },
+    { url: temporada?.uniforme_2_url, label:"Uniforme 2" },
+    { url: temporada?.uniforme_3_url, label:"Uniforme 3" },
+  ].filter(u => u.url);
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+      {/* Comissão da temporada */}
+      {(temporada?.tecnico || temporada?.presidente) && (
+        <Card>
+          <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
+            {temporada.tecnico && (
+              <div>
+                <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:2 }}>Técnico</div>
+                <div style={{ fontWeight:700, color:C.cream }}>{temporada.tecnico}</div>
+              </div>
+            )}
+            {temporada.presidente && (
+              <div>
+                <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:2 }}>Presidente</div>
+                <div style={{ fontWeight:700, color:C.cream }}>{temporada.presidente}</div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+      {/* Uniformes da temporada */}
+      {uniformes.length > 0 && (
+        <Card>
+          <SecTitle>👕 Uniformes</SecTitle>
+          <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
+            {uniformes.map(u => (
+              <div key={u.label} style={{ textAlign:"center" }}>
+                <img src={u.url} alt={u.label}
+                  style={{ width:100, height:100, objectFit:"contain", borderRadius:8, background:C.surf2, border:`1px solid ${C.border}`, display:"block", marginBottom:6 }}/>
+                <div style={{ fontSize:11, color:C.dim }}>{u.label}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
       <Card style={{ padding:"14px 20px", display:"inline-flex", gap:20 }}>
         <div style={{ textAlign:"center" }}>
           <div style={{ fontSize:28, fontWeight:800, color:C.gold }}>{ativos.length}</div>
@@ -660,7 +704,7 @@ function TimeApp({ time, onVoltar }) {
       <header style={{ background:"#091F15", borderBottom:`3px solid ${C.gold}`, padding:"0 12px", display:"flex", alignItems:"center", gap:10, height:56, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 24px #00000066" }}>
         <button onClick={onVoltar} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 8px 4px 0", color:C.dim, fontSize:24, lineHeight:1, flexShrink:0 }}>‹</button>
         <img src="/logo.png" alt="Nerd do Campo" style={{ width:30, height:30, borderRadius:"50%", objectFit:"cover", flexShrink:0 }}/>
-        {time.escudo_url && <img src={time.escudo_url} alt={time.nome} style={{ width:30, height:30, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }}/>}
+        {{(temporadaSel?.escudo_url || time.escudo_url) && <img src={temporadaSel?.escudo_url || time.escudo_url} alt={time.nome} style={{ width:30, height:30, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }}/>}}
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", color:C.cream, lineHeight:1.1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{time.nome}</div>
         </div>

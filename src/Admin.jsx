@@ -413,7 +413,7 @@ function Calendario({ temporada }) {
   );
 }
 
-function Elenco({ time }) {
+function Elenco({ time, temporada }) {
   const { data: jogadores, loading } = useQuery(
     () => sb(`jogador?id_jogador=gt.0&id_time=eq.${time.id_time}&select=*,posicao(nome)&order=camisa.asc`),
     [time.id_time]
@@ -421,8 +421,47 @@ function Elenco({ time }) {
   if (loading) return <Spinner />;
   const ativos = (jogadores||[]).filter(j => !j.data_fim);
   const grupos = [...new Set(ativos.map(j => j.posicao?.nome).filter(Boolean))];
+  const uniformes = [
+    { url: temporada?.uniforme_1_url, label:"Uniforme 1" },
+    { url: temporada?.uniforme_2_url, label:"Uniforme 2" },
+    { url: temporada?.uniforme_3_url, label:"Uniforme 3" },
+  ].filter(u => u.url);
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+      {/* Comissão da temporada */}
+      {(temporada?.tecnico || temporada?.presidente) && (
+        <Card>
+          <div style={{ display:"flex", gap:24, flexWrap:"wrap" }}>
+            {temporada.tecnico && (
+              <div>
+                <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:2 }}>Técnico</div>
+                <div style={{ fontWeight:700, color:C.cream }}>{temporada.tecnico}</div>
+              </div>
+            )}
+            {temporada.presidente && (
+              <div>
+                <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:2 }}>Presidente</div>
+                <div style={{ fontWeight:700, color:C.cream }}>{temporada.presidente}</div>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+      {/* Uniformes da temporada */}
+      {uniformes.length > 0 && (
+        <Card>
+          <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", fontWeight:700, marginBottom:12 }}>👕 Uniformes</div>
+          <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
+            {uniformes.map(u => (
+              <div key={u.label} style={{ textAlign:"center" }}>
+                <img src={u.url} alt={u.label}
+                  style={{ width:100, height:100, objectFit:"contain", borderRadius:8, background:C.surf2, border:`1px solid ${C.border}`, display:"block", marginBottom:6 }}/>
+                <div style={{ fontSize:11, color:C.dim }}>{u.label}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
       <Card style={{ padding:"14px 20px", display:"inline-flex", gap:20 }}>
         <div style={{ textAlign:"center" }}>
           <div style={{ fontSize:28, fontWeight:800, color:C.gold }}>{ativos.length}</div>
@@ -592,7 +631,7 @@ function VisaoAppPublico({ time, temporadas }) {
   const screens = [
     <VisaoGeral    key="vg"   temporada={temporadaSel}/>,
     <Calendario    key="cal"  temporada={temporadaSel}/>,
-    <Elenco        key="el"   time={time}/>,
+    <Elenco        key="el"   time={time} temporada={temporadaSel}/>,
     <Estatisticas  key="st"   time={time} temporada={temporadaSel}/>,
     <Gols          key="gols" temporada={temporadaSel}/>,
   ];
@@ -2707,13 +2746,13 @@ function CrudTemporadas({ show }) {
     setForm({ nome:"", id_time: t ? String(t.id_time) : "", data_inicio:"", data_fim:"", publico: true, tecnico: t?.tecnico||"", presidente: t?.presidente||"", vice_presidente: t?.vice_presidente||"", financeiro: t?.financeiro||"", vice_financeiro: t?.vice_financeiro||"", marca_jogos: t?.marca_jogos||"", resp_redes_sociais: t?.resp_redes_sociais||"", resp_eventos: t?.resp_eventos||"", observacoes:"" });
     setModal("novo");
   }
-  function abrirEditar(t) { setForm({ ...t, publico: t.publico !== false, id_time: t.id_time ? String(t.id_time) : "" }); setModal(t); }
+  function abrirEditar(t) { setForm({ ...t, publico: t.publico !== false, uniforme_1_url: t.uniforme_1_url||null, uniforme_2_url: t.uniforme_2_url||null, uniforme_3_url: t.uniforme_3_url||null, escudo_url: t.escudo_url||null, id_time: t.id_time ? String(t.id_time) : "" }); setModal(t); }
 
   async function salvar() {
     if (!form.nome || !form.data_inicio || !form.data_fim) { show("Nome e datas são obrigatórios.", "error"); return; }
     setSaving(true);
     try {
-      const body = { nome: form.nome, id_time: form.id_time ? Number(form.id_time) : null, data_inicio: form.data_inicio, data_fim: form.data_fim, publico: form.publico !== false, tecnico: form.tecnico||null, presidente: form.presidente||null, vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null, vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null, resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null, observacoes: form.observacoes||null };
+      const body = { nome: form.nome, id_time: form.id_time ? Number(form.id_time) : null, data_inicio: form.data_inicio, data_fim: form.data_fim, publico: form.publico !== false, uniforme_1_url: form.uniforme_1_url||null, uniforme_2_url: form.uniforme_2_url||null, uniforme_3_url: form.uniforme_3_url||null, escudo_url: form.escudo_url||null, tecnico: form.tecnico||null, presidente: form.presidente||null, vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null, vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null, resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null, observacoes: form.observacoes||null };
       if (modal === "novo") await api.post("temporada", body);
       else await api.patch(`temporada?id_temporada=eq.${form.id_temporada}`, body);
       show("Salvo!"); setModal(null); reload();
@@ -2781,6 +2820,7 @@ function CrudTemporadas({ show }) {
                   <ThSortable colKey="marca_jogos" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Marca Jogos</ThSortable>
                   <ThSortable colKey="resp_redes_sociais" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Redes</ThSortable>
                   <ThSortable colKey="resp_eventos" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Eventos</ThSortable>
+                  <ThSortable colKey="fardamento_titular_url" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Fardamentos</ThSortable>
                   <ThSortable colKey="publico" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Público</ThSortable>
                   <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
           </tr></thead>
@@ -2799,6 +2839,15 @@ function CrudTemporadas({ show }) {
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.marca_jogos || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.resp_redes_sociais || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.resp_eventos || "—"}</td>
+                <td style={{ padding:"11px 14px", textAlign:"center" }}>
+                  <div style={{ display:"flex", gap:4, justifyContent:"center" }}>
+                    {t.escudo_url      && <img src={t.escudo_url}      alt="Escudo"    style={{ width:24, height:24, objectFit:"contain", borderRadius:"50%" }} title="Escudo"/>}
+                    {t.uniforme_1_url  && <img src={t.uniforme_1_url}  alt="Uniforme 1" style={{ width:24, height:24, objectFit:"contain" }} title="Uniforme 1"/>}
+                    {t.uniforme_2_url  && <img src={t.uniforme_2_url}  alt="Uniforme 2" style={{ width:24, height:24, objectFit:"contain" }} title="Uniforme 2"/>}
+                    {t.uniforme_3_url  && <img src={t.uniforme_3_url}  alt="Uniforme 3" style={{ width:24, height:24, objectFit:"contain" }} title="Uniforme 3"/>}
+                    {!t.escudo_url && !t.uniforme_1_url && !t.uniforme_2_url && !t.uniforme_3_url && <span style={{ color:C.dim, fontSize:11 }}>—</span>}
+                  </div>
+                </td>
                 <td style={{ padding:"11px 14px", textAlign:"center" }}>
                   <span style={{ color: t.publico !== false ? C.win : C.dim, fontWeight:700, fontSize:12 }}>{t.publico !== false ? "🌐" : "🔒"}</span>
                 </td>
@@ -2834,6 +2883,50 @@ function CrudTemporadas({ show }) {
               <Input label="Resp. Eventos"    value={form.resp_eventos||""}     onChange={e => set("resp_eventos",     e.target.value)} />
             </div>
             <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
+
+            {/* Escudo da temporada */}
+            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginTop:4 }}>Escudo da Temporada</div>
+            <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+              {form.escudo_url
+                ? <img src={form.escudo_url} alt="Escudo" style={{ width:64, height:64, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
+                : <div style={{ width:64, height:64, borderRadius:"50%", background:C.surf2, border:`2px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24 }}>🏆</div>
+              }
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                <ImageUpload bucket="escudos" onUpload={url => set("escudo_url", url)} style={{ fontSize:11 }}/>
+                {form.escudo_url && <button onClick={() => set("escudo_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>}
+                <div style={{ fontSize:10, color:C.dim }}>Opcional — se diferente do escudo do time</div>
+              </div>
+            </div>
+
+            {/* Uniformes */}
+            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginTop:4 }}>Uniformes</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+              {[
+                { key:"uniforme_1_url", label:"👕 Uniforme 1" },
+                { key:"uniforme_2_url", label:"👕 Uniforme 2" },
+                { key:"uniforme_3_url", label:"🧤 Uniforme 3" },
+              ].map(({ key, label }) => (
+                <div key={key} style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  <div style={{ fontSize:11, color:C.dim, fontWeight:700 }}>{label}</div>
+                  {form[key] && (
+                    <img src={form[key]} alt={label}
+                      style={{ width:"100%", height:80, objectFit:"contain", borderRadius:8, background:C.surf2, border:`1px solid ${C.border}` }}/>
+                  )}
+                  <ImageUpload
+                    bucket="uniformes"
+                    onUpload={url => set(key, url)}
+                    style={{ fontSize:11, padding:"4px 10px" }}
+                  />
+                  {form[key] && (
+                    <button onClick={() => set(key, null)}
+                      style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>
+                      ✕ Remover
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
             {/* Toggle público temporada */}
             <div style={{ background: form.publico !== false ? C.win+"11" : C.loss+"11", border:`1px solid ${form.publico !== false ? C.win+"44" : C.loss+"44"}`, borderRadius:10, padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
               <div>
