@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
 // ── Supabase ──────────────────────────────────────────────────
-const URL  = "https://nxztffulmvohduvudbhg.supabase.co";
-const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54enRmZnVsbXZvaGR1dnVkYmhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODY5ODMsImV4cCI6MjA5NTA2Mjk4M30.CwEmjukApMTJhkbKh1jlp4Q-IYrM26u-5SYx9p20nsg";
+const URL  = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
+const ANON = process.env.REACT_APP_SUPABASE_ANON || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54enRmZnVsbXZvaGR1dnVkYmhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODY5ODMsImV4cCI6MjA5NTA2Mjk4M30.CwEmjukApMTJhkbKh1jlp4Q-IYrM26u-5SYx9p20nsg";
 
 let SESSION_TOKEN = sessionStorage.getItem("ndc_token") || null;
 
@@ -1902,6 +1902,14 @@ export default function AdminAppCompleto() {
         <img src="/logo.png" alt="Nerd do Campo" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
         <div style={{ fontSize:18, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream }}>Nerd do Campo</div>
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"2px 8px" }}>Admin</div>
+        {process.env.REACT_APP_ENV === "development" && (
+          <div style={{ fontSize:10, color:"#ff6b6b", textTransform:"uppercase", letterSpacing:"0.1em", background:"#ff6b6b22", border:"1px solid #ff6b6b44", borderRadius:6, padding:"2px 8px", fontWeight:700 }}>
+            🧪 DEV
+          </div>
+        )}
+        <div style={{ fontSize:10, color:C.dim, letterSpacing:"0.05em" }}>
+          v{process.env.REACT_APP_VERSION || "1.0.0"}
+        </div>
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
           {time?.escudo_url
             ? <img src={time.escudo_url} alt={time.nome} style={{ width:32, height:32, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 
 // ── Supabase ──────────────────────────────────────────────────
-const SUPABASE_URL = "https://nxztffulmvohduvudbhg.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54enRmZnVsbXZvaGR1dnVkYmhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODY5ODMsImV4cCI6MjA5NTA2Mjk4M30.CwEmjukApMTJhkbKh1jlp4Q-IYrM26u-5SYx9p20nsg";
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
+const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54enRmZnVsbXZvaGR1dnVkYmhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODY5ODMsImV4cCI6MjA5NTA2Mjk4M30.CwEmjukApMTJhkbKh1jlp4Q-IYrM26u-5SYx9p20nsg";
 
 async function sb(path) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -122,28 +122,38 @@ function SeletorTimes({ onSelect }) {
         </div>
 
         {/* Filtro de data de referência — opcional */}
-        <div style={{ display:"flex", justifyContent:"center", marginBottom:24 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, background:C.surface, borderRadius:10, padding:"10px 20px", border:`1px solid ${dataRef ? C.gold : C.border}`, transition:"border 0.2s" }}>
-            <span style={{ fontSize:13, color:dataRef ? C.gold : C.dim, fontWeight:700, textTransform:"uppercase" }}>📅</span>
-            <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-              <span style={{ fontSize:12, color:C.dim, whiteSpace:"nowrap" }}>Filtrar por data:</span>
-              <span style={{ fontSize:10, color:C.dim, fontStyle:"italic", whiteSpace:"nowrap" }}>
-                {dataRef
-                  ? `Mostrando times com temporada ativa em ${new Date(dataRef+'T12:00:00').toLocaleDateString('pt-BR')}`
-                  : "Escolha uma data para ver só os times com temporada ativa naquele período"}
-              </span>
+        <div style={{ marginBottom:24 }}>
+          <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${dataRef ? C.gold : C.border}`, overflow:"hidden", transition:"border 0.2s" }}>
+            {/* Header do filtro */}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:`1px solid ${C.border}` }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:16 }}>📅</span>
+                <div>
+                  <div style={{ fontSize:12, fontWeight:700, color:C.cream, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                    Filtrar por data
+                  </div>
+                  <div style={{ fontSize:10, color:C.dim, marginTop:1 }}>
+                    {dataRef
+                      ? `Times com temporada ativa em ${new Date(dataRef+'T12:00:00').toLocaleDateString('pt-BR')}`
+                      : "Opcional — sem filtro mostra todos os times"}
+                  </div>
+                </div>
+              </div>
+              {dataRef && (
+                <button onClick={() => setDataRef("")}
+                  style={{ background:C.loss+"22", border:`1px solid ${C.loss}44`, borderRadius:6, color:C.loss, cursor:"pointer", fontSize:11, padding:"4px 10px", fontFamily:"inherit", fontWeight:700, flexShrink:0 }}>
+                  ✕ Limpar
+                </button>
+              )}
             </div>
-            <input type="date" value={dataRef} onChange={e => setDataRef(e.target.value)}
-              style={{ background:"transparent", border:"none", color:C.gold, fontFamily:"inherit", fontSize:14, fontWeight:700, cursor:"pointer", outline:"none" }}/>
-            {dataRef && (
-              <button onClick={() => setDataRef("")}
-                style={{ background:C.loss+"22", border:`1px solid ${C.loss}44`, borderRadius:6, color:C.loss, cursor:"pointer", fontSize:11, padding:"3px 8px", fontFamily:"inherit", fontWeight:700 }}>
-                ✕ Limpar
-              </button>
-            )}
-            {!dataRef && (
-              <span style={{ fontSize:11, color:C.dim, fontStyle:"italic" }}>Sem filtro — todos os times</span>
-            )}
+            {/* Input de data */}
+            <div style={{ padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
+              <input type="date" value={dataRef} onChange={e => setDataRef(e.target.value)}
+                style={{ flex:1, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:16, fontWeight:700, padding:"10px 14px", outline:"none", cursor:"pointer", WebkitAppearance:"none" }}/>
+              {!dataRef && (
+                <span style={{ fontSize:11, color:C.dim, fontStyle:"italic", flexShrink:0 }}>ou deixe em branco</span>
+              )}
+            </div>
           </div>
         </div>
 
