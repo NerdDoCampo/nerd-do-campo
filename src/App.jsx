@@ -125,7 +125,14 @@ function SeletorTimes({ onSelect }) {
         <div style={{ display:"flex", justifyContent:"center", marginBottom:24 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10, background:C.surface, borderRadius:10, padding:"10px 20px", border:`1px solid ${dataRef ? C.gold : C.border}`, transition:"border 0.2s" }}>
             <span style={{ fontSize:13, color:dataRef ? C.gold : C.dim, fontWeight:700, textTransform:"uppercase" }}>📅</span>
-            <span style={{ fontSize:12, color:C.dim, whiteSpace:"nowrap" }}>Filtrar por data:</span>
+            <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+              <span style={{ fontSize:12, color:C.dim, whiteSpace:"nowrap" }}>Filtrar por data:</span>
+              <span style={{ fontSize:10, color:C.dim, fontStyle:"italic", whiteSpace:"nowrap" }}>
+                {dataRef
+                  ? `Mostrando times com temporada ativa em ${new Date(dataRef+'T12:00:00').toLocaleDateString('pt-BR')}`
+                  : "Escolha uma data para ver só os times com temporada ativa naquele período"}
+              </span>
+            </div>
             <input type="date" value={dataRef} onChange={e => setDataRef(e.target.value)}
               style={{ background:"transparent", border:"none", color:C.gold, fontFamily:"inherit", fontSize:14, fontWeight:700, cursor:"pointer", outline:"none" }}/>
             {dataRef && (
