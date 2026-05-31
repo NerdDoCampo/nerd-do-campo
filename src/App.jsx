@@ -122,6 +122,21 @@ function SeletorTimes({ onSelect }) {
           <div style={{ fontSize:15, color:C.dim }}>Selecione o time para ver as estatísticas da temporada</div>
         </div>
 
+        {/* Filtro de data de referência */}
+        <div style={{ display:"flex", justifyContent:"center", marginBottom:24 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, background:C.surface, borderRadius:10, padding:"10px 20px", border:`1px solid ${C.border}` }}>
+            <span style={{ fontSize:13, color:C.dim, fontWeight:700, textTransform:"uppercase" }}>📅 Data de referência:</span>
+            <input type="date" value={dataRef} onChange={e => setDataRef(e.target.value)}
+              style={{ background:"transparent", border:"none", color:C.gold, fontFamily:"inherit", fontSize:14, fontWeight:700, cursor:"pointer", outline:"none" }}/>
+            {dataRef !== hoje && (
+              <button onClick={() => setDataRef(hoje)}
+                style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, color:C.dim, cursor:"pointer", fontSize:11, padding:"3px 8px", fontFamily:"inherit" }}>
+                Hoje
+              </button>
+            )}
+          </div>
+        </div>
+
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(260px,1fr))", gap:16 }}>
           {(times||[]).map(t => {
             const temp = t.temporada?.[0];

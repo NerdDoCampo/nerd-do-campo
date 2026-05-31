@@ -574,9 +574,9 @@ function Gols({ temporada }) {
 
 
 function VisaoAppPublico({ time, temporadas }) {
-  const [aba, setAba] = React.useState(0);
-  const [temporadaSel, setTemporadaSel] = React.useState(null);
-  React.useEffect(() => { if (temporadas?.length && !temporadaSel) setTemporadaSel(temporadas[0]); }, [temporadas]);
+  const [aba, setAba] = useState(0);
+  const [temporadaSel, setTemporadaSel] = useState(null);
+  useEffect(() => { if (temporadas?.length && !temporadaSel) setTemporadaSel(temporadas[0]); }, [temporadas]);
 
   const TABS_P = [
     { label:"Visão Geral", icon:"📊" },
@@ -598,24 +598,47 @@ function VisaoAppPublico({ time, temporadas }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <Card style={{ padding:"12px 16px", background:C.surf2, border:`1px solid ${C.gold}33` }}>
-        <div style={{ fontSize:11, color:C.gold, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>
-          👁️ Visualizando como app público — {time?.nome}
+      <Card style={{ padding:"16px 20px", background:C.surf2, border:`1px solid ${C.gold}44` }}>
+        {/* Cabeçalho */}
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+          <span style={{ fontSize:18 }}>👁️</span>
+          <div>
+            <div style={{ fontSize:13, fontWeight:800, color:C.gold, textTransform:"uppercase" }}>Visão App Público</div>
+            <div style={{ fontSize:11, color:C.dim }}>{time?.nome} — visualizando como o público vê</div>
+          </div>
         </div>
-        <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-          {(temporadas||[]).length > 1 && (
-            <select value={temporadaSel?.id_temporada||""} onChange={e => setTemporadaSel((temporadas||[]).find(t => t.id_temporada === Number(e.target.value)))}
-              style={{ background:C.bg, color:C.cream, border:`1px solid ${C.border}`, borderRadius:6, padding:"5px 10px", fontFamily:"inherit", fontSize:12 }}>
-              {(temporadas||[]).map(t => <option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
-            </select>
-          )}
-          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-            {TABS_P.map((t,i) => (
-              <button key={t.label} onClick={() => setAba(i)} style={{ background: aba===i ? C.gold : C.surface, color: aba===i ? "#0B3D2E" : C.dim, border:`1px solid ${aba===i ? C.gold : C.border}`, borderRadius:8, padding:"6px 14px", fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase", display:"flex", alignItems:"center", gap:5 }}>
-                {t.icon} {t.label}
+
+        {/* Seletor de temporada — sempre visível */}
+        <div style={{ marginBottom:12 }}>
+          <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Temporada</div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            {(temporadas||[]).map(t => (
+              <button key={t.id_temporada}
+                onClick={() => setTemporadaSel(t)}
+                style={{ background: temporadaSel?.id_temporada === t.id_temporada ? C.gold : C.surface,
+                  color: temporadaSel?.id_temporada === t.id_temporada ? "#0B3D2E" : C.cream,
+                  border:`1px solid ${temporadaSel?.id_temporada === t.id_temporada ? C.gold : C.border}`,
+                  borderRadius:8, padding:"6px 14px", fontFamily:"inherit", fontWeight:700,
+                  fontSize:12, cursor:"pointer", textTransform:"uppercase",
+                  display:"flex", alignItems:"center", gap:6 }}>
+                {t.publico !== false ? "🌐" : "🔒"} {t.nome}
               </button>
             ))}
+            {!(temporadas||[]).length && <span style={{ color:C.dim, fontSize:12 }}>Nenhuma temporada cadastrada</span>}
           </div>
+        </div>
+
+        {/* Abas */}
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", borderTop:`1px solid ${C.border}`, paddingTop:12 }}>
+          {TABS_P.map((t,i) => (
+            <button key={t.label} onClick={() => setAba(i)}
+              style={{ background: aba===i ? C.gold : "transparent", color: aba===i ? "#0B3D2E" : C.dim,
+                border:`1px solid ${aba===i ? C.gold : C.border}`, borderRadius:8, padding:"6px 14px",
+                fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase",
+                display:"flex", alignItems:"center", gap:5 }}>
+              {t.icon} {t.label}
+            </button>
+          ))}
         </div>
       </Card>
       {screens[aba]}
