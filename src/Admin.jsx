@@ -38,8 +38,9 @@ const api = {
 
 // ── Upload de imagem para Supabase Storage ────────────────────
 async function uploadImagem(bucket, file, nomeArquivo) {
-  const ext = file.name.split(".").pop();
-  const path = `${nomeArquivo}.${ext}`;
+  const ext  = file.name.split(".").pop();
+  const nome = nomeArquivo || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const path = `${nome}.${ext}`;
   const res = await fetch(`${URL}/storage/v1/object/${bucket}/${path}`, {
     method: "POST",
     headers: {
@@ -51,7 +52,8 @@ async function uploadImagem(bucket, file, nomeArquivo) {
     body: file,
   });
   if (!res.ok) throw new Error("Erro ao fazer upload da imagem");
-  return `${URL}/storage/v1/object/public/${bucket}/${path}`;
+  // Cache-bust na URL para garantir que o browser carregue a imagem nova
+  return `${URL}/storage/v1/object/public/${bucket}/${path}?t=${Date.now()}`;
 }
 
 // ── Componente de upload de imagem ────────────────────────────
@@ -2935,7 +2937,7 @@ function CrudTemporadas({ show }) {
                   <img src={form.uniforme_1_url} alt="Uniforme 1"
                     style={{ width:"100%", height:80, objectFit:"contain", borderRadius:8, background:C.surf2, border:`1px solid ${C.border}` }}/>
                 )}
-                <ImageUpload bucket="uniformes" value={form.uniforme_1_url} onUpload={url => set("uniforme_1_url", url)}/>
+                <ImageUpload bucket="uniformes" value={form.uniforme_1_url} onUpload={url => set("uniforme_1_url", url)} nomeArquivo={`uniforme_1_${form.id_temporada||'novo'}`}/>
                 {form.uniforme_1_url && (
                   <button onClick={() => set("uniforme_1_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>
                 )}
@@ -2947,7 +2949,7 @@ function CrudTemporadas({ show }) {
                   <img src={form.uniforme_2_url} alt="Uniforme 2"
                     style={{ width:"100%", height:80, objectFit:"contain", borderRadius:8, background:C.surf2, border:`1px solid ${C.border}` }}/>
                 )}
-                <ImageUpload bucket="uniformes" value={form.uniforme_2_url} onUpload={url => set("uniforme_2_url", url)}/>
+                <ImageUpload bucket="uniformes" value={form.uniforme_2_url} onUpload={url => set("uniforme_2_url", url)} nomeArquivo={`uniforme_2_${form.id_temporada||'novo'}`}/>
                 {form.uniforme_2_url && (
                   <button onClick={() => set("uniforme_2_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>
                 )}
@@ -2959,7 +2961,7 @@ function CrudTemporadas({ show }) {
                   <img src={form.uniforme_3_url} alt="Uniforme 3"
                     style={{ width:"100%", height:80, objectFit:"contain", borderRadius:8, background:C.surf2, border:`1px solid ${C.border}` }}/>
                 )}
-                <ImageUpload bucket="uniformes" value={form.uniforme_3_url} onUpload={url => set("uniforme_3_url", url)}/>
+                <ImageUpload bucket="uniformes" value={form.uniforme_3_url} onUpload={url => set("uniforme_3_url", url)} nomeArquivo={`uniforme_3_${form.id_temporada||'novo'}`}/>
                 {form.uniforme_3_url && (
                   <button onClick={() => set("uniforme_3_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>
                 )}
