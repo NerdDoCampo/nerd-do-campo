@@ -246,8 +246,36 @@ function VisaoGeral({ temporada }) {
     );
   };
 
+  const uniformes = [
+    { url: temporada?.uniforme_1_url, label:"Uniforme 1" },
+    { url: temporada?.uniforme_2_url, label:"Uniforme 2" },
+    { url: temporada?.uniforme_3_url, label:"Uniforme 3" },
+  ].filter(u => u.url);
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+      {/* Identidade visual da temporada */}
+      {(temporada?.escudo_url || uniformes.length > 0) && (
+        <Card style={{ padding:"16px 20px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:20, flexWrap:"wrap" }}>
+            {temporada?.escudo_url && (
+              <img src={temporada.escudo_url} alt="Escudo"
+                style={{ width:64, height:64, borderRadius:"50%", objectFit:"cover", border:`3px solid ${C.gold}` }}/>
+            )}
+            {uniformes.length > 0 && (
+              <div style={{ display:"flex", gap:16, flexWrap:"wrap" }}>
+                {uniformes.map(u => (
+                  <div key={u.label} style={{ textAlign:"center" }}>
+                    <img src={u.url} alt={u.label}
+                      style={{ width:72, height:72, objectFit:"contain", borderRadius:8, background:C.surf2, border:`1px solid ${C.border}`, display:"block", marginBottom:4 }}/>
+                    <div style={{ fontSize:10, color:C.dim }}>{u.label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
       <style>{`.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}@media(max-width:480px){.stat-grid{grid-template-columns:repeat(2,1fr)}}`}</style>
       <div className="stat-grid">
         <StatCard label="Jogos" value={jogadas.length}/>
