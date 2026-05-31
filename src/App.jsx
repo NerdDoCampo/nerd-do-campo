@@ -704,7 +704,7 @@ function TimeApp({ time, onVoltar }) {
       <header style={{ background:"#091F15", borderBottom:`3px solid ${C.gold}`, padding:"0 12px", display:"flex", alignItems:"center", gap:10, height:56, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 24px #00000066" }}>
         <button onClick={onVoltar} style={{ background:"none", border:"none", cursor:"pointer", padding:"4px 8px 4px 0", color:C.dim, fontSize:24, lineHeight:1, flexShrink:0 }}>‹</button>
         <img src="/logo.png" alt="Nerd do Campo" style={{ width:30, height:30, borderRadius:"50%", objectFit:"cover", flexShrink:0 }}/>
-        {{(temporadaSel?.escudo_url || time.escudo_url) && <img src={temporadaSel?.escudo_url || time.escudo_url} alt={time.nome} style={{ width:30, height:30, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }}/>}}
+        {(temporadaSel?.escudo_url || time.escudo_url) && <img src={temporadaSel?.escudo_url || time.escudo_url} alt={time.nome} style={{ width:30, height:30, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }}/>}
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", color:C.cream, lineHeight:1.1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{time.nome}</div>
         </div>
