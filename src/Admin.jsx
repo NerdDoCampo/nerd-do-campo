@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.1.1";
 
 // ── Supabase ──────────────────────────────────────────────────
 const URL  = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
@@ -1907,7 +1908,7 @@ export default function AdminAppCompleto() {
           </div>
         )}
         <div style={{ fontSize:10, color:C.dim, letterSpacing:"0.05em" }}>
-          v{process.env.REACT_APP_VERSION || "1.0.0"}
+          v{APP_VERSION}
         </div>
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
           {time?.escudo_url
