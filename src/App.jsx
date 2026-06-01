@@ -78,16 +78,21 @@ function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { ho
 function SeletorTimes({ onSelect }) {
   const [dataRef, setDataRef] = useState(""); // vazio = sem filtro de data
 
-  const { data: allTimes, loading } = useQuery(() => sb(`time?select=*,temporada(id_temporada,nome,data_inicio,data_fim,publico)&publico=eq.true&order=nome.asc`));
+  const { data: allTimes, loading } = useQuery(() => sb(`time?select=*,temporada(id_temporada,nome,data_inicio,data_fim,publico),tipo_time(id_tipo_time,descricao),cidade:id_cidade_sede(nome,estado),campo:id_campo(nome)&publico=eq.true&order=nome.asc`));
+  const { data: tiposAtivos } = useQuery(() => sb(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
+  const tipoFutebolCampo = (tiposAtivos||[]).find(t => t.descricao.toLowerCase().includes("campo"))?.id_tipo_time || null;
+  const [tipoFiltro, setTipoFiltro] = useState(null);
+  // Inicializar com Futebol de Campo quando tipos carregarem
+  useEffect(() => { if (tiposAtivos?.length && tipoFiltro === null) { const fc = (tiposAtivos||[]).find(t => t.descricao.toLowerCase().includes("campo")); setTipoFiltro(fc?.id_tipo_time || "todos"); } }, [tiposAtivos]);
 
   // Filtrar times
   const times = useMemo(() => {
     if (!allTimes) return [];
     return allTimes.filter(t => {
       const tempsPublicas = (t.temporada||[]).filter(temp => temp.publico === true);
-      if (!tempsPublicas.length) return false; // sem temporada pública = some
-      if (!dataRef) return true; // sem filtro de data = mostra todos com temporada pública
-      // Com data: só se alguma temporada pública engloba a data
+      if (!tempsPublicas.length) return false;
+      if (tipoFiltro && tipoFiltro !== "todos" && t.id_tipo_time !== tipoFiltro) return false;
+      if (!dataRef) return true;
       return tempsPublicas.some(temp => {
         const inicio = temp.data_inicio ? new Date(temp.data_inicio) : null;
         const fim    = temp.data_fim    ? new Date(temp.data_fim)    : null;
@@ -95,7 +100,7 @@ function SeletorTimes({ onSelect }) {
         return (!inicio || ref >= inicio) && (!fim || ref <= fim);
       });
     });
-  }, [allTimes, dataRef]);
+  }, [allTimes, dataRef, tipoFiltro]);
 
   if (loading) return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif" }}>
@@ -120,6 +125,22 @@ function SeletorTimes({ onSelect }) {
           </div>
           <div style={{ fontSize:15, color:C.dim }}>Selecione o time para ver as estatísticas da temporada</div>
         </div>
+
+        {/* Filtro de tipo de time */}
+        {(tiposAtivos||[]).length > 0 && (
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", justifyContent:"center", marginBottom:8 }}>
+            <button onClick={() => setTipoFiltro("todos")}
+              style={{ background: tipoFiltro==="todos" ? C.gold : C.surface, color: tipoFiltro==="todos" ? "#0B3D2E" : C.dim, border:`1px solid ${tipoFiltro==="todos" ? C.gold : C.border}`, borderRadius:8, padding:"7px 16px", fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>
+              Todos
+            </button>
+            {(tiposAtivos||[]).map(t => (
+              <button key={t.id_tipo_time} onClick={() => setTipoFiltro(t.id_tipo_time)}
+                style={{ background: tipoFiltro===t.id_tipo_time ? C.gold : C.surface, color: tipoFiltro===t.id_tipo_time ? "#0B3D2E" : C.dim, border:`1px solid ${tipoFiltro===t.id_tipo_time ? C.gold : C.border}`, borderRadius:8, padding:"7px 16px", fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>
+                {t.descricao}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Filtro de data de referência — opcional */}
         <div style={{ marginBottom:24 }}>
@@ -188,6 +209,16 @@ function SeletorTimes({ onSelect }) {
                 {t.resp_redes_sociais && (
                   <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>
                     📱 <span style={{ color:C.cream }}>{t.resp_redes_sociais}</span>
+                  </div>
+                )}
+                {t.cidade && (
+                  <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>
+                    📍 <span style={{ color:C.cream }}>{t.cidade.nome}{t.cidade.estado ? ` — ${t.cidade.estado}` : ""}</span>
+                  </div>
+                )}
+                {t.campo && (
+                  <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>
+                    🏟️ <span style={{ color:C.cream }}>{t.campo.nome}</span>
                   </div>
                 )}
               </div>

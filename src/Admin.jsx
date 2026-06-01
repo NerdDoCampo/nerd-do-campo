@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.1.1";
 
 // ── Supabase ──────────────────────────────────────────────────
 const URL  = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
@@ -1907,7 +1908,7 @@ export default function AdminAppCompleto() {
           </div>
         )}
         <div style={{ fontSize:10, color:C.dim, letterSpacing:"0.05em" }}>
-          v{process.env.REACT_APP_VERSION || "1.0.0"}
+          v{APP_VERSION}
         </div>
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
           {time?.escudo_url
@@ -3004,7 +3005,9 @@ function CrudTemporadas({ show }) {
 // ── CONFIGURAÇÕES DO TIME ─────────────────────────────────────
 function ConfigTime({ show }) {
   const { data: times, loading, reload } = useQuery(() => api.get(`time?select=*,campo(nome)&limit=1`));
-  const { data: campos } = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
+  const { data: campos  } = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
+  const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
+  const { data: tipos   } = useQuery(() => api.get(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
   const [form, setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -3012,15 +3015,44 @@ function ConfigTime({ show }) {
   useEffect(() => {
     if (times?.[0] && !form) {
       const t = times[0];
-      setForm({ ...t, id_campo: t.id_campo ? String(t.id_campo) : "", data_fundacao: t.data_fundacao ? t.data_fundacao.split("T")[0] : "" });
+      setForm({ ...t, id_campo: t.id_campo ? String(t.id_campo) : "", id_cidade_sede: t.id_cidade_sede ? String(t.id_cidade_sede) : "", id_tipo_time: t.id_tipo_time ? String(t.id_tipo_time) : "", data_fundacao: t.data_fundacao ? t.data_fundacao.split("T")[0] : "" });
     }
   }, [times]);
+
+  function aplicarTipo(id_tipo) {
+    const tipo = (tipos||[]).find(t => String(t.id_tipo_time) === String(id_tipo));
+    if (!tipo) return;
+    setForm(f => ({ ...f,
+      id_tipo_time: String(id_tipo),
+      numero_titulares: tipo.numero_titulares,
+      quantidade_periodos: tipo.quantidade_periodos,
+      minutos_padrao_periodo: tipo.minutos_padrao_periodo,
+      permite_acrescimos: tipo.permite_acrescimos,
+    }));
+  }
 
   async function salvar() {
     if (!form?.nome) { show("Nome obrigatório.", "error"); return; }
     setSaving(true);
     try {
-      const body = { nome: form.nome, telefone: form.telefone||null, escudo_url: form.escudo_url||null, id_campo: form.id_campo ? Number(form.id_campo) : null, data_fundacao: form.data_fundacao||null, numero_titulares: form.numero_titulares ? Number(form.numero_titulares) : null, quantidade_periodos: form.quantidade_periodos ? Number(form.quantidade_periodos) : null, minutos_padrao_periodo: form.minutos_padrao_periodo ? Number(form.minutos_padrao_periodo) : null, permite_acrescimos: form.permite_acrescimos||"N", tecnico: form.tecnico||null, presidente: form.presidente||null, vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null, vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null, resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null, observacoes: form.observacoes||null, publico: form.publico !== false };
+      const body = {
+        nome: form.nome, telefone: form.telefone||null,
+        escudo_url: form.escudo_url||null,
+        id_campo: form.id_campo ? Number(form.id_campo) : null,
+        id_cidade_sede: form.id_cidade_sede ? Number(form.id_cidade_sede) : null,
+        id_tipo_time: form.id_tipo_time ? Number(form.id_tipo_time) : null,
+        valor_mensalidade: form.valor_mensalidade ? Number(form.valor_mensalidade) : null,
+        data_fundacao: form.data_fundacao||null,
+        numero_titulares: form.numero_titulares ? Number(form.numero_titulares) : null,
+        quantidade_periodos: form.quantidade_periodos ? Number(form.quantidade_periodos) : null,
+        minutos_padrao_periodo: form.minutos_padrao_periodo ? Number(form.minutos_padrao_periodo) : null,
+        permite_acrescimos: form.permite_acrescimos||"N",
+        tecnico: form.tecnico||null, presidente: form.presidente||null,
+        vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null,
+        vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null,
+        resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null,
+        observacoes: form.observacoes||null, publico: form.publico !== false
+      };
       await api.patch(`time?id_time=eq.${form.id_time}`, body);
       show("Configurações salvas!"); reload();
     } catch (e) { show(e.message, "error"); }
@@ -3030,30 +3062,43 @@ function ConfigTime({ show }) {
   if (loading || !form) return <Spinner />;
 
   return (
-    <Card style={{ padding:24, maxWidth:720 }}>
-      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-        <div style={{ display:"flex", alignItems:"flex-start", gap:20, marginBottom:8 }}>
-          <ImageUpload
-            label="Escudo do Time"
-            value={form.escudo_url||""}
-            onUpload={url => set("escudo_url", url)}
-            bucket="escudos"
-            nomeArquivo={`time_${form.id_time}`}
-          />
-          <div style={{ flex:1, display:"flex", flexDirection:"column", gap:12 }}>
-            <Input label="Nome do Time *" value={form.nome||""} onChange={e => set("nome", e.target.value)} />
-            <Input label="Telefone" value={form.telefone||""} onChange={e => set("telefone", e.target.value)} />
+    <Card style={{ padding:24 }}>
+      <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+        {/* Identidade do Time */}
+        <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Identidade</div>
+        <div style={{ display:"flex", alignItems:"flex-start", gap:20 }}>
+          <ImageUpload label="Escudo" value={form.escudo_url||""} onUpload={url => set("escudo_url", url)} bucket="escudos" nomeArquivo={`time_${form.id_time}`}/>
+          <div style={{ flex:1, display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <Input label="Nome do Time *" value={form.nome||""} onChange={e => set("nome", e.target.value)}/>
+            <Input label="Telefone" value={form.telefone||""} onChange={e => set("telefone", e.target.value)}/>
+            <Input label="Data de Fundação" type="date" value={form.data_fundacao||""} onChange={e => set("data_fundacao", e.target.value)}/>
+            <Select label="Cidade Sede" value={form.id_cidade_sede||""} onChange={e => set("id_cidade_sede", e.target.value)}>
+              <option value="">Selecione...</option>
+              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}{c.estado ? ` — ${c.estado}` : ""}</option>)}
+            </Select>
+            <Select label="Campo Principal" value={form.id_campo||""} onChange={e => set("id_campo", e.target.value)}>
+              <option value="">Selecione...</option>
+              {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
+            </Select>
+            <Input label="Valor Mensalidade (R$)" type="number" min="0" step="0.01" value={form.valor_mensalidade||""} onChange={e => set("valor_mensalidade", e.target.value)}/>
           </div>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          <Input label="Data de Fundação" type="date" value={form.data_fundacao||""} onChange={e => set("data_fundacao", e.target.value)} />
-          <Select label="Campo Principal" value={form.id_campo||""} onChange={e => set("id_campo", e.target.value)}>
+
+        {/* Tipo de Time */}
+        <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Tipo de Time</div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, alignItems:"end" }}>
+          <Select label="Tipo de Time" value={form.id_tipo_time||""} onChange={e => aplicarTipo(e.target.value)}>
             <option value="">Selecione...</option>
-            {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
+            {(tipos||[]).map(t => <option key={t.id_tipo_time} value={t.id_tipo_time}>{t.descricao}</option>)}
           </Select>
+          <div style={{ fontSize:11, color:C.dim, fontStyle:"italic", paddingBottom:4 }}>
+            Ao mudar o tipo, as regras abaixo são atualizadas automaticamente
+          </div>
         </div>
 
-        <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginTop:4, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Regras do Jogo</div>
+        {/* Regras do Jogo */}
+        <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Regras do Jogo</div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
           <Input label="Nº Titulares"    type="number" min="1" value={form.numero_titulares||""} onChange={e => set("numero_titulares", e.target.value)} />
           <Input label="Qtd. Períodos"   type="number" min="1" value={form.quantidade_periodos||""} onChange={e => set("quantidade_periodos", e.target.value)} />

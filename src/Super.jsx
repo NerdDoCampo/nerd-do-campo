@@ -170,6 +170,7 @@ function DashboardSuper() {
   const [modalNovoTime, setModalNovoTime]   = useState(false);
   const [modalNovoUser, setModalNovoUser]   = useState(false);
   const [timeSelecionado, setTimeSelecionado] = useState(null);
+  const [aba, setAba] = useState("times");
 
   const totalTimes    = (times||[]).length;
   const totalUsuarios = (usuarios||[]).length;
@@ -180,6 +181,24 @@ function DashboardSuper() {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
       <Toast {...(toast||{msg:null})}/>
+
+      {/* Abas */}
+      <div style={{ display:"flex", gap:8 }}>
+        {[
+          { id:"times", label:"🏆 Times" },
+          { id:"tipos", label:"⚽ Tipos de Time" },
+        ].map(a => (
+          <button key={a.id} onClick={() => setAba(a.id)}
+            style={{ background: aba===a.id ? C.gold : C.surface, color: aba===a.id ? "#0B3D2E" : C.dim,
+              border:`1px solid ${aba===a.id ? C.gold : C.border}`, borderRadius:8, padding:"8px 18px",
+              fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>
+            {a.label}
+          </button>
+        ))}
+      </div>
+
+      {aba === "tipos" && <CrudTipoTime show={show}/>}
+      {aba === "times" && <>
 
       {/* Stats */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
@@ -244,6 +263,7 @@ function DashboardSuper() {
           <FormNovoAdmin time={timeSelecionado} onSalvo={()=>{ setModalNovoUser(false); setTimeSelecionado(null); reload(); show("Admin criado! Envie o acesso para o time."); }} show={show}/>
         </Modal>
       )}
+      </>}
     </div>
   );
 }
@@ -452,8 +472,140 @@ function FormNovoAdmin({ time, onSalvo, show }) {
 }
 
 // ── APP SUPER ─────────────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════
+// CRUD TIPOS DE TIME
+// ══════════════════════════════════════════════════════════════
+function CrudTipoTime({ show }) {
+  const { data: tipos, loading, reload } = useQuery(() => api.get(`tipo_time?select=*&order=id_tipo_time.asc`));
+  const { toast } = useToast();
+  const [modal, setModal] = useState(null);
+  const [form, setForm]   = useState({});
+  const [saving, setSaving] = useState(false);
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  function abrirNovo() {
+    setForm({ descricao:"", status:"Ativo", numero_titulares:11, quantidade_periodos:2, minutos_padrao_periodo:45, permite_acrescimos:"S" });
+    setModal("novo");
+  }
+
+  function abrirEditar(t) {
+    setForm({ ...t });
+    setModal(t);
+  }
+
+  async function salvar() {
+    if (!form.descricao) { show("Descrição obrigatória"); return; }
+    setSaving(true);
+    try {
+      const body = {
+        descricao: form.descricao,
+        status: form.status || "Ativo",
+        numero_titulares: Number(form.numero_titulares) || 11,
+        quantidade_periodos: Number(form.quantidade_periodos) || 2,
+        minutos_padrao_periodo: Number(form.minutos_padrao_periodo) || 45,
+        permite_acrescimos: form.permite_acrescimos || "S",
+      };
+      if (modal === "novo") {
+        await api.post(`tipo_time`, body);
+        show("Tipo criado!");
+      } else {
+        await api.patch(`tipo_time?id_tipo_time=eq.${modal.id_tipo_time}`, body);
+        show("Tipo atualizado!");
+      }
+      setModal(null); reload();
+    } catch(e) { show("Erro ao salvar: " + e.message); }
+    finally { setSaving(false); }
+  }
+
+  async function alterarStatus(t) {
+    const novoStatus = t.status === "Ativo" ? "Inativo" : "Ativo";
+    await api.patch(`tipo_time?id_tipo_time=eq.${t.id_tipo_time}`, { status: novoStatus });
+    show(`${t.descricao}: ${novoStatus}`); reload();
+  }
+
+  if (loading) return <Spinner/>;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <Card style={{ padding:0, overflow:"hidden" }}>
+        <div style={{ padding:"18px 24px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ fontSize:16, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.cream }}>⚽ Tipos de Time</div>
+          <Btn onClick={abrirNovo}>+ Novo Tipo</Btn>
+        </div>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+          <thead><tr style={{ background:C.surf2 }}>
+            {["Descrição","Status","Titulares","Períodos","Min/Período","Acrésc.","Ações"].map(h => (
+              <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {(tipos||[]).map((t,i) => (
+              <tr key={t.id_tipo_time} style={{ background:i%2===0?C.surface:C.bg }}>
+                <td style={{ padding:"13px 16px", fontWeight:700, color:C.cream }}>{t.descricao}</td>
+                <td style={{ padding:"13px 16px" }}>
+                  <span style={{ color: t.status==="Ativo" ? C.win : C.dim, fontWeight:700, fontSize:12 }}>
+                    {t.status==="Ativo" ? "🟢 Ativo" : "🔴 Inativo"}
+                  </span>
+                </td>
+                <td style={{ padding:"13px 16px", color:C.dim }}>{t.numero_titulares}</td>
+                <td style={{ padding:"13px 16px", color:C.dim }}>{t.quantidade_periodos}</td>
+                <td style={{ padding:"13px 16px", color:C.dim }}>{t.minutos_padrao_periodo} min</td>
+                <td style={{ padding:"13px 16px", color:C.dim }}>{t.permite_acrescimos==="S" ? "Sim" : "Não"}</td>
+                <td style={{ padding:"13px 16px", display:"flex", gap:8 }}>
+                  <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(t)}>Editar</Btn>
+                  <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px", color: t.status==="Ativo" ? C.loss : C.win }} onClick={() => alterarStatus(t)}>
+                    {t.status==="Ativo" ? "Inativar" : "Ativar"}
+                  </Btn>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+
+      {modal && (
+        <Modal title={modal==="novo" ? "Novo Tipo de Time" : "Editar Tipo de Time"} onClose={() => setModal(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            <Input label="Descrição *" value={form.descricao||""} onChange={e => set("descricao", e.target.value)}/>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div>
+                <div style={{ fontSize:11, color:C.dim, textTransform:"uppercase", marginBottom:4 }}>Status</div>
+                <select value={form.status||"Ativo"} onChange={e => set("status", e.target.value)}
+                  style={{ width:"100%", background:C.surf2, color:C.cream, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 12px", fontFamily:"inherit", fontSize:13 }}>
+                  <option>Ativo</option>
+                  <option>Inativo</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:C.dim, textTransform:"uppercase", marginBottom:4 }}>Permite Acréscimos</div>
+                <select value={form.permite_acrescimos||"S"} onChange={e => set("permite_acrescimos", e.target.value)}
+                  style={{ width:"100%", background:C.surf2, color:C.cream, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 12px", fontFamily:"inherit", fontSize:13 }}>
+                  <option value="S">Sim</option>
+                  <option value="N">Não</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+              <Input label="Nº Titulares"    type="number" value={form.numero_titulares||""} onChange={e => set("numero_titulares", e.target.value)}/>
+              <Input label="Qtd Períodos"    type="number" value={form.quantidade_periodos||""} onChange={e => set("quantidade_periodos", e.target.value)}/>
+              <Input label="Min por Período" type="number" value={form.minutos_padrao_periodo||""} onChange={e => set("minutos_padrao_periodo", e.target.value)}/>
+            </div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:8 }}>
+              <Btn variant="secondary" onClick={() => setModal(null)}>Cancelar</Btn>
+              <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.1.1";
 
   if (!session) return <LoginSuper onLogin={setSession}/>;
 
@@ -463,6 +615,10 @@ export default function SuperApp() {
         <img src="/logo.png" alt="Nerd do Campo" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
         <div style={{ fontSize:18, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream }}>Nerd do Campo</div>
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"2px 8px" }}>Super Admin</div>
+        {process.env.REACT_APP_ENV === "development" && (
+          <div style={{ fontSize:10, color:"#ff6b6b", textTransform:"uppercase", background:"#ff6b6b22", border:"1px solid #ff6b6b44", borderRadius:6, padding:"2px 8px", fontWeight:700 }}>🧪 DEV</div>
+        )}
+        <div style={{ fontSize:10, color:C.dim }}>v{APP_VERSION}</div>
         <div style={{ marginLeft:"auto" }}>
           <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>{ SESSION_TOKEN=null; sessionStorage.removeItem("ndc_super_token"); setSession(null); }}>Sair</Btn>
         </div>
