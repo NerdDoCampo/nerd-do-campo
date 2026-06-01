@@ -2360,7 +2360,7 @@ export default function AdminAppCompleto() {
             </button>
           ))}
           <div style={{ height:1, background:C.border, margin:"8px 0" }}/>
-          {["Jogos","Cadastros","Configurações"].map(grupo => {
+          {["Jogos","Cadastros","Configurações","Financeiro"].map(grupo => {
             const itens = MENU.filter(m => m.grupo === grupo);
             return (
               <div key={grupo}>
