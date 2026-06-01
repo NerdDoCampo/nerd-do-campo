@@ -1901,7 +1901,9 @@ function CrudMensalidades({ show }) {
     .reduce((s, j) => s + (j.pag?.valor_esperado || time?.valor_mensalidade || 0), 0);
   const totalRecebido = jogadoresComStatus
     .reduce((s, j) => s + (j.pag?.valor_pago || 0), 0);
-  const totalPendente = totalEsperado - totalRecebido;
+  const totalPendente = jogadoresComStatus
+    .filter(j => j.status === "nao_pago" || j.status === "parcial")
+    .reduce((s, j) => s + ((j.pag?.valor_esperado || time?.valor_mensalidade || 0) - (j.pag?.valor_pago || 0)), 0);
 
   // Inadimplentes — 2+ meses em aberto
   const inadimplentes = (jogadores||[]).filter(j => {
