@@ -2386,6 +2386,7 @@ export default function AdminAppCompleto() {
           <div style={{ height:1, background:C.border, margin:"8px 0" }}/>
           {["Jogos","Cadastros","Configurações","Financeiro"].map(grupo => {
             const itens = MENU.filter(m => m.grupo === grupo);
+            if (!itens.length) return null;
             return (
               <div key={grupo}>
                 <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, padding:"12px 20px 6px" }}>{grupo}</div>
