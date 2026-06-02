@@ -119,6 +119,27 @@ function useToast() {
 }
 
 // ── LOGIN SUPER ───────────────────────────────────────────────
+
+// ── Badge de solicitações pendentes ──────────────────────────
+function BadgePendentes() {
+  const { data: pendentes } = useQuery(() =>
+    api.get(`solicitacao_time?select=id&status=eq.pendente`),
+    [], { refetchInterval: 60000 } // atualiza a cada 60s
+  );
+  const total = (pendentes||[]).length;
+  if (!total) return null;
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:6,
+      background:"#F4433622", border:"1px solid #F4433644",
+      borderRadius:8, padding:"3px 10px", animation:"pulse 2s infinite" }}>
+      <div style={{ width:8, height:8, borderRadius:"50%", background:"#F44336" }}/>
+      <span style={{ fontSize:11, color:"#F44336", fontWeight:800 }}>
+        {total} solicitação{total > 1 ? "ões" : ""} pendente{total > 1 ? "s" : ""}
+      </span>
+    </div>
+  );
+}
+
 function LoginSuper({ onLogin }) {
   const [email, setEmail]   = useState("");
   const [senha, setSenha]   = useState("");
@@ -166,6 +187,7 @@ function LoginSuper({ onLogin }) {
 function DashboardSuper() {
   const { data: times, loading, reload } = useQuery(() => api.get(`time?select=*,temporada(id_temporada,nome),usuario_time(user_id,role)&order=nome.asc`));
   const { data: usuarios } = useQuery(() => api.get(`usuario_time?select=*&order=criado_em.desc`));
+  const { data: solPendentes } = useQuery(() => api.get(`solicitacao_time?select=id&status=eq.pendente`));
   const { toast, show } = useToast();
   const [modalNovoTime, setModalNovoTime]     = useState(false);
   const [modalNovoUser, setModalNovoUser]     = useState(false);
@@ -184,10 +206,11 @@ function DashboardSuper() {
       <Toast {...(toast||{msg:null})}/>
 
       {/* Abas */}
-      <div style={{ display:"flex", gap:8 }}>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
         {[
-          { id:"times", label:"🏆 Times" },
-          { id:"tipos", label:"⚽ Tipos de Time" },
+          { id:"times",        label:"🏆 Times" },
+          { id:"solicitacoes", label:`📋 Solicitações${(solPendentes||[]).length > 0 ? ` (${(solPendentes||[]).length})` : ""}` },
+          { id:"tipos",        label:"⚽ Tipos de Time" },
         ].map(a => (
           <button key={a.id} onClick={() => setAba(a.id)}
             style={{ background: aba===a.id ? C.gold : C.surface, color: aba===a.id ? "#0B3D2E" : C.dim,
@@ -198,7 +221,8 @@ function DashboardSuper() {
         ))}
       </div>
 
-      {aba === "tipos" && <CrudTipoTime show={show}/>}
+      {aba === "tipos"        && <CrudTipoTime show={show}/>}
+      {aba === "solicitacoes" && <CrudSolicitacoes show={show}/>}
       {aba === "times" && <>
 
       {/* Stats */}
@@ -641,6 +665,276 @@ function ModalPermissoes({ user_id, id_time, nomeUsuario, onClose, show }) {
   );
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// APROVAÇÃO DE SOLICITAÇÕES DE TIMES
+// ══════════════════════════════════════════════════════════════
+function CrudSolicitacoes({ show }) {
+  const { data: solicitacoes, reload } = useQuery(() =>
+    api.get(`solicitacao_time?select=*,tipo_time(descricao)&order=criado_em.desc`)
+  );
+  const { data: tipos } = useQuery(() => api.get(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
+  const [modalSol, setModalSol] = useState(null);
+  const [permsForm, setPermsForm] = useState({});
+  const [obs, setObs]   = useState("");
+  const [saving, setSaving] = useState(false);
+  const [filtro, setFiltro] = useState("pendente");
+
+  function abrirAprovar(s) {
+    // Permissões padrão — tudo liberado
+    const p = {};
+    MODULOS_ADMIN.forEach(m => { p[m.id] = { ver: true, editar: true }; });
+    setPermsForm(p);
+    setObs("");
+    setModalSol(s);
+  }
+
+  function togglePerm(modulo, campo) {
+    setPermsForm(prev => ({
+      ...prev,
+      [modulo]: {
+        ...prev[modulo],
+        [campo]: !prev[modulo][campo],
+        ...(campo === 'pode_ver' && prev[modulo].ver ? { editar: false } : {}),
+      }
+    }));
+  }
+
+  async function aprovar() {
+    setSaving(true);
+    try {
+      // 1. Criar time
+      const timeRes = await api.post(`time`, {
+        nome: modalSol.nome_time,
+        id_tipo_time: modalSol.id_tipo_time || null,
+        data_fundacao: modalSol.data_fundacao || null,
+        telefone: modalSol.telefone || null,
+        publico: false,
+      });
+
+      // 2. Buscar id do time criado
+      const times = await api.get(`time?nome=eq.${encodeURIComponent(modalSol.nome_time)}&order=id_time.desc&limit=1`);
+      const id_time = times?.[0]?.id_time;
+      if (!id_time) throw new Error("Não foi possível encontrar o time criado.");
+
+      // 3. Criar usuário admin via RPC
+      const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/criar_admin_time`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SESSION_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ p_email: modalSol.email_responsavel, p_id_time: id_time, p_role: "admin" }),
+      });
+      const rpcData = await rpcRes.json();
+      const user_id = rpcData?.user_id;
+
+      // 4. Salvar permissões
+      if (user_id) {
+        for (const m of MODULOS_ADMIN) {
+          const p = permsForm[m.id];
+          await api.post(`usuario_permissao`, {
+            user_id, id_time, modulo: m.id,
+            pode_ver: p.ver, pode_editar: p.editar,
+          });
+        }
+      }
+
+      // 5. Atualizar status da solicitação
+      await api.patch(`solicitacao_time?id=eq.${modalSol.id}`, {
+        status: "aprovado", observacoes_admin: obs || null,
+      });
+
+      show(`✅ Time "${modalSol.nome_time}" aprovado! Admin criado para ${modalSol.email_responsavel}.`);
+      setModalSol(null); reload();
+    } catch(e) { show("Erro: " + e.message, "error"); }
+    finally { setSaving(false); }
+  }
+
+  async function recusar() {
+    if (!obs.trim()) { show("Informe o motivo da recusa.", "error"); return; }
+    setSaving(true);
+    try {
+      await api.patch(`solicitacao_time?id=eq.${modalSol.id}`, {
+        status: "recusado", observacoes_admin: obs,
+      });
+      show("Solicitação recusada."); setModalSol(null); reload();
+    } catch(e) { show("Erro: " + e.message, "error"); }
+    finally { setSaving(false); }
+  }
+
+  const lista = (solicitacoes||[]).filter(s => filtro === "todos" || s.status === filtro);
+
+  const STATUS_SOL = {
+    pendente:  { label:"⏳ Pendente",  cor:"#E8A020" },
+    aprovado:  { label:"✅ Aprovado",  cor:"#4CAF50" },
+    recusado:  { label:"❌ Recusado",  cor:"#F44336" },
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {/* Filtros */}
+      <div style={{ display:"flex", gap:8 }}>
+        {[["todos","Todos"],["pendente","⏳ Pendentes"],["aprovado","✅ Aprovados"],["recusado","❌ Recusados"]].map(([k,l]) => (
+          <button key={k} onClick={() => setFiltro(k)}
+            style={{ background: filtro===k ? C.gold : C.surface, color: filtro===k ? "#0B3D2E" : C.dim,
+              border:`1px solid ${filtro===k ? C.gold : C.border}`, borderRadius:8, padding:"7px 16px",
+              fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>
+            {l} {k !== "todos" && `(${(solicitacoes||[]).filter(s=>s.status===k).length})`}
+          </button>
+        ))}
+      </div>
+
+      <Card style={{ padding:0, overflow:"hidden" }}>
+        {lista.length === 0 ? (
+          <div style={{ padding:40, textAlign:"center", color:C.dim, fontSize:14 }}>
+            Nenhuma solicitação {filtro !== "todos" ? filtro : ""} encontrada.
+          </div>
+        ) : (
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <thead><tr style={{ background:C.surf2 }}>
+              {["Data","Time","Tipo","Cidade","Responsável","E-mail","Telefone","Status","Ações"].map(h => (
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {lista.map((s,i) => {
+                const cfg = STATUS_SOL[s.status] || STATUS_SOL.pendente;
+                return (
+                  <tr key={s.id} style={{ background:i%2===0?C.surface:C.bg }}>
+                    <td style={{ padding:"11px 14px", color:C.dim, fontSize:11, whiteSpace:"nowrap" }}>{new Date(s.criado_em).toLocaleDateString("pt-BR")}</td>
+                    <td style={{ padding:"11px 14px", fontWeight:700, color:C.cream }}>{s.nome_time}</td>
+                    <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{s.tipo_time?.descricao || "—"}</td>
+                    <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{s.cidade || "—"}</td>
+                    <td style={{ padding:"11px 14px", color:C.dim }}>{s.nome_responsavel}</td>
+                    <td style={{ padding:"11px 14px", color:C.gold, fontSize:12 }}>{s.email_responsavel}</td>
+                    <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{s.telefone}</td>
+                    <td style={{ padding:"11px 14px" }}>
+                      <span style={{ background:cfg.cor+"22", color:cfg.cor, border:`1px solid ${cfg.cor}44`, borderRadius:6, padding:"2px 10px", fontSize:11, fontWeight:700 }}>
+                        {cfg.label}
+                      </span>
+                    </td>
+                    <td style={{ padding:"11px 14px" }}>
+                      {s.status === "pendente" && (
+                        <Btn style={{ fontSize:11, padding:"5px 12px" }} onClick={() => abrirAprovar(s)}>
+                          Analisar
+                        </Btn>
+                      )}
+                      {s.status !== "pendente" && s.observacoes_admin && (
+                        <span style={{ fontSize:11, color:C.dim, fontStyle:"italic" }}>{s.observacoes_admin}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      {/* Modal de análise */}
+      {modalSol && (
+        <Modal title={`Analisar Solicitação — ${modalSol.nome_time}`} onClose={() => setModalSol(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+            {/* Dados da solicitação */}
+            <div style={{ background:C.surf2, borderRadius:10, padding:16 }}>
+              <div style={{ fontSize:11, color:C.gold, fontWeight:700, textTransform:"uppercase", marginBottom:10 }}>Dados da Solicitação</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, fontSize:12 }}>
+                {[
+                  ["Time",          modalSol.nome_time],
+                  ["Tipo",          modalSol.tipo_time?.descricao || "—"],
+                  ["Cidade",        modalSol.cidade || "—"],
+                  ["Campo",         modalSol.campo_principal || "—"],
+                  ["Fundação",      modalSol.data_fundacao ? new Date(modalSol.data_fundacao+"T12:00:00").toLocaleDateString("pt-BR") : "—"],
+                  ["Redes Sociais", modalSol.redes_sociais || "—"],
+                  ["Responsável",   modalSol.nome_responsavel],
+                  ["E-mail",        modalSol.email_responsavel],
+                  ["Telefone",      modalSol.telefone],
+                ].map(([k,v]) => (
+                  <div key={k}>
+                    <span style={{ color:C.dim }}>{k}: </span>
+                    <span style={{ color:C.cream, fontWeight:600 }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Permissões */}
+            <div>
+              <div style={{ fontSize:11, color:C.gold, fontWeight:700, textTransform:"uppercase", marginBottom:8 }}>
+                Permissões do Admin
+              </div>
+              <div style={{ display:"flex", gap:6, marginBottom:10 }}>
+                <Btn variant="secondary" style={{ fontSize:11, padding:"4px 12px" }}
+                  onClick={() => { const p={}; MODULOS_ADMIN.forEach(m=>{p[m.id]={ver:true,editar:true}}); setPermsForm(p); }}>
+                  ✅ Liberar tudo
+                </Btn>
+                <Btn variant="secondary" style={{ fontSize:11, padding:"4px 12px", color:C.loss }}
+                  onClick={() => { const p={}; MODULOS_ADMIN.forEach(m=>{p[m.id]={ver:false,editar:false}}); setPermsForm(p); }}>
+                  🔒 Bloquear tudo
+                </Btn>
+              </div>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                <thead><tr style={{ background:C.surf2 }}>
+                  {["Módulo","Ver","Editar"].map(h => (
+                    <th key={h} style={{ padding:"8px 12px", textAlign: h==="Módulo"?"left":"center", fontSize:10, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>
+                  {MODULOS_ADMIN.map((m,i) => {
+                    const p = permsForm[m.id] || { ver:true, editar:true };
+                    return (
+                      <tr key={m.id} style={{ background:i%2===0?C.surface:C.bg }}>
+                        <td style={{ padding:"8px 12px", color:C.cream, fontWeight:600 }}>{m.label}</td>
+                        <td style={{ padding:"8px 12px", textAlign:"center" }}>
+                          <button onClick={() => togglePerm(m.id, 'pode_ver')}
+                            style={{ width:32, height:18, borderRadius:9, border:"none", cursor:"pointer",
+                              background:p.ver?C.win:C.dim, position:"relative" }}>
+                            <span style={{ position:"absolute", top:1, left:p.ver?14:2,
+                              width:14, height:14, borderRadius:"50%", background:"white", display:"block" }}/>
+                          </button>
+                        </td>
+                        <td style={{ padding:"8px 12px", textAlign:"center" }}>
+                          <button onClick={() => p.ver && togglePerm(m.id, 'pode_editar')}
+                            style={{ width:32, height:18, borderRadius:9, border:"none",
+                              cursor:p.ver?"pointer":"not-allowed",
+                              background:p.editar&&p.ver?C.gold:C.dim,
+                              position:"relative", opacity:p.ver?1:0.4 }}>
+                            <span style={{ position:"absolute", top:1, left:p.editar&&p.ver?14:2,
+                              width:14, height:14, borderRadius:"50%", background:"white", display:"block" }}/>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Observações */}
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Observações (obrigatório para recusar)</div>
+              <textarea value={obs} onChange={e => setObs(e.target.value)} rows={3}
+                placeholder="Mensagem para o solicitante..."
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8,
+                  color:C.cream, fontFamily:"inherit", fontSize:12, padding:"10px 12px",
+                  resize:"vertical", boxSizing:"border-box", outline:"none" }}/>
+            </div>
+
+            <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+              <Btn variant="secondary" onClick={() => setModalSol(null)}>Cancelar</Btn>
+              <Btn variant="danger" onClick={recusar} disabled={saving} style={{ fontSize:12 }}>
+                ❌ Recusar
+              </Btn>
+              <Btn onClick={aprovar} disabled={saving}>
+                {saving ? "Processando..." : "✅ Aprovar e Criar Admin"}
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════
 // CRUD TIPOS DE TIME
 // ══════════════════════════════════════════════════════════════
@@ -783,6 +1077,7 @@ export default function SuperApp() {
         <img src="/logo.png" alt="Nerd do Campo" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
         <div style={{ fontSize:18, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream }}>Nerd do Campo</div>
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"2px 8px" }}>Super Admin</div>
+        <BadgePendentes/>
         {process.env.REACT_APP_ENV === "development" && (
           <div style={{ fontSize:10, color:"#ff6b6b", textTransform:"uppercase", background:"#ff6b6b22", border:"1px solid #ff6b6b44", borderRadius:6, padding:"2px 8px", fontWeight:700 }}>🧪 DEV</div>
         )}

@@ -820,6 +820,221 @@ function TimeApp({ time, onVoltar }) {
   );
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// MODAL DE SOLICITAÇÃO DE CADASTRO
+// ══════════════════════════════════════════════════════════════
+function ModalSolicitacao({ onClose }) {
+  const [form, setForm] = useState({
+    nome_time:"", id_tipo_time:"", data_fundacao:"", cidade:"",
+    campo_principal:"", redes_sociais:"",
+    nome_responsavel:"", email_responsavel:"", telefone:"",
+  });
+  const [step, setStep]     = useState(1); // 1=dados, 2=confirmação
+  const [saving, setSaving] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [erro, setErro]     = useState("");
+  const { data: tipos } = useQuery(() => sb(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  function validar() {
+    if (!form.nome_time.trim())          return "Nome do time é obrigatório.";
+    if (!form.nome_responsavel.trim())   return "Nome do responsável é obrigatório.";
+    if (!form.email_responsavel.trim())  return "E-mail é obrigatório.";
+    if (!/\S+@\S+\.\S+/.test(form.email_responsavel)) return "E-mail inválido.";
+    if (!form.telefone.trim())           return "Telefone é obrigatório.";
+    return "";
+  }
+
+  async function enviar() {
+    const err = validar();
+    if (err) { setErro(err); return; }
+    setSaving(true); setErro("");
+    try {
+      const body = {
+        nome_time:          form.nome_time.trim(),
+        id_tipo_time:       form.id_tipo_time ? Number(form.id_tipo_time) : null,
+        data_fundacao:      form.data_fundacao || null,
+        cidade:             form.cidade.trim() || null,
+        campo_principal:    form.campo_principal.trim() || null,
+        redes_sociais:      form.redes_sociais.trim() || null,
+        nome_responsavel:   form.nome_responsavel.trim(),
+        email_responsavel:  form.email_responsavel.trim().toLowerCase(),
+        telefone:           form.telefone.trim(),
+      };
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/solicitacao_time`, {
+        method:"POST",
+        headers:{ apikey:SUPABASE_KEY, "Content-Type":"application/json", Prefer:"return=minimal" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Erro ao enviar solicitação.");
+      setEnviado(true);
+    } catch(e) { setErro(e.message); }
+    finally { setSaving(false); }
+  }
+
+  if (enviado) return (
+    <div style={{ position:"fixed", inset:0, background:"#00000099", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+      <div style={{ background:C.surface, borderRadius:16, padding:40, maxWidth:400, width:"100%", textAlign:"center", border:`1px solid ${C.border}` }}>
+        <div style={{ fontSize:56, marginBottom:16 }}>✅</div>
+        <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:12 }}>Solicitação enviada!</div>
+        <div style={{ fontSize:13, color:C.dim, lineHeight:1.7, marginBottom:24 }}>
+          Recebemos os dados do <b style={{ color:C.cream }}>{form.nome_time}</b>.
+          Nossa equipe irá analisar e entrar em contato pelo e-mail <b style={{ color:C.gold }}>{form.email_responsavel}</b> em breve.
+        </div>
+        <button onClick={onClose}
+          style={{ background:C.gold, color:"#0B3D2E", border:"none", borderRadius:10, padding:"12px 32px", fontFamily:"inherit", fontWeight:800, fontSize:14, cursor:"pointer", textTransform:"uppercase" }}>
+          Fechar
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#00000099", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16, overflowY:"auto" }}>
+      <div style={{ background:C.surface, borderRadius:16, padding:28, maxWidth:520, width:"100%", border:`1px solid ${C.border}`, margin:"auto" }}>
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+          <div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.cream, textTransform:"uppercase", letterSpacing:"0.06em" }}>🏆 Cadastrar meu Time</div>
+            <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>Passo {step} de 2</div>
+          </div>
+          <button onClick={onClose}
+            style={{ background:"none", border:"none", color:C.dim, cursor:"pointer", fontSize:22, lineHeight:1 }}>✕</button>
+        </div>
+
+        {/* Progress */}
+        <div style={{ display:"flex", gap:6, marginBottom:24 }}>
+          {[1,2].map(s => (
+            <div key={s} style={{ flex:1, height:4, borderRadius:2,
+              background: step >= s ? C.gold : C.surf2, transition:"background 0.3s" }}/>
+          ))}
+        </div>
+
+        {step === 1 && (
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", fontWeight:700, letterSpacing:"0.08em", borderLeft:`3px solid ${C.gold}`, paddingLeft:8 }}>Dados do Time</div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Nome do Time *</div>
+              <input value={form.nome_time} onChange={e => set("nome_time", e.target.value)}
+                placeholder="Ex: Juventus FC"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+            </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Tipo de Time</div>
+              <select value={form.id_tipo_time} onChange={e => set("id_tipo_time", e.target.value)}
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px" }}>
+                <option value="">Selecione...</option>
+                {(tipos||[]).map(t => <option key={t.id_tipo_time} value={t.id_tipo_time}>{t.descricao}</option>)}
+              </select>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div>
+                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Cidade</div>
+                <input value={form.cidade} onChange={e => set("cidade", e.target.value)}
+                  placeholder="Ex: Sapiranga/RS"
+                  style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Data de Fundação</div>
+                <input type="date" value={form.data_fundacao} onChange={e => set("data_fundacao", e.target.value)}
+                  style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Campo Principal</div>
+              <input value={form.campo_principal} onChange={e => set("campo_principal", e.target.value)}
+                placeholder="Ex: Campo do Bairro Centro"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+            </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Redes Sociais</div>
+              <input value={form.redes_sociais} onChange={e => set("redes_sociais", e.target.value)}
+                placeholder="Ex: @juventusfcsapiranga"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+            </div>
+
+            <button onClick={() => setStep(2)}
+              disabled={!form.nome_time.trim()}
+              style={{ background: form.nome_time.trim() ? C.gold : C.surf2,
+                color: form.nome_time.trim() ? "#0B3D2E" : C.dim,
+                border:"none", borderRadius:10, padding:"13px", fontFamily:"inherit",
+                fontWeight:800, fontSize:14, cursor: form.nome_time.trim() ? "pointer" : "not-allowed",
+                textTransform:"uppercase", marginTop:4 }}>
+              Próximo →
+            </button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", fontWeight:700, letterSpacing:"0.08em", borderLeft:`3px solid ${C.gold}`, paddingLeft:8 }}>Dados do Responsável</div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Nome do Responsável *</div>
+              <input value={form.nome_responsavel} onChange={e => set("nome_responsavel", e.target.value)}
+                placeholder="Seu nome completo"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+            </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>E-mail *</div>
+              <input type="email" value={form.email_responsavel} onChange={e => set("email_responsavel", e.target.value)}
+                placeholder="seu@email.com"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+              <div style={{ fontSize:10, color:C.dim, marginTop:4 }}>Será o e-mail de acesso ao painel admin</div>
+            </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Telefone / WhatsApp *</div>
+              <input value={form.telefone} onChange={e => set("telefone", e.target.value)}
+                placeholder="(51) 99999-9999"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+            </div>
+
+            {/* Resumo */}
+            <div style={{ background:C.surf2, borderRadius:10, padding:14, border:`1px solid ${C.border}` }}>
+              <div style={{ fontSize:11, color:C.gold, fontWeight:700, marginBottom:8 }}>📋 Resumo da solicitação</div>
+              <div style={{ fontSize:12, color:C.dim, lineHeight:1.8 }}>
+                <b style={{ color:C.cream }}>Time:</b> {form.nome_time}<br/>
+                {form.cidade && <><b style={{ color:C.cream }}>Cidade:</b> {form.cidade}<br/></>}
+                {form.id_tipo_time && (tipos||[]).find(t=>String(t.id_tipo_time)===String(form.id_tipo_time)) && (
+                  <><b style={{ color:C.cream }}>Tipo:</b> {(tipos||[]).find(t=>String(t.id_tipo_time)===String(form.id_tipo_time))?.descricao}<br/></>
+                )}
+              </div>
+            </div>
+
+            {erro && <div style={{ background:C.loss+"22", border:`1px solid ${C.loss}44`, borderRadius:8, padding:"10px 14px", fontSize:12, color:C.loss }}>{erro}</div>}
+
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={() => setStep(1)}
+                style={{ flex:1, background:C.surf2, color:C.dim, border:`1px solid ${C.border}`,
+                  borderRadius:10, padding:"13px", fontFamily:"inherit", fontWeight:700,
+                  fontSize:13, cursor:"pointer", textTransform:"uppercase" }}>
+                ← Voltar
+              </button>
+              <button onClick={enviar} disabled={saving}
+                style={{ flex:2, background: saving ? C.surf2 : C.gold,
+                  color: saving ? C.dim : "#0B3D2E", border:"none",
+                  borderRadius:10, padding:"13px", fontFamily:"inherit",
+                  fontWeight:800, fontSize:14, cursor: saving ? "not-allowed" : "pointer",
+                  textTransform:"uppercase" }}>
+                {saving ? "Enviando..." : "✅ Enviar Solicitação"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [timeSel, setTimeSel] = useState(null);
   if (timeSel) return <TimeApp time={timeSel} onVoltar={() => setTimeSel(null)} />;
