@@ -2262,7 +2262,16 @@ export default function AdminAppCompleto() {
   const [session, setSession]       = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [idTime, setIdTime]         = useState(null);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
-  const [menu, setMenu]             = useState("inicio");
+  const [menu, setMenu] = useState("inicio");
+
+  // Redirecionar para o primeiro menu permitido após carregar permissões
+  useEffect(() => {
+    if (!permissoesRaw) return;
+    if (!canVer(menu)) {
+      const primeiro = MENU_BASE.find(m => canVer(m.id));
+      if (primeiro) setMenu(primeiro.id);
+    }
+  }, [permissoesRaw]);
   const [partida, setPartida]   = useState(null);
   const [novaPartida, setNovaPartida] = useState(false);
   const { toast, show }         = useToast();
@@ -2800,7 +2809,7 @@ function CrudAdversarios({ show, readOnly }) {
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{a.contato || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={a.observacoes||""}>{a.observacoes || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{a.data_fim ? new Date(a.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px" }}><Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(a)}>Editar</Btn></td>
+                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(a)}>Editar</Btn>}</td>
               </tr>
             ))}
           </tbody>
@@ -2927,7 +2936,7 @@ function CrudCampos({ show, readOnly }) {
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{c.endereco || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{c.cidade ? `${c.cidade.nome}/${c.cidade.estado}` : "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{c.data_fim ? new Date(c.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px" }}><Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(c)}>Editar</Btn></td>
+                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(c)}>Editar</Btn>}</td>
               </tr>
             ))}
           </tbody>
@@ -3043,7 +3052,7 @@ function CrudCidades({ show, readOnly }) {
               <tr key={c.id_cidade} style={{ background: i%2===0?C.surface:C.bg }}>
                 <td style={{ padding:"11px 14px", fontWeight:700 }}>{c.nome}</td>
                 <td style={{ padding:"11px 14px", color:C.dim }}>{c.estado || "—"}</td>
-                <td style={{ padding:"11px 14px" }}><Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(c)}>Editar</Btn></td>
+                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(c)}>Editar</Btn>}</td>
               </tr>
             ))}
           </tbody>
@@ -3177,8 +3186,8 @@ function CrudPosicoes({ show, readOnly }) {
                       <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{p.posicao_pai?.nome || "—"}</td>
                       <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{p.data_fim ? new Date(p.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
                       <td style={{ padding:"11px 14px", display:"flex", gap:8 }}>
-                        <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(p)}>Editar</Btn>
-                        {!p.data_fim && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => inativar(p)}>Inativar</Btn>}
+                        {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(p)}>Editar</Btn>}
+                        {!p.data_fim && !readOnly && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => inativar(p)}>Inativar</Btn>}
                       </td>
                     </tr>
                   ))}

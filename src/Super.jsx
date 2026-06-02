@@ -281,7 +281,7 @@ function DashboardSuper() {
 // ── TABELA DE USUÁRIOS ────────────────────────────────────────
 function UsuariosTable({ times, reload, show, onPermissoes }) {
   const { data: vinculos, loading, reload: reloadVinculos } = useQuery(() =>
-    api.get(`usuario_time?select=*,time(nome)&order=criado_em.desc`)
+    api.get(`vw_usuarios_time?select=*,time(nome)&order=criado_em.desc`)
   );
 
   async function revogar(id) {
@@ -295,12 +295,13 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
   return (
     <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
       <thead><tr style={{ background:C.surf2 }}>
-        {["User ID","Time","Role","Criado em","Ações"].map(h => <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
+        {["E-mail","Último Acesso","Time","Role","Criado em","Ações"].map(h => <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
       </tr></thead>
       <tbody>
         {(vinculos||[]).map((v,i) => (
           <tr key={v.id} style={{ background:i%2===0?C.surface:C.bg }}>
-            <td style={{ padding:"12px 16px", color:C.dim, fontSize:12, fontFamily:"monospace" }}>{v.user_id?.substring(0,8)}...</td>
+            <td style={{ padding:"12px 16px", color:C.cream, fontSize:13 }}>{v.email || v.user_id?.substring(0,8)+"..."}</td>
+            <td style={{ padding:"12px 16px", color:C.dim, fontSize:12 }}>{v.last_sign_in_at ? new Date(v.last_sign_in_at).toLocaleDateString("pt-BR") : "Nunca"}</td>
             <td style={{ padding:"12px 16px", fontWeight:700, color:C.cream }}>{v.time?.nome||"—"}</td>
             <td style={{ padding:"12px 16px" }}>
               <span style={{ background:v.role==="superadmin"?C.gold+"33":v.role==="admin"?C.win+"33":C.surf2, color:v.role==="superadmin"?C.gold:v.role==="admin"?C.win:C.dim, border:`1px solid ${v.role==="superadmin"?C.gold:v.role==="admin"?C.win:C.border}55`, borderRadius:6, padding:"2px 10px", fontSize:11, fontWeight:700, textTransform:"uppercase" }}>
@@ -311,7 +312,7 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
             <td style={{ padding:"12px 16px", display:"flex", gap:6 }}>
               {v.role !== "superadmin" && (
                 <Btn variant="secondary" style={{ fontSize:11, padding:"4px 10px" }}
-                  onClick={() => onPermissoes && onPermissoes({ user_id: v.user_id, id_time: v.id_time, nome: v.user_id })}>
+                  onClick={() => onPermissoes && onPermissoes({ user_id: v.user_id, id_time: v.id_time, nome: v.email || v.user_id })}>
                   🔐 Permissões
                 </Btn>
               )}
