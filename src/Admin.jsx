@@ -1170,7 +1170,7 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
 }
 
 // Wrapper que busca adversarios e campos para passar à ListaPartidas
-function ListaPartidasWrapper({ temporada, onSelect, onNova, show }) {
+function ListaPartidasWrapper({ temporada, onSelect, onNova, show, readOnly }) {
   const { data: adversarios } = useQuery(() => api.get(`adversario?select=*&order=nome.asc`));
   const { data: campos }      = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
   return <ListaPartidas temporada={temporada} onSelect={onSelect} onNova={onNova} adversarios={adversarios} campos={campos} show={show}/>;
@@ -1240,14 +1240,14 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar }) {
       <Input label="Observações" value={form.observacoes} onChange={e => set("observacoes", e.target.value)} placeholder="Amistoso, campeonato, etc..." />
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
         <Btn variant="secondary" onClick={onCancelar}>Cancelar</Btn>
-        <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Criar Partida"}</Btn>
+        <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Criar Partida"}</Btn>
       </div>
     </div>
   );
 }
 
 // ── FICHA DA PARTIDA ──────────────────────────────────────────
-function FichaPartida({ partida: p0, onVoltar }) {
+function FichaPartida({ partida: p0, onVoltar, readOnly }) {
   const [partida, setPartida] = useState(p0);
   const { toast, show } = useToast();
 
@@ -1381,7 +1381,7 @@ function FichaPartida({ partida: p0, onVoltar }) {
                         <td style={{ padding: "10px 12px", textAlign: "center" }}><NumCell pa={pa} field="cartao_vermelho" reload={reloadPart} show={show} /></td>
                         <td style={{ padding: "10px 12px", textAlign: "center" }}><NumCell pa={pa} field="gols_contra" reload={reloadPart} show={show} /></td>
                         <td style={{ padding: "10px 12px" }}>
-                          <button onClick={() => removerParticipacao(pa.id_participacao)} style={{ background: "none", border: "none", color: C.loss, cursor: "pointer", fontSize: 16 }}>✕</button>
+                          <button onClick={() => !readOnly && removerParticipacao(pa.id_participacao)} style={{ background: "none", border: "none", color: C.loss, cursor: "pointer", fontSize: 16 }}>✕</button>
                         </td>
                       </tr>
                     ))}
@@ -1420,7 +1420,7 @@ function FichaPartida({ partida: p0, onVoltar }) {
                         {assist && <span style={{ color: C.win, fontSize: 13, marginLeft: 8 }}>🅰️ {assist.apelido || assist.nome}</span>}
                       </div>
                       <span style={{ color: C.dim, fontSize: 13 }}>{g.periodo}° · {g.minuto}'</span>
-                      <button onClick={() => removerGol(g.id_gol)} style={{ background: "none", border: "none", color: C.loss, cursor: "pointer", fontSize: 16 }}>✕</button>
+                      <button onClick={() => !readOnly && removerGol(g.id_gol)} style={{ background: "none", border: "none", color: C.loss, cursor: "pointer", fontSize: 16 }}>✕</button>
                     </div>
                   );
                 })}
@@ -1554,7 +1554,7 @@ function FormEscalacao({ partida, jogadores, posicoes, participacoes, onSalvo, s
         </Select>
       </div>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-        <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Adicionar"}</Btn>
+        <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Adicionar"}</Btn>
       </div>
     </div>
   );
@@ -1606,7 +1606,7 @@ function FormGol({ partida, participacoes, jogadores, onSalvo, show }) {
         {jogadores.map(j => <option key={j.id_jogador} value={j.id_jogador}>#{j.camisa} — {j.apelido || j.nome}</option>)}
       </Select>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
-        <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Registrar Gol"}</Btn>
+        <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Registrar Gol"}</Btn>
       </div>
     </div>
   );
@@ -1856,7 +1856,7 @@ function fmtMoeda(v) {
   return v != null ? `R$ ${Number(v).toFixed(2).replace(".",",")}` : "—";
 }
 
-function CrudMensalidades({ show }) {
+function CrudMensalidades({ show, readOnly }) {
   const hoje = new Date();
   const [mesSel, setMesSel]   = useState(hoje.getMonth() + 1);
   const [anoSel, setAnoSel]   = useState(hoje.getFullYear());
@@ -2077,12 +2077,15 @@ function CrudMensalidades({ show }) {
                       {j.status==="isento" ? "—" : saldo>0 ? `-${fmtMoeda(saldo)}` : "✓"}
                     </td>
                     <td style={{ padding:"11px 14px", display:"flex", gap:6 }}>
-                      {j.status !== "pago" && j.status !== "isento" && (
+                      {!readOnly && j.status !== "pago" && j.status !== "isento" && (
                         <Btn style={{ fontSize:11, padding:"4px 10px", background:C.win, color:"white" }}
                           onClick={() => marcarPago(j)}>✅ Pago</Btn>
                       )}
                       <Btn variant="secondary" style={{ fontSize:11, padding:"4px 10px" }}
-                        onClick={() => abrirModal(j)}>Detalhes</Btn>
+                        onClick={() => !readOnly && abrirModal(j)}
+                        disabled={readOnly}>
+                        {readOnly ? "👁️ Ver" : "Detalhes"}
+                      </Btn>
                     </td>
                   </tr>
                 );
@@ -2245,8 +2248,8 @@ function CrudMensalidades({ show }) {
               </div>
             )}
             <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:4 }}>
-              <Btn variant="secondary" onClick={() => setModalJog(null)}>Cancelar</Btn>
-              <Btn onClick={salvarPagamento} disabled={saving}>{saving?"Salvando...":"Salvar"}</Btn>
+              <Btn variant="secondary" onClick={() => setModalJog(null)}>Fechar</Btn>
+              {!readOnly && <Btn onClick={salvarPagamento} disabled={saving}>{saving?"Salvando...":"Salvar"}</Btn>}
             </div>
           </div>
         </Modal>
@@ -2447,17 +2450,17 @@ export default function AdminAppCompleto() {
               {secTitle("Ficha da Partida")}
               <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", marginTop:-20 }} onClick={()=>setPartida(null)}>← Voltar</Btn>
             </div>
-            <FichaPartida partida={partida} onVoltar={()=>setPartida(null)} />
+            <FichaPartida partida={partida} onVoltar={()=>setPartida(null)} readOnly={!canEdit("partidas")}/>
           </>)}
 
-          {menu === "jogadores"   && (<>{secTitle("Jogadores")}<CrudJogadores show={show} /></>)}
-          {menu === "adversarios" && (<>{secTitle("Adversários")}<CrudAdversarios show={show} /></>)}
-          {menu === "campos"      && (<>{secTitle("Campos")}<CrudCampos show={show} /></>)}
-          {menu === "cidades"     && (<>{secTitle("Cidades")}<CrudCidades show={show} /></>)}
-          {menu === "posicoes"    && (<>{secTitle("Posições")}<CrudPosicoes show={show} /></>)}
-          {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas show={show} /></>)}
-          {menu === "mensalidades" && (<CrudMensalidades show={show}/>)}
-          {menu === "time"        && (<>{secTitle("Configurações do Time")}<ConfigTime show={show} /></>)}
+          {menu === "jogadores"   && (<>{secTitle("Jogadores")}<CrudJogadores show={show} readOnly={!canEdit("jogadores")} /></>)}
+          {menu === "adversarios" && (<>{secTitle("Adversários")}<CrudAdversarios show={show} readOnly={!canEdit("adversarios")} /></>)}
+          {menu === "campos"      && (<>{secTitle("Campos")}<CrudCampos show={show} readOnly={!canEdit("campos")} /></>)}
+          {menu === "cidades"     && (<>{secTitle("Cidades")}<CrudCidades show={show} readOnly={!canEdit("cidades")} /></>)}
+          {menu === "posicoes"    && (<>{secTitle("Posições")}<CrudPosicoes show={show} readOnly={!canEdit("posicoes")} /></>)}
+          {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas show={show} readOnly={!canEdit("temporadas")} /></>)}
+          {menu === "mensalidades" && (<CrudMensalidades show={show} readOnly={!canEdit("mensalidades")}/>)}
+          {menu === "time"        && (<>{secTitle("Configurações do Time")}<ConfigTime show={show} readOnly={!canEdit("time")} /></>)}
         </main>
       </div>
     </div>
@@ -2467,7 +2470,7 @@ export default function AdminAppCompleto() {
 
 // ── CRUD JOGADORES ────────────────────────────────────────────
 
-function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, onReativar }) {
+function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, onReativar, readOnly }) {
   if (!lista.length) return null;
   const S = k => <ThSortable colKey={k} sortKey={sk} asc={asc} onSort={onSort}/>;
   return (
@@ -2502,8 +2505,8 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
                 <td style={{ padding:"11px 14px", whiteSpace:"nowrap" }}>
                   <div style={{ display:"flex", gap:6 }}>
                     <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onEditar(j)}>Editar</Btn>
-                    {!j.data_fim && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onInativar(j)}>Inativar</Btn>}
-                    {j.data_fim && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px", color:C.win, borderColor:C.win }} onClick={() => onReativar(j)}>Reativar</Btn>}
+                    {!j.data_fim && {!readOnly && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onInativar(j)}>Inativar</Btn>}}
+                    {j.data_fim && !readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px", color:C.win, borderColor:C.win }} onClick={() => onReativar(j)}>Reativar</Btn>}
                   </div>
                 </td>
               </tr>
@@ -2516,7 +2519,7 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
 }
 
 
-function CrudJogadores({ show }) {
+function CrudJogadores({ show, readOnly }) {
   const { data: _utj } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
   const _idTimeJ = _utj?.[0]?.id_time;
   const { data: jogadores, loading, reload } = useQuery(() => 
@@ -2638,18 +2641,18 @@ function CrudJogadores({ show }) {
           }}
           loadingImport={loadingImport==="jogadores"}
         />
-        <Btn onClick={abrirNovo}>+ Novo Jogador</Btn>
+        {!readOnly && <Btn onClick={abrirNovo}>+ Novo Jogador</Btn>}
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       {ativos.length > 0 && (
         <TabelaJogadores grupo="Ativos" lista={sortData(ativos, _sk, _asc)} sk={_sk} asc={_asc}
           onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
-          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar}/>
+          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly}/>
       )}
       {inativos.length > 0 && (
         <TabelaJogadores grupo="Inativos" lista={sortData(inativos, _sk, _asc)} sk={_sk} asc={_asc}
           onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
-          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar}/>
+          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly}/>
       )}
       {modal && (
         <Modal title={modal === "novo" ? "Novo Jogador" : "Editar Jogador"} onClose={() => setModal(null)}>
@@ -2680,7 +2683,7 @@ function CrudJogadores({ show }) {
             <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
               <Btn variant="secondary" onClick={() => setModal(null)}>Cancelar</Btn>
-              <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
+              <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar"}</Btn>
             </div>
           </div>
         </Modal>
@@ -2690,7 +2693,7 @@ function CrudJogadores({ show }) {
 }
 
 // ── CRUD ADVERSÁRIOS ──────────────────────────────────────────
-function CrudAdversarios({ show }) {
+function CrudAdversarios({ show, readOnly }) {
   const { data: _uta } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
   const _idTimeA = _uta?.[0]?.id_time;
   const { data: adversarios, loading, reload } = useQuery(() => 
@@ -2774,7 +2777,7 @@ function CrudAdversarios({ show }) {
           }}
           loadingImport={loadingImport==="adversarios"}
         />
-        <Btn onClick={abrirNovo}>+ Novo Adversário</Btn>
+        {!readOnly && <Btn onClick={abrirNovo}>+ Novo Adversário</Btn>}
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
@@ -2819,7 +2822,7 @@ function CrudAdversarios({ show }) {
             <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
               <Btn variant="secondary" onClick={() => setModal(null)}>Cancelar</Btn>
-              <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
+              <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar"}</Btn>
             </div>
           </div>
         </Modal>
@@ -2829,7 +2832,7 @@ function CrudAdversarios({ show }) {
 }
 
 // ── CRUD CAMPOS ───────────────────────────────────────────────
-function CrudCampos({ show }) {
+function CrudCampos({ show, readOnly }) {
   const { data: campos, loading, reload } = useQuery(() => api.get(`campo?select=*,cidade(nome,estado)&order=nome.asc`));
   const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
@@ -2905,7 +2908,7 @@ function CrudCampos({ show }) {
           }}
           loadingImport={loadingImport==="campos"}
         />
-        <Btn onClick={abrirNovo}>+ Novo Campo</Btn>
+        {!readOnly && <Btn onClick={abrirNovo}>+ Novo Campo</Btn>}
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
@@ -2942,7 +2945,7 @@ function CrudCampos({ show }) {
             <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
               <Btn variant="secondary" onClick={() => setModal(null)}>Cancelar</Btn>
-              <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
+              <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar"}</Btn>
             </div>
           </div>
         </Modal>
@@ -2952,7 +2955,7 @@ function CrudCampos({ show }) {
 }
 
 // ── CRUD CIDADES ──────────────────────────────────────────────
-function CrudCidades({ show }) {
+function CrudCidades({ show, readOnly }) {
   const { data: cidades, loading, reload } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
   const [modal, setModal]   = useState(null);
@@ -3026,7 +3029,7 @@ function CrudCidades({ show }) {
           }}
           loadingImport={loadingImport==="cidades"}
         />
-        <Btn onClick={abrirNovo}>+ Nova Cidade</Btn>
+        {!readOnly && <Btn onClick={abrirNovo}>+ Nova Cidade</Btn>}
       </div>
       <Card style={{ padding:0, overflow:"hidden" }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
@@ -3055,7 +3058,7 @@ function CrudCidades({ show }) {
             <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
               <Btn variant="secondary" onClick={() => setModal(null)}>Cancelar</Btn>
-              <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
+              <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar"}</Btn>
             </div>
           </div>
         </Modal>
@@ -3065,7 +3068,7 @@ function CrudCidades({ show }) {
 }
 
 // ── CRUD POSIÇÕES ─────────────────────────────────────────────
-function CrudPosicoes({ show }) {
+function CrudPosicoes({ show, readOnly }) {
   const { data: posicoes, loading, reload } = useQuery(() =>
     api.get(`posicao?select=*,posicao_pai:posicao!id_posicao_pai(nome)&order=ordem.asc,nome.asc`)
   );
@@ -3147,7 +3150,7 @@ function CrudPosicoes({ show }) {
           }}
           loadingImport={loadingImport==="posicoes"}
         />
-        <Btn onClick={abrirNovo}>+ Nova Posição</Btn>
+        {!readOnly && <Btn onClick={abrirNovo}>+ Nova Posição</Btn>}
       </div>
       {["Grupos (pai)","Posições detalhadas"].map((titulo, gi) => {
         const lista = gi === 0 ? grupos : filhas;
@@ -3200,7 +3203,7 @@ function CrudPosicoes({ show }) {
             </div>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
               <Btn variant="secondary" onClick={() => setModal(null)}>Cancelar</Btn>
-              <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
+              <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar"}</Btn>
             </div>
           </div>
         </Modal>
@@ -3210,7 +3213,7 @@ function CrudPosicoes({ show }) {
 }
 
 // ── CRUD TEMPORADAS ───────────────────────────────────────────
-function CrudTemporadas({ show }) {
+function CrudTemporadas({ show, readOnly }) {
   const { data: temporadas, loading, reload } = useQuery(() =>
     api.get(`temporada?select=*,time(nome)&order=data_inicio.desc`)
   );
@@ -3298,7 +3301,7 @@ function CrudTemporadas({ show }) {
           }}
           loadingImport={loadingImport==="temporadas"}
         />
-        <Btn onClick={abrirNovo}>+ Nova Temporada</Btn>
+        {!readOnly && <Btn onClick={abrirNovo}>+ Nova Temporada</Btn>}
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImportTemporadas} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
@@ -3347,7 +3350,7 @@ function CrudTemporadas({ show }) {
                 <td style={{ padding:"11px 14px", textAlign:"center" }}>
                   <span style={{ color: t.publico !== false ? C.win : C.dim, fontWeight:700, fontSize:12 }}>{t.publico !== false ? "🌐" : "🔒"}</span>
                 </td>
-                <td style={{ padding:"11px 14px" }}><Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(t)}>Editar</Btn></td>
+                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(t)}>Editar</Btn>}</td>
               </tr>
             ))}
           </tbody>
@@ -3389,7 +3392,7 @@ function CrudTemporadas({ show }) {
               }
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 <ImageUpload bucket="escudos" onUpload={url => set("escudo_url", url)} style={{ fontSize:11 }}/>
-                {form.escudo_url && <button onClick={() => set("escudo_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>}
+                {form.escudo_url && <button onClick={() => !readOnly && set("escudo_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>}
                 <div style={{ fontSize:10, color:C.dim }}>Opcional — se diferente do escudo do time</div>
               </div>
             </div>
@@ -3406,7 +3409,7 @@ function CrudTemporadas({ show }) {
                 )}
                 <ImageUpload bucket="uniformes" value={form.uniforme_1_url} onUpload={url => set("uniforme_1_url", url)} nomeArquivo={`uniforme_1_${form.id_temporada||'novo'}`}/>
                 {form.uniforme_1_url && (
-                  <button onClick={() => set("uniforme_1_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>
+                  <button onClick={() => !readOnly && set("uniforme_1_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>
                 )}
               </div>
               {/* Uniforme 2 */}
@@ -3418,7 +3421,7 @@ function CrudTemporadas({ show }) {
                 )}
                 <ImageUpload bucket="uniformes" value={form.uniforme_2_url} onUpload={url => set("uniforme_2_url", url)} nomeArquivo={`uniforme_2_${form.id_temporada||'novo'}`}/>
                 {form.uniforme_2_url && (
-                  <button onClick={() => set("uniforme_2_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>
+                  <button onClick={() => !readOnly && set("uniforme_2_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>
                 )}
               </div>
               {/* Uniforme 3 */}
@@ -3430,7 +3433,7 @@ function CrudTemporadas({ show }) {
                 )}
                 <ImageUpload bucket="uniformes" value={form.uniforme_3_url} onUpload={url => set("uniforme_3_url", url)} nomeArquivo={`uniforme_3_${form.id_temporada||'novo'}`}/>
                 {form.uniforme_3_url && (
-                  <button onClick={() => set("uniforme_3_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>
+                  <button onClick={() => !readOnly && set("uniforme_3_url", null)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:11 }}>✕ Remover</button>
                 )}
               </div>
             </div>
@@ -3452,7 +3455,7 @@ function CrudTemporadas({ show }) {
             </div>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
               <Btn variant="secondary" onClick={() => setModal(null)}>Cancelar</Btn>
-              <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
+              <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar"}</Btn>
             </div>
           </div>
         </Modal>
@@ -3462,7 +3465,7 @@ function CrudTemporadas({ show }) {
 }
 
 // ── CONFIGURAÇÕES DO TIME ─────────────────────────────────────
-function ConfigTime({ show }) {
+function ConfigTime({ show, readOnly }) {
   const { data: times, loading, reload } = useQuery(() => api.get(`time?select=*,campo(nome)&limit=1`));
   const { data: campos  } = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
   const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
@@ -3600,7 +3603,7 @@ function ConfigTime({ show }) {
         </div>
 
         <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
-          <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar Configurações"}</Btn>
+          <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar Configurações"}</Btn>
         </div>
       </div>
     </Card>
