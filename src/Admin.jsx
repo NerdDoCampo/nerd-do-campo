@@ -2505,7 +2505,7 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
                 <td style={{ padding:"11px 14px", whiteSpace:"nowrap" }}>
                   <div style={{ display:"flex", gap:6 }}>
                     <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onEditar(j)}>Editar</Btn>
-                    {!j.data_fim && {!readOnly && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onInativar(j)}>Inativar</Btn>}}
+                    {!j.data_fim && !readOnly && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onInativar(j)}>Inativar</Btn>}
                     {j.data_fim && !readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px", color:C.win, borderColor:C.win }} onClick={() => onReativar(j)}>Reativar</Btn>}
                   </div>
                 </td>
