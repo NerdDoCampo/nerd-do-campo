@@ -40,6 +40,10 @@
       ::-webkit-scrollbar-thumb:hover { background: #E8A020; }
       /* iOS safe area */
       #root { padding-top: env(safe-area-inset-top); }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.55; }
+      }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   </head>
