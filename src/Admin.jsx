@@ -998,8 +998,14 @@ function Login({ onLogin }) {
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Oswald','Arial Narrow',Arial,sans-serif" }}>
       <Card style={{ width: 380, padding: 40 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:12, marginBottom:4 }}>
-            <img src="/logo.png" alt="Nerd do Campo" style={{ width:64, height:64, borderRadius:"50%", objectFit:"cover" }}/>
+          <div style={{ display:"inline-block", position:"relative", marginBottom:16 }}>
+            <div style={{ position:"absolute", inset:-10, borderRadius:"50%",
+              background:`radial-gradient(circle, ${C.gold}33 0%, transparent 70%)`,
+              filter:"blur(8px)" }}/>
+            <img src="/logo.png" alt="Nerd do Campo"
+              style={{ width:88, height:88, borderRadius:"50%", objectFit:"cover",
+                border:`3px solid ${C.gold}`, position:"relative",
+                boxShadow:`0 8px 28px ${C.gold}44` }}/>
           </div>
           <div style={{ fontSize: 24, fontWeight: 800, color: C.cream, textTransform: "uppercase", letterSpacing: "0.08em" }}>Nerd do Campo</div>
           <div style={{ fontSize: 12, color: C.gold, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.12em" }}>Painel Admin</div>
@@ -1012,6 +1018,9 @@ function Login({ onLogin }) {
           <Btn onClick={handleLogin} disabled={loading} style={{ marginTop: 8, padding: "12px" }}>
             {loading ? "Entrando..." : "Entrar"}
           </Btn>
+        </div>
+        <div style={{ textAlign:"center", marginTop:24, fontSize:11, color:C.gold, letterSpacing:"0.08em", opacity:0.8 }}>
+          ⚽ Designed by Caxpa Augsten
         </div>
       </Card>
     </div>
@@ -1141,7 +1150,7 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
           const pendente = p.gols_marcados === null && p.cancelada !== "S";
           return (
             <div key={p.id_partida}
-              onClick={() => { console.log("clicou", p.id_partida); onSelect(p); }}
+              onClick={() => { onSelect(p); }}
               style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "background 0.15s", background: C.surface, borderRadius: 12, border: `1px solid ${C.border}` }}
               onMouseEnter={e => e.currentTarget.style.background = C.surf2}
               onMouseLeave={e => e.currentTarget.style.background = C.surface}>
@@ -2275,7 +2284,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.6.1" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -2309,7 +2318,7 @@ function PaginaAjuda() {
           Ainda com dúvidas? Entre em contato:
         </div>
         <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginTop:6 }}>
-          contato@nerddocampo.com.br
+          nerddocampo10@gmail.com
         </div>
       </Card>
     </div>
@@ -2319,12 +2328,19 @@ function PaginaAjuda() {
 export default function AdminAppCompleto() {
   const [session, setSession]       = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [idTime, setIdTime]         = useState(null);
+  const [timeInativo, setTimeInativo] = useState(false);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [menu, setMenu] = useState("inicio");
 
   const [partida, setPartida]   = useState(null);
   const [novaPartida, setNovaPartida] = useState(false);
   const { toast, show }         = useToast();
+
+  // Verificar manutenção do sistema
+  const { data: manutCfg, loading: loadManut } = useQuery(() =>
+    api.get(`config_sistema?chave=eq.sistema_manutencao&select=valor&limit=1`)
+  );
+  const emManutencao = ["true","1"].includes(String(manutCfg?.[0]?.valor ?? "").trim().toLowerCase());
 
   // Buscar time do usuário logado
   useEffect(() => {
@@ -2337,6 +2353,11 @@ export default function AdminAppCompleto() {
             setIsSuperadmin(true);
             setIdTime(null); // superadmin vê tudo
           } else {
+            // Bloquear acesso se o time estiver inativo
+            if (ut.time?.status === 'Inativo') {
+              setTimeInativo(true);
+              return;
+            }
             setIdTime(ut.id_time);
           }
         }
@@ -2391,7 +2412,53 @@ export default function AdminAppCompleto() {
   const [temporadaSel, setTemporadaSel] = useState(null);
   useEffect(() => { if (temporadas?.length && !temporadaSel) setTemporadaSel(temporadas[0]); }, [temporadas]);
 
+  if (loadManut) return null;
+
+  // Sistema em manutenção — bloqueia tudo, exceto superadmin já logado
+  if (emManutencao && !isSuperadmin) {
+    return (
+      <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:24, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif" }}>
+        <div style={{ textAlign:"center", maxWidth:420 }}>
+          <div style={{ fontSize:64, marginBottom:20 }}>🔧</div>
+          <div style={{ fontSize:26, fontWeight:800, color:C.cream, marginBottom:14, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+            Sistema em Manutenção
+          </div>
+          <div style={{ fontSize:15, color:C.dim, lineHeight:1.7 }}>
+            Estamos realizando melhorias no Nerd do Campo.
+            Volte em alguns instantes — já já estaremos de volta! ⚽
+          </div>
+          <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginTop:24 }}>
+            nerddocampo.com.br
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!session) return <Login onLogin={setSession} />;
+
+  // Bloqueio de time inativo
+  if (timeInativo) {
+    return (
+      <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:24, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif" }}>
+        <div style={{ background:C.surface, borderRadius:16, padding:40, maxWidth:420, textAlign:"center", border:`1px solid ${C.border}` }}>
+          <div style={{ fontSize:56, marginBottom:16 }}>🔒</div>
+          <div style={{ fontSize:22, fontWeight:800, color:C.cream, marginBottom:12, textTransform:"uppercase", letterSpacing:"0.06em" }}>Acesso Suspenso</div>
+          <div style={{ fontSize:14, color:C.dim, lineHeight:1.7, marginBottom:24 }}>
+            O acesso do seu time está temporariamente <b style={{ color:C.loss }}>inativo</b>.
+            Entre em contato com o administrador do sistema para regularizar a situação.
+          </div>
+          <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:24 }}>
+            nerddocampo10@gmail.com
+          </div>
+          <button onClick={() => { SESSION_TOKEN=null; sessionStorage.removeItem("ndc_token"); setSession(null); setTimeInativo(false); }}
+            style={{ background:C.gold, color:"#0B3D2E", border:"none", borderRadius:10, padding:"12px 32px", fontFamily:"inherit", fontWeight:800, fontSize:14, cursor:"pointer", textTransform:"uppercase" }}>
+            Sair
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const time = times?.[0];
 

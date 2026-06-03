@@ -77,9 +77,12 @@ function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { ho
 // ── SELETOR DE TIMES ──────────────────────────────────────────
 function SeletorTimes({ onSelect }) {
   const [dataRef, setDataRef] = useState(""); // vazio = sem filtro de data
+  const [modalCadastro, setModalCadastro] = useState(false);
 
   const { data: allTimes, loading } = useQuery(() => sb(`time?select=*,temporada(id_temporada,nome,data_inicio,data_fim,publico),tipo_time(id_tipo_time,descricao),cidade:id_cidade_sede(nome,estado),campo:id_campo(nome)&publico=eq.true&order=nome.asc`));
   const { data: tiposAtivos } = useQuery(() => sb(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
+  const { data: configSistema } = useQuery(() => sb(`config_sistema?chave=eq.cadastro_time_ativo&select=valor&limit=1`));
+  const cadastroAtivo = ["true","1"].includes(String(configSistema?.[0]?.valor ?? "").trim().toLowerCase());
   const tipoFutebolCampo = (tiposAtivos||[]).find(t => t.descricao.toLowerCase().includes("campo"))?.id_tipo_time || null;
   const [tipoFiltro, setTipoFiltro] = useState(null);
   // Inicializar com Futebol de Campo quando tipos carregarem
@@ -118,12 +121,25 @@ function SeletorTimes({ onSelect }) {
         </div>
       </header>
 
-      <main style={{ maxWidth:900, margin:"0 auto", padding:"60px 24px" }}>
+      <main style={{ maxWidth:900, margin:"0 auto", padding:"48px 24px 60px" }}>
         <div style={{ textAlign:"center", marginBottom:48 }}>
-          <div style={{ fontSize:32, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 }}>
-            Escolha um Time
+          {/* Logo em destaque */}
+          <div style={{ display:"inline-block", position:"relative", marginBottom:24 }}>
+            <div style={{ position:"absolute", inset:-12, borderRadius:"50%",
+              background:`radial-gradient(circle, ${C.gold}33 0%, transparent 70%)`,
+              filter:"blur(8px)" }}/>
+            <img src="/logo.png" alt="Nerd do Campo"
+              style={{ width:120, height:120, borderRadius:"50%", objectFit:"cover",
+                border:`3px solid ${C.gold}`, position:"relative",
+                boxShadow:`0 8px 32px ${C.gold}44` }}/>
           </div>
-          <div style={{ fontSize:15, color:C.dim }}>Selecione o time para ver as estatísticas da temporada</div>
+          <div style={{ fontSize:34, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8, color:C.cream }}>
+            Nerd do Campo
+          </div>
+          <div style={{ fontSize:13, color:C.gold, letterSpacing:"0.12em", textTransform:"uppercase", fontWeight:700, marginBottom:20 }}>
+            Estatísticas de Futebol Amador
+          </div>
+          <div style={{ fontSize:15, color:C.dim }}>Selecione um time para ver as estatísticas da temporada</div>
         </div>
 
         {/* Filtro de tipo de time */}
@@ -227,9 +243,27 @@ function SeletorTimes({ onSelect }) {
         </div>
       </main>
 
-      <footer style={{ textAlign:"center", padding:"20px", color:C.dim, fontSize:12, borderTop:`1px solid ${C.border}`, marginTop:40 }}>
-        ⚽ Nerd do Campo — Estatísticas de Futebol Amador
+      {/* CTA cadastro — controlado por config_sistema */}
+      {cadastroAtivo && (
+        <div style={{ textAlign:"center", padding:"24px 16px 8px", borderTop:`1px solid ${C.border}`, marginTop:32 }}>
+          <div style={{ fontSize:13, color:C.dim, marginBottom:12 }}>Quer ter seu time aqui?</div>
+          <button onClick={() => setModalCadastro(true)}
+            style={{ background:"none", border:`2px solid ${C.gold}`, borderRadius:10,
+              color:C.gold, fontFamily:"inherit", fontWeight:800, fontSize:13,
+              padding:"11px 28px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em" }}>
+            🏆 Cadastrar meu Time
+          </button>
+        </div>
+      )}
+
+      <footer style={{ textAlign:"center", padding:"24px 20px", color:C.dim, fontSize:12, borderTop:`1px solid ${C.border}`, marginTop:20 }}>
+        <div style={{ marginBottom:8 }}>⚽ Nerd do Campo — Estatísticas de Futebol Amador</div>
+        <div style={{ fontSize:11, color:C.gold, letterSpacing:"0.08em", opacity:0.85 }}>
+          ⚽ Designed by Caxpa Augsten
+        </div>
       </footer>
+
+      {modalCadastro && <ModalSolicitacao onClose={() => setModalCadastro(false)}/>}
     </div>
   );
 }
@@ -795,6 +829,12 @@ function TimeApp({ time, onVoltar }) {
       {/* Conteúdo */}
       <main style={{ maxWidth:1200, margin:"0 auto", padding:"12px 10px 20px" }}>
         {screens[tab]}
+        {/* Assinatura */}
+        <div style={{ textAlign:"center", padding:"24px 12px 8px", marginTop:16, borderTop:`1px solid ${C.border}` }}>
+          <div style={{ fontSize:11, color:C.gold, letterSpacing:"0.08em", opacity:0.85 }}>
+            ⚽ Designed by Caxpa Augsten
+          </div>
+        </div>
       </main>
 
       {/* Menu inferior fixo */}
@@ -820,8 +860,251 @@ function TimeApp({ time, onVoltar }) {
   );
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// MODAL DE SOLICITAÇÃO DE CADASTRO
+// ══════════════════════════════════════════════════════════════
+function ModalSolicitacao({ onClose }) {
+  const [form, setForm] = useState({
+    nome_time:"", id_tipo_time:"", data_fundacao:"", cidade:"",
+    campo_principal:"", redes_sociais:"",
+    nome_responsavel:"", email_responsavel:"", telefone:"",
+  });
+  const [step, setStep]     = useState(1); // 1=dados, 2=confirmação
+  const [saving, setSaving] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [erro, setErro]     = useState("");
+  const { data: tipos } = useQuery(() => sb(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  function validar() {
+    if (!form.nome_time.trim())          return "Nome do time é obrigatório.";
+    if (!form.nome_responsavel.trim())   return "Nome do responsável é obrigatório.";
+    if (!form.email_responsavel.trim())  return "E-mail é obrigatório.";
+    if (!/\S+@\S+\.\S+/.test(form.email_responsavel)) return "E-mail inválido.";
+    if (!form.telefone.trim())           return "Telefone é obrigatório.";
+    return "";
+  }
+
+  async function enviar() {
+    const err = validar();
+    if (err) { setErro(err); return; }
+    setSaving(true); setErro("");
+    try {
+      const body = {
+        nome_time:          form.nome_time.trim(),
+        id_tipo_time:       form.id_tipo_time ? Number(form.id_tipo_time) : null,
+        data_fundacao:      form.data_fundacao || null,
+        cidade:             form.cidade.trim() || null,
+        campo_principal:    form.campo_principal.trim() || null,
+        redes_sociais:      form.redes_sociais.trim() || null,
+        nome_responsavel:   form.nome_responsavel.trim(),
+        email_responsavel:  form.email_responsavel.trim().toLowerCase(),
+        telefone:           form.telefone.trim(),
+      };
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/solicitacao_time`, {
+        method:"POST",
+        headers:{ apikey:SUPABASE_KEY, "Content-Type":"application/json", Prefer:"return=minimal" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Erro ao enviar solicitação.");
+      setEnviado(true);
+    } catch(e) { setErro(e.message); }
+    finally { setSaving(false); }
+  }
+
+  if (enviado) return (
+    <div style={{ position:"fixed", inset:0, background:"#00000099", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+      <div style={{ background:C.surface, borderRadius:16, padding:40, maxWidth:400, width:"100%", textAlign:"center", border:`1px solid ${C.border}` }}>
+        <div style={{ fontSize:56, marginBottom:16 }}>✅</div>
+        <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:12 }}>Solicitação enviada!</div>
+        <div style={{ fontSize:13, color:C.dim, lineHeight:1.7, marginBottom:24 }}>
+          Recebemos os dados do <b style={{ color:C.cream }}>{form.nome_time}</b>.
+          Nossa equipe irá analisar e entrar em contato pelo e-mail <b style={{ color:C.gold }}>{form.email_responsavel}</b> em breve.
+        </div>
+        <button onClick={onClose}
+          style={{ background:C.gold, color:"#0B3D2E", border:"none", borderRadius:10, padding:"12px 32px", fontFamily:"inherit", fontWeight:800, fontSize:14, cursor:"pointer", textTransform:"uppercase" }}>
+          Fechar
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"#00000099", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16, overflowY:"auto" }}>
+      <div style={{ background:C.surface, borderRadius:16, padding:28, maxWidth:520, width:"100%", border:`1px solid ${C.border}`, margin:"auto" }}>
+        {/* Header */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+          <div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.cream, textTransform:"uppercase", letterSpacing:"0.06em" }}>🏆 Cadastrar meu Time</div>
+            <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>Passo {step} de 2</div>
+          </div>
+          <button onClick={onClose}
+            style={{ background:"none", border:"none", color:C.dim, cursor:"pointer", fontSize:22, lineHeight:1 }}>✕</button>
+        </div>
+
+        {/* Progress */}
+        <div style={{ display:"flex", gap:6, marginBottom:24 }}>
+          {[1,2].map(s => (
+            <div key={s} style={{ flex:1, height:4, borderRadius:2,
+              background: step >= s ? C.gold : C.surf2, transition:"background 0.3s" }}/>
+          ))}
+        </div>
+
+        {step === 1 && (
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", fontWeight:700, letterSpacing:"0.08em", borderLeft:`3px solid ${C.gold}`, paddingLeft:8 }}>Dados do Time</div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Nome do Time *</div>
+              <input value={form.nome_time} onChange={e => set("nome_time", e.target.value)}
+                placeholder="Ex: Juventus FC"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+            </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Tipo de Time</div>
+              <select value={form.id_tipo_time} onChange={e => set("id_tipo_time", e.target.value)}
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px" }}>
+                <option value="">Selecione...</option>
+                {(tipos||[]).map(t => <option key={t.id_tipo_time} value={t.id_tipo_time}>{t.descricao}</option>)}
+              </select>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div>
+                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Cidade</div>
+                <input value={form.cidade} onChange={e => set("cidade", e.target.value)}
+                  placeholder="Ex: Sapiranga/RS"
+                  style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Data de Fundação</div>
+                <input type="date" value={form.data_fundacao} onChange={e => set("data_fundacao", e.target.value)}
+                  style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Campo Principal</div>
+              <input value={form.campo_principal} onChange={e => set("campo_principal", e.target.value)}
+                placeholder="Ex: Campo do Bairro Centro"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+            </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Redes Sociais</div>
+              <input value={form.redes_sociais} onChange={e => set("redes_sociais", e.target.value)}
+                placeholder="Ex: @juventusfcsapiranga"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+            </div>
+
+            <button onClick={() => setStep(2)}
+              disabled={!form.nome_time.trim()}
+              style={{ background: form.nome_time.trim() ? C.gold : C.surf2,
+                color: form.nome_time.trim() ? "#0B3D2E" : C.dim,
+                border:"none", borderRadius:10, padding:"13px", fontFamily:"inherit",
+                fontWeight:800, fontSize:14, cursor: form.nome_time.trim() ? "pointer" : "not-allowed",
+                textTransform:"uppercase", marginTop:4 }}>
+              Próximo →
+            </button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", fontWeight:700, letterSpacing:"0.08em", borderLeft:`3px solid ${C.gold}`, paddingLeft:8 }}>Dados do Responsável</div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Nome do Responsável *</div>
+              <input value={form.nome_responsavel} onChange={e => set("nome_responsavel", e.target.value)}
+                placeholder="Seu nome completo"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+            </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>E-mail *</div>
+              <input type="email" value={form.email_responsavel} onChange={e => set("email_responsavel", e.target.value)}
+                placeholder="seu@email.com"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+              <div style={{ fontSize:10, color:C.dim, marginTop:4 }}>Será o e-mail de acesso ao painel admin</div>
+            </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Telefone / WhatsApp *</div>
+              <input value={form.telefone} onChange={e => set("telefone", e.target.value)}
+                placeholder="(51) 99999-9999"
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+            </div>
+
+            {/* Resumo */}
+            <div style={{ background:C.surf2, borderRadius:10, padding:14, border:`1px solid ${C.border}` }}>
+              <div style={{ fontSize:11, color:C.gold, fontWeight:700, marginBottom:8 }}>📋 Resumo da solicitação</div>
+              <div style={{ fontSize:12, color:C.dim, lineHeight:1.8 }}>
+                <b style={{ color:C.cream }}>Time:</b> {form.nome_time}<br/>
+                {form.cidade && <><b style={{ color:C.cream }}>Cidade:</b> {form.cidade}<br/></>}
+                {form.id_tipo_time && (tipos||[]).find(t=>String(t.id_tipo_time)===String(form.id_tipo_time)) && (
+                  <><b style={{ color:C.cream }}>Tipo:</b> {(tipos||[]).find(t=>String(t.id_tipo_time)===String(form.id_tipo_time))?.descricao}<br/></>
+                )}
+              </div>
+            </div>
+
+            {erro && <div style={{ background:C.loss+"22", border:`1px solid ${C.loss}44`, borderRadius:8, padding:"10px 14px", fontSize:12, color:C.loss }}>{erro}</div>}
+
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={() => setStep(1)}
+                style={{ flex:1, background:C.surf2, color:C.dim, border:`1px solid ${C.border}`,
+                  borderRadius:10, padding:"13px", fontFamily:"inherit", fontWeight:700,
+                  fontSize:13, cursor:"pointer", textTransform:"uppercase" }}>
+                ← Voltar
+              </button>
+              <button onClick={enviar} disabled={saving}
+                style={{ flex:2, background: saving ? C.surf2 : C.gold,
+                  color: saving ? C.dim : "#0B3D2E", border:"none",
+                  borderRadius:10, padding:"13px", fontFamily:"inherit",
+                  fontWeight:800, fontSize:14, cursor: saving ? "not-allowed" : "pointer",
+                  textTransform:"uppercase" }}>
+                {saving ? "Enviando..." : "✅ Enviar Solicitação"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [timeSel, setTimeSel] = useState(null);
+  const { data: manut, loading: loadManut } = useQuery(() =>
+    sb(`config_sistema?chave=eq.sistema_manutencao&select=valor&limit=1`)
+  );
+
+  if (loadManut) return null;
+  if (["true","1"].includes(String(manut?.[0]?.valor ?? "").trim().toLowerCase())) return <TelaManutencao/>;
+
   if (timeSel) return <TimeApp time={timeSel} onVoltar={() => setTimeSel(null)} />;
   return <SeletorTimes onSelect={setTimeSel} />;
+}
+
+// ── Tela de Manutenção ────────────────────────────────────────
+function TelaManutencao() {
+  return (
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:24, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif" }}>
+      <div style={{ textAlign:"center", maxWidth:420 }}>
+        <div style={{ fontSize:64, marginBottom:20 }}>🔧</div>
+        <div style={{ fontSize:26, fontWeight:800, color:C.cream, marginBottom:14, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+          Sistema em Manutenção
+        </div>
+        <div style={{ fontSize:15, color:C.dim, lineHeight:1.7 }}>
+          Estamos realizando melhorias no Nerd do Campo.
+          Volte em alguns instantes — já já estaremos de volta! ⚽
+        </div>
+        <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginTop:24 }}>
+          nerddocampo.com.br
+        </div>
+      </div>
+    </div>
+  );
 }
