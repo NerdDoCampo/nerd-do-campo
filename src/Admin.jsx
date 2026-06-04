@@ -1978,7 +1978,7 @@ function CrudMensalidades({ idTime, show, readOnly }) {
   const [saving, setSaving]     = useState(false);
   const [abaRel, setAbaRel]     = useState("mensal"); // mensal | inadimplentes
 
-  const { data: times }     = useQuery(() => api.get(`time?select=id_time,nome,valor_mensalidade&limit=1`));
+  const { data: times }     = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,valor_mensalidade&limit=1`) : Promise.resolve([]), [idTime]);
   const time = times?.[0];
 
   const { data: jogadores } = useQuery(
@@ -3191,7 +3191,7 @@ export default function AdminAppCompleto() {
   const { data: _posicoes }   = useQuery(() => api.get(`posicao?select=id_posicao&limit=1`), [session]);
   const { data: _adversarios } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario&limit=1`) : Promise.resolve([]), [session, idTime]);
   const { data: _jogadores }  = useQuery(() => idTime ? api.get(`jogador?id_time=eq.${idTime}&id_jogador=gt.0&select=id_jogador&limit=1`) : Promise.resolve([]), [session, idTime]);
-  const { data: _partidas }   = useQuery(() => api.get(`partida?select=id_partida&limit=1`), [session]);
+  const { data: _partidas }   = useQuery(() => idTime ? api.get(`partida?select=id_partida,temporada!inner(id_time)&temporada.id_time=eq.${idTime}&limit=1`) : Promise.resolve([]), [session, idTime]);
   const [temporadaSel, setTemporadaSel] = useState(null);
   useEffect(() => { if (temporadas?.length && !temporadaSel) setTemporadaSel(temporadas[0]); }, [temporadas]);
 
@@ -4403,7 +4403,7 @@ function CrudTemporadas({ idTime, show, readOnly }) {
 
 // ── CONFIGURAÇÕES DO TIME ─────────────────────────────────────
 function ConfigTime({ idTime, show, readOnly }) {
-  const { data: times, loading, reload } = useQuery(() => api.get(`time?select=*,campo(nome)&limit=1`));
+  const { data: times, loading, reload } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=*,campo(nome)&limit=1`) : Promise.resolve([]), [idTime]);
   const { data: campos  } = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
   const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
   const { data: tipos   } = useQuery(() => api.get(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
