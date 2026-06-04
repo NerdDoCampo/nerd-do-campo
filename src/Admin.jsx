@@ -1256,7 +1256,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
 }
 
 // ── FICHA DA PARTIDA ──────────────────────────────────────────
-function FichaPartida({ partida: p0, onVoltar, readOnly }) {
+function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
   const [partida, setPartida] = useState(p0);
   const { toast, show } = useToast();
 
@@ -1270,8 +1270,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly }) {
     () => api.get(`gol?select=*,participacao!inner(id_partida,id_jogador,jogador(nome,apelido)),jogador(nome,apelido)&participacao.id_partida=eq.${partida.id_partida}&order=periodo.asc,minuto.asc`),
     [partida.id_partida]
   );
-  const { data: _utp } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
-  const idTimeP = _utp?.[0]?.id_time;
+  const idTimeP = idTime; // recebido por prop (filtrado pelo usuário logado)
   const { data: tiposMovP } = useQuery(() => idTimeP ? api.get(`tipo_movimento?id_time=eq.${idTimeP}&status=eq.Ativo&select=*&order=descricao.asc`) : Promise.resolve([]), [idTimeP]);
   const { data: movsPartida, reload: reloadMovsP } = useQuery(
     () => api.get(`movimento_caixa?origem=eq.partida&id_partida=eq.${partida.id_partida}&select=*,tipo_movimento(descricao)&order=id_movimento.asc`),
@@ -1969,7 +1968,7 @@ function fmtMoeda(v) {
   return v != null ? `R$ ${Number(v).toFixed(2).replace(".",",")}` : "—";
 }
 
-function CrudMensalidades({ show, readOnly }) {
+function CrudMensalidades({ idTime, show, readOnly }) {
   const hoje = new Date();
   const [mesSel, setMesSel]   = useState(hoje.getMonth() + 1);
   const [anoSel, setAnoSel]   = useState(hoje.getFullYear());
@@ -2465,9 +2464,8 @@ function PaginaAjuda() {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO FINANCEIRO — Tipos de Movimento
 // ══════════════════════════════════════════════════════════════
-function CrudTiposMov({ show, readOnly }) {
-  const { data: _ut } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
-  const idTime = _ut?.[0]?.id_time;
+function CrudTiposMov({ idTime, show, readOnly }) {
+  // idTime recebido por prop (filtrado pelo usuário logado no componente pai)
   const { data: tipos, loading, reload } = useQuery(
     () => idTime ? api.get(`tipo_movimento?id_time=eq.${idTime}&select=*&order=natureza.asc,descricao.asc`) : Promise.resolve([]),
     [idTime]
@@ -2557,9 +2555,8 @@ function CrudTiposMov({ show, readOnly }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO FINANCEIRO — Caixa (saldo + extrato cronológico)
 // ══════════════════════════════════════════════════════════════
-function CrudCaixa({ show, readOnly }) {
-  const { data: _ut } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
-  const idTime = _ut?.[0]?.id_time;
+function CrudCaixa({ idTime, show, readOnly }) {
+  // idTime recebido por prop (filtrado pelo usuário logado no componente pai)
   const { data: timeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=saldo_inicial,nome`) : Promise.resolve([]), [idTime]);
   const saldoInicial = Number(timeData?.[0]?.saldo_inicial || 0);
 
@@ -2875,9 +2872,8 @@ function CrudCaixa({ show, readOnly }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO FINANCEIRO — Eventos (arrecadações)
 // ══════════════════════════════════════════════════════════════
-function CrudEventos({ show, readOnly }) {
-  const { data: _ut } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
-  const idTime = _ut?.[0]?.id_time;
+function CrudEventos({ idTime, show, readOnly }) {
+  // idTime recebido por prop (filtrado pelo usuário logado no componente pai)
   const { data: eventos, loading, reload } = useQuery(
     () => idTime ? api.get(`evento?id_time=eq.${idTime}&select=*,temporada(nome)&order=data_evento.desc,id_evento.desc`) : Promise.resolve([]),
     [idTime]
@@ -3120,6 +3116,10 @@ export default function AdminAppCompleto() {
   const { toast, show }         = useToast();
 
   // Verificar manutenção do sistema
+  const { data: todosTimesSuper } = useQuery(() =>
+    isSuperadmin ? api.get(`time?select=id_time,nome&order=nome.asc`) : Promise.resolve([]),
+    [isSuperadmin]
+  );
   const { data: manutCfg, loading: loadManut } = useQuery(() =>
     api.get(`config_sistema?chave=eq.sistema_manutencao&select=valor&limit=1`)
   );
@@ -3148,7 +3148,7 @@ export default function AdminAppCompleto() {
   }, [session]);
 
   const { data: times }      = useQuery(() => 
-    idTime ? api.get(`time?id_time=eq.${idTime}&select=*&limit=1`) : api.get(`time?select=*&limit=1`),
+    idTime ? api.get(`time?id_time=eq.${idTime}&select=*&limit=1`) : Promise.resolve([]),
     [session, idTime]
   );
 
@@ -3273,6 +3273,16 @@ export default function AdminAppCompleto() {
           v{APP_VERSION}
         </div>
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
+          {isSuperadmin && (
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <span style={{ fontSize:11, color:C.gold, fontWeight:700, textTransform:"uppercase" }}>👑 Super</span>
+              <select value={idTime||""} onChange={e => { const v=e.target.value; setIdTime(v?Number(v):null); setTemporadaSel(null); setMenu("inicio"); setPartida(null); setNovaPartida(false); }}
+                style={{ background:C.surf2, color: idTime?C.cream:C.gold, border:`1px solid ${idTime?C.border:C.gold}`, borderRadius:8, padding:"6px 10px", fontFamily:"inherit", fontSize:12, fontWeight:700 }}>
+                <option value="">— Selecione um time —</option>
+                {(todosTimesSuper||[]).map(t=><option key={t.id_time} value={t.id_time}>{t.nome}</option>)}
+              </select>
+            </div>
+          )}
           {time?.escudo_url
             ? <img src={time.escudo_url} alt={time.nome} style={{ width:32, height:32, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
             : null
@@ -3330,6 +3340,16 @@ export default function AdminAppCompleto() {
 
         {/* Conteúdo */}
         <main className="admin-main" style={{ flex:1, padding:"28px 28px", minWidth:0 }}>
+          {isSuperadmin && !idTime ? (
+            <div style={{ textAlign:"center", padding:"60px 20px", color:C.dim }}>
+              <div style={{ fontSize:48, marginBottom:16 }}>👑</div>
+              <div style={{ fontSize:18, fontWeight:800, color:C.cream, marginBottom:8 }}>Modo Super Admin</div>
+              <div style={{ fontSize:14, maxWidth:420, margin:"0 auto", lineHeight:1.6 }}>
+                Selecione um time no menu <b style={{ color:C.gold }}>👑 Super</b> no topo da tela
+                para visualizar e gerenciar os dados dele. Para a gestão geral do sistema, use o painel <b>/super</b>.
+              </div>
+            </div>
+          ) : (<>
           {/* Badge somente leitura */}
           {menu !== "inicio" && menu !== "app" && !canEdit(menu) && (
             <div style={{ background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:8,
@@ -3368,21 +3388,22 @@ export default function AdminAppCompleto() {
               {secTitle("Ficha da Partida")}
               <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", marginTop:-20 }} onClick={()=>setPartida(null)}>← Voltar</Btn>
             </div>
-            <FichaPartida partida={partida} onVoltar={()=>setPartida(null)} readOnly={!canEdit("partidas")}/>
+            <FichaPartida partida={partida} onVoltar={()=>setPartida(null)} readOnly={!canEdit("partidas")} idTime={idTime}/>
           </>)}
 
-          {menu === "jogadores"   && (<>{secTitle("Jogadores")}<CrudJogadores show={show} readOnly={!canEdit("jogadores")} /></>)}
-          {menu === "adversarios" && (<>{secTitle("Adversários")}<CrudAdversarios show={show} readOnly={!canEdit("adversarios")} /></>)}
-          {menu === "campos"      && (<>{secTitle("Campos")}<CrudCampos show={show} readOnly={!canEdit("campos")} /></>)}
-          {menu === "cidades"     && (<>{secTitle("Cidades")}<CrudCidades show={show} readOnly={!canEdit("cidades")} /></>)}
-          {menu === "posicoes"    && (<>{secTitle("Posições")}<CrudPosicoes show={show} readOnly={!canEdit("posicoes")} /></>)}
-          {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas show={show} readOnly={!canEdit("temporadas")} /></>)}
-          {menu === "mensalidades" && (<CrudMensalidades show={show} readOnly={!canEdit("mensalidades")}/>)}
-          {menu === "caixa"         && (<CrudCaixa show={show} readOnly={!canEdit("caixa")}/>)}
-          {menu === "eventos"       && (<CrudEventos show={show} readOnly={!canEdit("eventos")}/>)}
-          {menu === "tiposmov"      && (<CrudTiposMov show={show} readOnly={!canEdit("tiposmov")}/>)}
+          {menu === "jogadores"   && (<>{secTitle("Jogadores")}<CrudJogadores idTime={idTime} show={show} readOnly={!canEdit("jogadores")} /></>)}
+          {menu === "adversarios" && (<>{secTitle("Adversários")}<CrudAdversarios idTime={idTime} show={show} readOnly={!canEdit("adversarios")} /></>)}
+          {menu === "campos"      && (<>{secTitle("Campos")}<CrudCampos idTime={idTime} show={show} readOnly={!canEdit("campos")} /></>)}
+          {menu === "cidades"     && (<>{secTitle("Cidades")}<CrudCidades idTime={idTime} show={show} readOnly={!canEdit("cidades")} /></>)}
+          {menu === "posicoes"    && (<>{secTitle("Posições")}<CrudPosicoes idTime={idTime} show={show} readOnly={!canEdit("posicoes")} /></>)}
+          {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas idTime={idTime} show={show} readOnly={!canEdit("temporadas")} /></>)}
+          {menu === "mensalidades" && (<CrudMensalidades idTime={idTime} show={show} readOnly={!canEdit("mensalidades")}/>)}
+          {menu === "caixa"         && (<CrudCaixa idTime={idTime} show={show} readOnly={!canEdit("caixa")}/>)}
+          {menu === "eventos"       && (<CrudEventos idTime={idTime} show={show} readOnly={!canEdit("eventos")}/>)}
+          {menu === "tiposmov"      && (<CrudTiposMov idTime={idTime} show={show} readOnly={!canEdit("tiposmov")}/>)}
           {menu === "ajuda"         && (<PaginaAjuda/>)}
-          {menu === "time"        && (<>{secTitle("Configurações do Time")}<ConfigTime show={show} readOnly={!canEdit("time")} /></>)}
+          {menu === "time"        && (<>{secTitle("Configurações do Time")}<ConfigTime idTime={idTime} show={show} readOnly={!canEdit("time")} /></>)}
+          </>)}
         </main>
       </div>
     </div>
@@ -3441,9 +3462,8 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
 }
 
 
-function CrudJogadores({ show, readOnly }) {
-  const { data: _utj } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
-  const _idTimeJ = _utj?.[0]?.id_time;
+function CrudJogadores({ idTime, show, readOnly }) {
+  const _idTimeJ = idTime; // recebido por prop (filtrado pelo usuário logado)
   const { data: jogadores, loading, reload } = useQuery(() => 
     _idTimeJ ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${_idTimeJ}&select=*,posicao(nome)&order=camisa.asc`) : api.get(`jogador?id_jogador=gt.0&select=*,posicao(nome)&order=camisa.asc`),
     [_idTimeJ]
@@ -3462,8 +3482,7 @@ function CrudJogadores({ show, readOnly }) {
     if (!form.nome) { show("Nome obrigatório.", "error"); return; }
     setSaving(true);
     try {
-      const utData = await api.get(`usuario_time?select=id_time&limit=1`);
-      const body = { nome: form.nome, apelido: form.apelido||null, camisa: form.camisa||null, id_posicao: form.id_posicao ? Number(form.id_posicao) : null, telefone: form.telefone||null, email: form.email||null, data_inicio: form.data_inicio||null, observacoes: form.observacoes||null, foto_url: form.foto_url||null, id_time: utData?.[0]?.id_time||null };
+      const body = { nome: form.nome, apelido: form.apelido||null, camisa: form.camisa||null, id_posicao: form.id_posicao ? Number(form.id_posicao) : null, telefone: form.telefone||null, email: form.email||null, data_inicio: form.data_inicio||null, observacoes: form.observacoes||null, foto_url: form.foto_url||null, id_time: idTime||null };
       if (modal === "novo") await api.post("jogador", body);
       else await api.patch(`jogador?id_jogador=eq.${form.id_jogador}`, body);
       show(modal === "novo" ? "Jogador criado!" : "Jogador atualizado!"); setModal(null); reload();
@@ -3478,8 +3497,7 @@ function CrudJogadores({ show, readOnly }) {
   async function confirmarImport() {
     setSaving(true);
     try {
-      const utData = await api.get(`usuario_time?select=id_time&limit=1`);
-      const id_time_val = utData?.[0]?.id_time || null;
+      const id_time_val = idTime || null;
       for (const row of resultadoImport._dados) {
         const pos = (_idTimeJ ? posicoes : posicoes||[]).find ? 
           (posicoes||[]).find(p => p.nome.toUpperCase() === String(row.posicao||"").trim().toUpperCase()) : null;
@@ -3615,9 +3633,8 @@ function CrudJogadores({ show, readOnly }) {
 }
 
 // ── CRUD ADVERSÁRIOS ──────────────────────────────────────────
-function CrudAdversarios({ show, readOnly }) {
-  const { data: _uta } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
-  const _idTimeA = _uta?.[0]?.id_time;
+function CrudAdversarios({ idTime, show, readOnly }) {
+  const _idTimeA = idTime; // recebido por prop (filtrado pelo usuário logado)
   const { data: adversarios, loading, reload } = useQuery(() => 
     _idTimeA ? api.get(`adversario?id_time=eq.${_idTimeA}&select=*,campo(nome),cidade(nome,estado)&order=nome.asc`) : api.get(`adversario?select=*,campo(nome),cidade(nome,estado)&order=nome.asc`),
     [_idTimeA]
@@ -3635,8 +3652,7 @@ function CrudAdversarios({ show, readOnly }) {
   async function confirmarImport() {
     setSaving(true);
     try {
-      const utData = await api.get(`usuario_time?select=id_time&limit=1`);
-      const id_time_val = utData?.[0]?.id_time || null;
+      const id_time_val = idTime || null;
       for (const row of resultadoImport._dados) {
         const campo = (campos||[]).find(c => c.nome.toUpperCase() === String(row.campo||"").trim().toUpperCase());
         const body = { nome: String(row.nome||"").trim(), id_campo: campo?.id_campo||null, contato: row.contato||null, observacoes: row.observacoes||null, id_time: id_time_val };
@@ -3654,8 +3670,7 @@ function CrudAdversarios({ show, readOnly }) {
     if (!form.nome) { show("Nome obrigatório.", "error"); return; }
     setSaving(true);
     try {
-      const utDataA = await api.get(`usuario_time?select=id_time&limit=1`);
-      const body = { nome: form.nome, id_campo: form.id_campo?Number(form.id_campo):null, id_cidade: form.id_cidade?Number(form.id_cidade):null, contato: form.contato||null, observacoes: form.observacoes||null, id_time: utDataA?.[0]?.id_time||null };
+      const body = { nome: form.nome, id_campo: form.id_campo?Number(form.id_campo):null, id_cidade: form.id_cidade?Number(form.id_cidade):null, contato: form.contato||null, observacoes: form.observacoes||null, id_time: idTime||null };
       if (modal === "novo") await api.post("adversario", body);
       else await api.patch(`adversario?id_adversario=eq.${form.id_adversario}`, body);
       show("Salvo!"); setModal(null); reload();
@@ -3754,7 +3769,7 @@ function CrudAdversarios({ show, readOnly }) {
 }
 
 // ── CRUD CAMPOS ───────────────────────────────────────────────
-function CrudCampos({ show, readOnly }) {
+function CrudCampos({ idTime, show, readOnly }) {
   const { data: campos, loading, reload } = useQuery(() => api.get(`campo?select=*,cidade(nome,estado)&order=nome.asc`));
   const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
@@ -3877,7 +3892,7 @@ function CrudCampos({ show, readOnly }) {
 }
 
 // ── CRUD CIDADES ──────────────────────────────────────────────
-function CrudCidades({ show, readOnly }) {
+function CrudCidades({ idTime, show, readOnly }) {
   const { data: cidades, loading, reload } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
   const [modal, setModal]   = useState(null);
@@ -3990,7 +4005,7 @@ function CrudCidades({ show, readOnly }) {
 }
 
 // ── CRUD POSIÇÕES ─────────────────────────────────────────────
-function CrudPosicoes({ show, readOnly }) {
+function CrudPosicoes({ idTime, show, readOnly }) {
   const { data: posicoes, loading, reload } = useQuery(() =>
     api.get(`posicao?select=*,posicao_pai:posicao!id_posicao_pai(nome)&order=ordem.asc,nome.asc`)
   );
@@ -4135,7 +4150,7 @@ function CrudPosicoes({ show, readOnly }) {
 }
 
 // ── CRUD TEMPORADAS ───────────────────────────────────────────
-function CrudTemporadas({ show, readOnly }) {
+function CrudTemporadas({ idTime, show, readOnly }) {
   const { data: temporadas, loading, reload } = useQuery(() =>
     api.get(`temporada?select=*,time(nome)&order=data_inicio.desc`)
   );
@@ -4150,8 +4165,7 @@ function CrudTemporadas({ show, readOnly }) {
   async function confirmarImportTemporadas() {
     setSaving(true);
     try {
-      const utData = await api.get(`usuario_time?select=id_time&limit=1`);
-      const id_time_val = utData?.[0]?.id_time || null;
+      const id_time_val = idTime || null;
       for (const row of resultadoImport._dados) {
         const body = { nome: String(row.nome||"").trim(), data_inicio: row.data_inicio||null, data_fim: row.data_fim||null, publico: row.publico !== "NAO" && row.publico !== false, tecnico: row.tecnico||null, presidente: row.presidente||null, vice_presidente: row.vice_presidente||null, financeiro: row.financeiro||null, vice_financeiro: row.vice_financeiro||null, marca_jogos: row.marca_jogos||null, resp_redes_sociais: row.resp_redes_sociais||null, resp_eventos: row.resp_eventos||null, id_time: id_time_val };
         if (row.id_temporada) await api.patch(`temporada?id_temporada=eq.${row.id_temporada}`, body);
@@ -4387,7 +4401,7 @@ function CrudTemporadas({ show, readOnly }) {
 }
 
 // ── CONFIGURAÇÕES DO TIME ─────────────────────────────────────
-function ConfigTime({ show, readOnly }) {
+function ConfigTime({ idTime, show, readOnly }) {
   const { data: times, loading, reload } = useQuery(() => api.get(`time?select=*,campo(nome)&limit=1`));
   const { data: campos  } = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
   const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
