@@ -1273,7 +1273,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
   const idTimeP = idTime; // recebido por prop (filtrado pelo usuário logado)
   const { data: tiposMovP } = useQuery(() => idTimeP ? api.get(`tipo_movimento?id_time=eq.${idTimeP}&status=eq.Ativo&select=*&order=descricao.asc`) : Promise.resolve([]), [idTimeP]);
   const { data: movsPartida, reload: reloadMovsP } = useQuery(
-    () => api.get(`movimento_caixa?origem=eq.partida&id_partida=eq.${partida.id_partida}&select=*,tipo_movimento(descricao)&order=id_movimento.asc`),
+    () => partida?.id_partida ? api.get(`movimento_caixa?origem=eq.partida&id_partida=eq.${partida.id_partida}&select=*,tipo_movimento(descricao)&order=id_movimento.asc`) : Promise.resolve([]),
     [partida.id_partida]
   );
   const [modalMovP, setModalMovP] = useState(false);
@@ -3127,8 +3127,9 @@ export default function AdminAppCompleto() {
 
   // Buscar time do usuário logado
   useEffect(() => {
-    if (!session) return;
-    api.get(`usuario_time?user_id=eq.${session.user?.id || ''}&select=*,time(*)`)
+    const uid = session?.user?.id;
+    if (!uid) return; // espera o id do usuário estar disponível (evita query com user_id vazio = erro 400)
+    api.get(`usuario_time?user_id=eq.${uid}&select=*,time(*)`)
       .then(data => {
         if (data?.length) {
           const ut = data[0];
@@ -3153,8 +3154,8 @@ export default function AdminAppCompleto() {
   );
 
   const { data: permissoesRaw } = useQuery(() =>
-    session && idTime
-      ? api.get(`usuario_permissao?user_id=eq.${session.user?.id}&id_time=eq.${idTime}&select=*`)
+    session?.user?.id && idTime
+      ? api.get(`usuario_permissao?user_id=eq.${session.user.id}&id_time=eq.${idTime}&select=*`)
       : Promise.resolve([]),
     [session, idTime]
   );
@@ -3191,7 +3192,8 @@ export default function AdminAppCompleto() {
   const { data: _posicoes }   = useQuery(() => api.get(`posicao?select=id_posicao&limit=1`), [session]);
   const { data: _adversarios } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario&limit=1`) : Promise.resolve([]), [session, idTime]);
   const { data: _jogadores }  = useQuery(() => idTime ? api.get(`jogador?id_time=eq.${idTime}&id_jogador=gt.0&select=id_jogador&limit=1`) : Promise.resolve([]), [session, idTime]);
-  const { data: _partidas }   = useQuery(() => idTime ? api.get(`partida?select=id_partida,temporada!inner(id_time)&temporada.id_time=eq.${idTime}&limit=1`) : Promise.resolve([]), [session, idTime]);
+  const _idsTemp = (temporadas||[]).map(t=>t.id_temporada).join(",");
+  const { data: _partidas }   = useQuery(() => _idsTemp ? api.get(`partida?id_temporada=in.(${_idsTemp})&select=id_partida&limit=1`) : Promise.resolve([]), [_idsTemp]);
   const [temporadaSel, setTemporadaSel] = useState(null);
   useEffect(() => { if (temporadas?.length && !temporadaSel) setTemporadaSel(temporadas[0]); }, [temporadas]);
 
