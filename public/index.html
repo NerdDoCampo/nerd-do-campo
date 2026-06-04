@@ -44,6 +44,39 @@
         0%, 100% { opacity: 1; }
         50% { opacity: 0.55; }
       }
+      /* Responsivo: Admin em telas estreitas */
+      @media (max-width: 768px) {
+        .admin-layout { flex-direction: column !important; }
+        .admin-sidebar {
+          width: 100% !important;
+          height: auto !important;
+          position: static !important;
+          display: flex !important;
+          flex-direction: row !important;
+          overflow-x: auto !important;
+          overflow-y: hidden !important;
+          border-right: none !important;
+          border-bottom: 1px solid #1F5C3E !important;
+          padding: 8px !important;
+          gap: 4px;
+          -webkit-overflow-scrolling: touch;
+        }
+        .admin-sidebar > * { flex-shrink: 0; }
+        .admin-sidebar button {
+          white-space: nowrap;
+          border-left: none !important;
+          border-bottom: 3px solid transparent;
+          width: auto !important;
+          padding: 8px 14px !important;
+        }
+        .admin-sidebar .menu-grupo { display: flex; flex-direction: row; align-items: center; }
+        .admin-sidebar .menu-grupo-titulo { display: none !important; }
+        .admin-main { padding: 16px 14px !important; }
+        .admin-header { padding: 0 12px !important; gap: 8px !important; }
+      }
+      @media (max-width: 480px) {
+        .header-time-nome { display: none !important; }
+      }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   </head>

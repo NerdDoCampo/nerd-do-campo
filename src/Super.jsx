@@ -163,8 +163,8 @@ function LoginSuper({ onLogin }) {
   }
 
   return (
-    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif" }}>
-      <Card style={{ width:380, padding:40 }}>
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:16, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif" }}>
+      <Card style={{ width:"100%", maxWidth:380, padding:"32px 24px" }}>
         <div style={{ textAlign:"center", marginBottom:32 }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:12, marginBottom:4 }}>
             <img src="/logo.png" alt="Nerd do Campo" style={{ width:64, height:64, borderRadius:"50%", objectFit:"cover" }}/>
@@ -241,7 +241,7 @@ function DashboardSuper() {
       {aba === "times" && <>
 
       {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(100px, 1fr))", gap:16 }}>
         {[
           { label:"Times cadastrados", value:totalTimes,    cor:C.gold },
           { label:"Usuários totais",   value:totalUsuarios, cor:C.win },
@@ -260,7 +260,7 @@ function DashboardSuper() {
           <div style={{ fontSize:16, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.cream }}>Times Cadastrados</div>
           <Btn onClick={()=>setModalNovoTime(true)}>+ Novo Time</Btn>
         </div>
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
             {["Time","Status","Nível","Temporadas","Admins","Fundação","Ações"].map(h => <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
           </tr></thead>
@@ -300,7 +300,7 @@ function DashboardSuper() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
 
       {/* Usuários */}
@@ -361,7 +361,7 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
   if (loading) return <Spinner/>;
 
   return (
-    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+    <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
       <thead><tr style={{ background:C.surf2 }}>
         {["E-mail","Último Acesso","Time","Role","Criado em","Ações"].map(h => <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
       </tr></thead>
@@ -391,7 +391,7 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
           </tr>
         ))}
       </tbody>
-    </table>
+    </table></div>
   );
 }
 
@@ -419,10 +419,12 @@ function FormNovoTime({ onSalvo, show }) {
         nivel_mensalidade: Number(form.nivel_mensalidade)||1,
       });
       // Criar temporada inicial automaticamente
+      const novoIdTime = Array.isArray(time) ? time?.[0]?.id_time : time?.id_time;
+      if (!novoIdTime) { show("Time criado, mas não foi possível criar a temporada inicial. Crie-a manualmente.", "error"); onSalvo?.(); return; }
       const ano = new Date().getFullYear();
       await api.post("temporada", {
         nome: `Temporada ${ano}`,
-        id_time: time[0].id_time,
+        id_time: novoIdTime,
         data_inicio: `${ano}-01-01`,
         data_fim: `${ano}-12-31`,
         tecnico: form.tecnico||null,
@@ -443,7 +445,7 @@ function FormNovoTime({ onSalvo, show }) {
           {(campos||[]).map(c=><option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
         </Select>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(130px, 1fr))", gap:12 }}>
         <Input label="Nº Titulares" type="number" value={form.numero_titulares} onChange={e=>set("numero_titulares",e.target.value)}/>
         <Input label="Períodos" type="number" value={form.quantidade_periodos} onChange={e=>set("quantidade_periodos",e.target.value)}/>
         <Input label="Min/Período" type="number" value={form.minutos_padrao_periodo} onChange={e=>set("minutos_padrao_periodo",e.target.value)}/>
@@ -578,6 +580,9 @@ const MODULOS_ADMIN = [
   { id:"temporadas",   label:"📆 Temporadas" },
   { id:"time",         label:"⚙️ Meu Time" },
   { id:"mensalidades", label:"💰 Mensalidades" },
+  { id:"caixa",        label:"💵 Caixa" },
+  { id:"eventos",      label:"🎉 Eventos" },
+  { id:"tiposmov",     label:"🏷️ Tipos de Movimento" },
 ];
 
 function ModalPermissoes({ user_id, id_time, nomeUsuario, onClose, show }) {
@@ -661,7 +666,7 @@ function ModalPermissoes({ user_id, id_time, nomeUsuario, onClose, show }) {
         </div>
 
         {/* Tabela de permissões */}
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
           <thead>
             <tr style={{ background:C.surf2 }}>
               <th style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>Módulo</th>
@@ -698,7 +703,7 @@ function ModalPermissoes({ user_id, id_time, nomeUsuario, onClose, show }) {
               );
             })}
           </tbody>
-        </table>
+        </table></div>
 
         <div style={{ fontSize:11, color:C.dim, fontStyle:"italic" }}>
           ℹ️ Desativar "Ver" remove o módulo do menu. "Editar" desativado mantém visível mas sem botões de salvar/editar.
@@ -836,7 +841,7 @@ function CrudSolicitacoes({ show }) {
             Nenhuma solicitação {filtro !== "todos" ? filtro : ""} encontrada.
           </div>
         ) : (
-          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
             <thead><tr style={{ background:C.surf2 }}>
               {["Data","Time","Tipo","Cidade","Responsável","E-mail","Telefone","Status","Ações"].map(h => (
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>
@@ -873,7 +878,7 @@ function CrudSolicitacoes({ show }) {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Card>
 
@@ -920,7 +925,7 @@ function CrudSolicitacoes({ show }) {
                   🔒 Bloquear tudo
                 </Btn>
               </div>
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+              <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
                 <thead><tr style={{ background:C.surf2 }}>
                   {["Módulo","Ver","Editar"].map(h => (
                     <th key={h} style={{ padding:"8px 12px", textAlign: h==="Módulo"?"left":"center", fontSize:10, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>
@@ -954,7 +959,7 @@ function CrudSolicitacoes({ show }) {
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
             </div>
 
             {/* Observações */}
@@ -1395,7 +1400,7 @@ function CrudMensalidadeTimes({ show }) {
 
       {/* Tabela */}
       <Card style={{ padding:0, overflow:"hidden" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
           <thead><tr style={{ background:C.surf2 }}>
             {["Time","Nível","Status","Esperado","Pago","Comprovante","Ações"].map(h => (
               <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>
@@ -1434,7 +1439,7 @@ function CrudMensalidadeTimes({ show }) {
               );
             })}
           </tbody>
-        </table>
+        </table></div>
       </Card>
       </>)}
 
@@ -1452,7 +1457,7 @@ function CrudMensalidadeTimes({ show }) {
               🎉 Nenhum time inadimplente! Todos em dia.
             </div>
           ) : (
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
               <thead><tr style={{ background:C.surf2 }}>
                 {["Time","Meses em Aberto","Débito Total","Qtde"].map(h => (
                   <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>
@@ -1476,7 +1481,7 @@ function CrudMensalidadeTimes({ show }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </Card>
       )}
@@ -1492,7 +1497,7 @@ function CrudMensalidadeTimes({ show }) {
             <button onClick={() => setAnoSel(a=>a+1)}
               style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, color:C.dim, cursor:"pointer", padding:"4px 12px", fontFamily:"inherit", fontSize:16 }}>›</button>
           </div>
-          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
             <thead><tr style={{ background:C.surf2 }}>
               {["Mês","Pagos","Parciais","Não Pagos","Isentos","Arrecadado","A Receber"].map(h => (
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>
@@ -1526,7 +1531,7 @@ function CrudMensalidadeTimes({ show }) {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
           <div style={{ fontSize:11, color:C.dim, marginTop:8, fontStyle:"italic" }}>
             Clique em um mês para abrir o controle detalhado daquele mês.
           </div>
@@ -1724,7 +1729,7 @@ function CrudTipoTime({ show }) {
           <div style={{ fontSize:16, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.cream }}>⚽ Tipos de Time</div>
           <Btn onClick={abrirNovo}>+ Novo Tipo</Btn>
         </div>
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
             {["Descrição","Status","Titulares","Períodos","Min/Período","Acrésc.","Ações"].map(h => (
               <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>
@@ -1752,7 +1757,7 @@ function CrudTipoTime({ show }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
 
       {modal && (
@@ -1777,7 +1782,7 @@ function CrudTipoTime({ show }) {
                 </select>
               </div>
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(130px, 1fr))", gap:12 }}>
               <Input label="Nº Titulares"    type="number" value={form.numero_titulares||""} onChange={e => set("numero_titulares", e.target.value)}/>
               <Input label="Qtd Períodos"    type="number" value={form.quantidade_periodos||""} onChange={e => set("quantidade_periodos", e.target.value)}/>
               <Input label="Min por Período" type="number" value={form.minutos_padrao_periodo||""} onChange={e => set("minutos_padrao_periodo", e.target.value)}/>

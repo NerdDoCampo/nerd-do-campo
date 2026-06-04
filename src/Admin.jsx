@@ -995,8 +995,8 @@ function Login({ onLogin }) {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Oswald','Arial Narrow',Arial,sans-serif" }}>
-      <Card style={{ width: 380, padding: 40 }}>
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, fontFamily: "'Oswald','Arial Narrow',Arial,sans-serif" }}>
+      <Card style={{ width: "100%", maxWidth: 380, padding: "32px 24px" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ display:"inline-block", position:"relative", marginBottom:16 }}>
             <div style={{ position:"absolute", inset:-10, borderRadius:"50%",
@@ -1186,7 +1186,7 @@ function ListaPartidasWrapper({ temporada, onSelect, onNova, show, readOnly }) {
 }
 
 // ── FORM NOVA PARTIDA ─────────────────────────────────────────
-function FormNovaPartida({ temporada, onSalvo, onCancelar }) {
+function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
   const { data: adversarios } = useQuery(() => api.get(`adversario?select=*&order=nome.asc`));
   const { data: campos }      = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
   const { data: time }        = useQuery(() => api.get(`time?select=*&limit=1`));
@@ -1270,6 +1270,16 @@ function FichaPartida({ partida: p0, onVoltar, readOnly }) {
     () => api.get(`gol?select=*,participacao!inner(id_partida,id_jogador,jogador(nome,apelido)),jogador(nome,apelido)&participacao.id_partida=eq.${partida.id_partida}&order=periodo.asc,minuto.asc`),
     [partida.id_partida]
   );
+  const { data: _utp } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
+  const idTimeP = _utp?.[0]?.id_time;
+  const { data: tiposMovP } = useQuery(() => idTimeP ? api.get(`tipo_movimento?id_time=eq.${idTimeP}&status=eq.Ativo&select=*&order=descricao.asc`) : Promise.resolve([]), [idTimeP]);
+  const { data: movsPartida, reload: reloadMovsP } = useQuery(
+    () => api.get(`movimento_caixa?origem=eq.partida&id_partida=eq.${partida.id_partida}&select=*,tipo_movimento(descricao)&order=id_movimento.asc`),
+    [partida.id_partida]
+  );
+  const [modalMovP, setModalMovP] = useState(false);
+  const [formMovP, setFormMovP] = useState({});
+  const [savingMovP, setSavingMovP] = useState(false);
 
   const [savingPlacar, setSavingPlacar] = useState(false);
   const [placar, setPlacar] = useState({ gols_marcados: p0.gols_marcados ?? "", gols_sofridos: p0.gols_sofridos ?? "" });
@@ -1305,6 +1315,31 @@ function FichaPartida({ partida: p0, onVoltar, readOnly }) {
       await api.delete(`gol?id_gol=eq.${id_gol}`);
       show("Gol removido."); reloadGols();
     } catch (e) { show(e.message, "error"); }
+  }
+
+  function abrirMovP() {
+    setFormMovP({ id_tipo_movimento:"", valor:"", data_movimento: (partida.data ? partida.data.split("T")[0] : new Date().toISOString().split("T")[0]), observacao:"" });
+    setModalMovP(true);
+  }
+  async function salvarMovP() {
+    const tipo = (tiposMovP||[]).find(t => String(t.id_tipo_movimento)===String(formMovP.id_tipo_movimento));
+    if (!tipo) { show("Selecione o tipo.", "error"); return; }
+    if (!formMovP.valor || Number(formMovP.valor)<=0) { show("Informe um valor válido.", "error"); return; }
+    setSavingMovP(true);
+    try {
+      await api.post(`movimento_caixa`, {
+        id_time: idTimeP, id_tipo_movimento: tipo.id_tipo_movimento, natureza: tipo.natureza,
+        valor: Number(formMovP.valor), data_movimento: formMovP.data_movimento,
+        observacao: formMovP.observacao||null, origem:"partida", id_partida: partida.id_partida,
+      });
+      show("Lançamento adicionado!"); setModalMovP(false); reloadMovsP();
+    } catch(e){ show("Erro: "+e.message, "error"); }
+    finally { setSavingMovP(false); }
+  }
+  async function removerMovP(m) {
+    if (!confirm("Remover este lançamento?")) return;
+    try { await api.delete(`movimento_caixa?id_movimento=eq.${m.id_movimento}`); show("Removido."); reloadMovsP(); }
+    catch(e){ show("Erro: "+e.message, "error"); }
   }
 
   async function removerParticipacao(id) {
@@ -1439,7 +1474,70 @@ function FichaPartida({ partida: p0, onVoltar, readOnly }) {
         </Card>
       )}
 
+      {/* Financeiro da Partida */}
+      {partida.cancelada !== "S" && (() => {
+        const receitas = (movsPartida||[]).filter(m=>m.natureza==="receita").reduce((s,m)=>s+Number(m.valor||0),0);
+        const despesas = (movsPartida||[]).filter(m=>m.natureza==="despesa").reduce((s,m)=>s+Number(m.valor||0),0);
+        const saldo = receitas - despesas;
+        return (
+          <Card style={{ padding:"20px 24px", marginTop:16 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:8 }}>
+              <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700 }}>
+                💵 Financeiro da Partida
+              </div>
+              {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={abrirMovP}>+ Lançar receita/despesa</Btn>}
+            </div>
+            {(movsPartida||[]).length === 0 ? (
+              <div style={{ color:C.dim, fontSize:13 }}>Nenhum lançamento financeiro nesta partida.</div>
+            ) : (
+              <>
+                <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:14 }}>
+                  {(movsPartida||[]).map(m => (
+                    <div key={m.id_movimento} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:`1px solid ${C.border}`, fontSize:13 }}>
+                      <span style={{ color:C.cream }}>{m.tipo_movimento?.descricao}{m.observacao?<span style={{ color:C.dim }}> — {m.observacao}</span>:""}</span>
+                      <span style={{ display:"flex", gap:12, alignItems:"center" }}>
+                        <span style={{ color: m.natureza==="receita"?C.win:C.loss, fontWeight:700 }}>{m.natureza==="receita"?"+":"−"} {fmtMoeda(m.valor)}</span>
+                        {!readOnly && <button onClick={()=>removerMovP(m)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:14 }}>✕</button>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display:"flex", gap:16, justifyContent:"flex-end", fontSize:13 }}>
+                  <span style={{ color:C.win }}>Receitas: {fmtMoeda(receitas)}</span>
+                  <span style={{ color:C.loss }}>Despesas: {fmtMoeda(despesas)}</span>
+                  <span style={{ fontWeight:800, color: saldo>=0?C.gold:C.loss }}>Saldo: {fmtMoeda(saldo)}</span>
+                </div>
+              </>
+            )}
+          </Card>
+        );
+      })()}
+
       {/* Modais */}
+      {modalMovP && (
+        <Modal title="Lançar Movimento — Partida" onClose={() => setModalMovP(false)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <Select label="Tipo (receita/despesa)" value={formMovP.id_tipo_movimento} onChange={e=>setFormMovP(f=>({...f,id_tipo_movimento:e.target.value}))}>
+              <option value="">Selecione...</option>
+              <optgroup label="Receitas">
+                {(tiposMovP||[]).filter(t=>t.natureza==="receita").map(t=><option key={t.id_tipo_movimento} value={t.id_tipo_movimento}>{t.descricao}</option>)}
+              </optgroup>
+              <optgroup label="Despesas">
+                {(tiposMovP||[]).filter(t=>t.natureza==="despesa").map(t=><option key={t.id_tipo_movimento} value={t.id_tipo_movimento}>{t.descricao}</option>)}
+              </optgroup>
+            </Select>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Input label="Valor (R$)" type="number" min="0" step="0.01" value={formMovP.valor||""} onChange={e=>setFormMovP(f=>({...f,valor:e.target.value}))}/>
+              <Input label="Data" type="date" value={formMovP.data_movimento||""} onChange={e=>setFormMovP(f=>({...f,data_movimento:e.target.value}))}/>
+            </div>
+            <Input label="Observação" value={formMovP.observacao||""} onChange={e=>setFormMovP(f=>({...f,observacao:e.target.value}))}/>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
+              <Btn variant="secondary" onClick={()=>setModalMovP(false)}>Cancelar</Btn>
+              <Btn onClick={salvarMovP} disabled={savingMovP}>{savingMovP?"Salvando...":"Adicionar"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
       {modalEscalacao && (
         <Modal title="Adicionar Jogador" onClose={() => setModalEscalacao(false)}>
           <FormEscalacao
@@ -1449,6 +1547,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly }) {
             participacoes={participacoes || []}
             onSalvo={() => { setModalEscalacao(false); reloadPart(); show("Jogador adicionado!"); }}
             show={show}
+            readOnly={readOnly}
           />
         </Modal>
       )}
@@ -1460,6 +1559,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly }) {
             jogadores={jogadores || []}
             onSalvo={() => { setModalGol(false); reloadGols(); show("Gol registrado!"); }}
             show={show}
+            readOnly={readOnly}
           />
         </Modal>
       )}
@@ -1508,7 +1608,7 @@ function NumCell({ pa, field, reload, show }) {
 }
 
 // ── FORM ESCALAÇÃO ────────────────────────────────────────────
-function FormEscalacao({ partida, jogadores, posicoes, participacoes, onSalvo, show }) {
+function FormEscalacao({ partida, jogadores, posicoes, participacoes, onSalvo, show, readOnly = false }) {
   const jaEscalados = new Set((participacoes).map(p => p.id_jogador));
   const disponiveis = jogadores.filter(j => !jaEscalados.has(j.id_jogador));
 
@@ -1570,7 +1670,7 @@ function FormEscalacao({ partida, jogadores, posicoes, participacoes, onSalvo, s
 }
 
 // ── FORM GOL ──────────────────────────────────────────────────
-function FormGol({ partida, participacoes, jogadores, onSalvo, show }) {
+function FormGol({ partida, participacoes, jogadores, onSalvo, show, readOnly = false }) {
   const [form, setForm] = useState({ id_participacao: "", periodo: "1", minuto: "", penalti: "N", gol_contra: "N", id_assistente: "" });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -1634,6 +1734,9 @@ const MENU_BASE = [
   { id:"temporadas",  label:"Temporadas",  icon:"📆", grupo:"Configurações" },
   { id:"time",        label:"Meu Time",    icon:"⚙️", grupo:"Configurações" },
   { id:"mensalidades",label:"Mensalidades", icon:"💰", grupo:"Financeiro" },
+  { id:"caixa",       label:"Caixa",        icon:"💵", grupo:"Financeiro" },
+  { id:"eventos",     label:"Eventos",      icon:"🎉", grupo:"Financeiro" },
+  { id:"tiposmov",    label:"Tipos de Mov.", icon:"🏷️", grupo:"Financeiro" },
   { id:"ajuda",       label:"Ajuda",        icon:"❓", grupo:"" },
 ];
 
@@ -1951,6 +2054,34 @@ function CrudMensalidades({ show, readOnly }) {
 
   function setFP(k, v) { setFormPag(f => ({ ...f, [k]: v })); }
 
+  // Sincroniza o movimento de caixa de uma mensalidade (Opção A)
+  // pago/parcial → cria ou atualiza movimento de receita; nao_pago/isento → remove
+  async function sincronizarMovimentoMensalidade(id_mensalidade, dados, nomeJogador) {
+    if (!id_mensalidade) return;
+    try {
+      const existentes = await api.get(`movimento_caixa?id_mensalidade=eq.${id_mensalidade}&select=id_movimento`);
+      const temMov = existentes && existentes.length > 0;
+      const geraReceita = (dados.status === "pago" || dados.status === "parcial") && Number(dados.valor_pago) > 0;
+
+      if (geraReceita) {
+        // achar o tipo "Mensalidade" (receita) do time
+        const tipos = await api.get(`tipo_movimento?id_time=eq.${dados.id_time}&natureza=eq.receita&descricao=eq.Mensalidade&select=id_tipo_movimento&limit=1`);
+        const idTipo = tipos?.[0]?.id_tipo_movimento || null;
+        const body = {
+          id_time: dados.id_time, id_tipo_movimento: idTipo, natureza: "receita",
+          valor: Number(dados.valor_pago), data_movimento: dados.data_pagamento || new Date().toISOString().split("T")[0],
+          observacao: `Mensalidade ${String(dados.mes).padStart(2,"0")}/${dados.ano}${nomeJogador?` — ${nomeJogador}`:""}`,
+          origem: "mensalidade", id_mensalidade,
+        };
+        if (temMov) await api.patch(`movimento_caixa?id_mensalidade=eq.${id_mensalidade}`, body);
+        else await api.post(`movimento_caixa`, body);
+      } else if (temMov) {
+        // status virou nao_pago/isento → remove o movimento
+        await api.delete(`movimento_caixa?id_mensalidade=eq.${id_mensalidade}`);
+      }
+    } catch(e) { /* não bloqueia o fluxo principal de mensalidade */ }
+  }
+
   async function salvarPagamento() {
     setSaving(true);
     try {
@@ -1968,11 +2099,14 @@ function CrudMensalidades({ show, readOnly }) {
       };
 
       const existe = modalJog.pag?.id_mensalidade;
+      let idMens = existe;
       if (existe) {
         await api.patch(`mensalidade?id_mensalidade=eq.${existe}`, body);
       } else {
-        await api.post(`mensalidade`, body);
+        const criado = await api.post(`mensalidade`, body);
+        idMens = Array.isArray(criado) ? criado?.[0]?.id_mensalidade : criado?.id_mensalidade;
       }
+      await sincronizarMovimentoMensalidade(idMens, body, modalJog.apelido || modalJog.nome);
       show("Pagamento salvo!"); setModalJog(null); reloadPag();
     } catch(e) { show("Erro: " + e.message, "error"); }
     finally { setSaving(false); }
@@ -1988,11 +2122,14 @@ function CrudMensalidades({ show, readOnly }) {
       atualizado_em: new Date().toISOString(),
     };
     try {
-      if (jog.pag?.id_mensalidade) {
-        await api.patch(`mensalidade?id_mensalidade=eq.${jog.pag.id_mensalidade}`, body);
+      let idMens = jog.pag?.id_mensalidade;
+      if (idMens) {
+        await api.patch(`mensalidade?id_mensalidade=eq.${idMens}`, body);
       } else {
-        await api.post(`mensalidade`, body);
+        const criado = await api.post(`mensalidade`, body);
+        idMens = Array.isArray(criado) ? criado?.[0]?.id_mensalidade : criado?.id_mensalidade;
       }
+      await sincronizarMovimentoMensalidade(idMens, body, jog.apelido || jog.nome);
       show(`${jog.apelido||jog.nome}: Pago ✅`); reloadPag();
     } catch(e) { show("Erro: " + e.message, "error"); }
   }
@@ -2058,7 +2195,7 @@ function CrudMensalidades({ show, readOnly }) {
 
         {/* Tabela de jogadores */}
         <Card style={{ padding:0, overflow:"hidden" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
             <thead><tr style={{ background:C.surf2 }}>
               {["#","Jogador","Status","Esperado","Pago","Saldo","Ações"].map(h => (
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>
@@ -2101,7 +2238,7 @@ function CrudMensalidades({ show, readOnly }) {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </Card>
       </>)}
 
@@ -2119,7 +2256,7 @@ function CrudMensalidades({ show, readOnly }) {
               🎉 Nenhum inadimplente! Todos em dia.
             </div>
           ) : (
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
               <thead><tr style={{ background:C.surf2 }}>
                 {["Jogador","Meses em Aberto","Débito Total","Detalhes"].map(h => (
                   <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>
@@ -2149,7 +2286,7 @@ function CrudMensalidades({ show, readOnly }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </Card>
       )}
@@ -2165,7 +2302,7 @@ function CrudMensalidades({ show, readOnly }) {
             <button onClick={() => setAnoSel(a=>a+1)}
               style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, color:C.dim, cursor:"pointer", padding:"4px 12px", fontFamily:"inherit", fontSize:16 }}>›</button>
           </div>
-          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
             <thead><tr style={{ background:C.surf2 }}>
               {["Mês","Pagos","Parciais","Não Pagos","Isentos","Arrecadado","Pendente"].map(h => (
                 <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>
@@ -2198,7 +2335,7 @@ function CrudMensalidades({ show, readOnly }) {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
           <div style={{ fontSize:11, color:C.dim, marginTop:8, fontStyle:"italic" }}>
             Clique em um mês para abrir o controle detalhado daquele mês.
           </div>
@@ -2325,6 +2462,652 @@ function PaginaAjuda() {
   );
 }
 
+// ══════════════════════════════════════════════════════════════
+// MÓDULO FINANCEIRO — Tipos de Movimento
+// ══════════════════════════════════════════════════════════════
+function CrudTiposMov({ show, readOnly }) {
+  const { data: _ut } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
+  const idTime = _ut?.[0]?.id_time;
+  const { data: tipos, loading, reload } = useQuery(
+    () => idTime ? api.get(`tipo_movimento?id_time=eq.${idTime}&select=*&order=natureza.asc,descricao.asc`) : Promise.resolve([]),
+    [idTime]
+  );
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  function abrirNovo() { setForm({ descricao:"", natureza:"despesa", status:"Ativo" }); setModal("novo"); }
+  function abrirEditar(t) { setForm({ ...t }); setModal("editar"); }
+  function set(k,v){ setForm(f=>({ ...f, [k]:v })); }
+
+  async function salvar() {
+    if (!form.descricao?.trim()) { show("Informe a descrição.", "error"); return; }
+    setSaving(true);
+    try {
+      const body = { descricao: form.descricao.trim(), natureza: form.natureza, status: form.status||"Ativo", id_time: idTime };
+      if (modal === "editar") await api.patch(`tipo_movimento?id_tipo_movimento=eq.${form.id_tipo_movimento}`, body);
+      else await api.post(`tipo_movimento`, body);
+      show("Tipo salvo!"); setModal(null); reload();
+    } catch(e){ show("Erro: "+e.message, "error"); }
+    finally { setSaving(false); }
+  }
+
+  async function alternarStatus(t) {
+    const novo = t.status === "Ativo" ? "Inativo" : "Ativo";
+    try { await api.patch(`tipo_movimento?id_tipo_movimento=eq.${t.id_tipo_movimento}`, { status: novo }); show(`${t.descricao}: ${novo}`); reload(); }
+    catch(e){ show("Erro: "+e.message, "error"); }
+  }
+
+  if (loading) return <Spinner/>;
+  const receitas = (tipos||[]).filter(t => t.natureza === "receita");
+  const despesas = (tipos||[]).filter(t => t.natureza === "despesa");
+
+  const Tabela = ({ titulo, lista, cor }) => (
+    <Card style={{ padding:0, overflow:"hidden" }}>
+      <div style={{ padding:"12px 16px", borderBottom:`1px solid ${C.border}`, fontSize:14, fontWeight:700, color:cor }}>{titulo} ({lista.length})</div>
+      <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+        <tbody>
+          {lista.map((t,i) => (
+            <tr key={t.id_tipo_movimento} style={{ background:i%2===0?C.surface:C.bg, opacity: t.status==="Inativo"?0.5:1 }}>
+              <td style={{ padding:"10px 16px", fontWeight:600, color:C.cream }}>
+                {t.descricao} {t.status==="Inativo" && <span style={{ fontSize:10, color:C.dim }}>(inativo)</span>}
+              </td>
+              <td style={{ padding:"10px 16px", textAlign:"right", display:"flex", gap:6, justifyContent:"flex-end" }}>
+                {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"4px 10px" }} onClick={()=>abrirEditar(t)}>Editar</Btn>}
+                {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"4px 10px", color: t.status==="Ativo"?C.loss:C.win }} onClick={()=>alternarStatus(t)}>{t.status==="Ativo"?"Inativar":"Ativar"}</Btn>}
+              </td>
+            </tr>
+          ))}
+          {lista.length===0 && <tr><td style={{ padding:16, color:C.dim, fontSize:12 }}>Nenhum tipo cadastrado.</td></tr>}
+        </tbody>
+      </table></div>
+    </Card>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {!readOnly && <div><Btn onClick={abrirNovo}>+ Novo Tipo</Btn></div>}
+      <Tabela titulo="🟢 Receitas" lista={receitas} cor={C.win}/>
+      <Tabela titulo="🔴 Despesas" lista={despesas} cor={C.loss}/>
+      {modal && (
+        <Modal title={modal==="novo"?"Novo Tipo de Movimento":"Editar Tipo"} onClose={()=>setModal(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <Input label="Descrição" value={form.descricao||""} onChange={e=>set("descricao",e.target.value)} placeholder="Ex: Pagamento de juiz"/>
+            <Select label="Natureza" value={form.natureza} onChange={e=>set("natureza",e.target.value)}>
+              <option value="despesa">Despesa</option>
+              <option value="receita">Receita</option>
+            </Select>
+            {modal==="editar" && (
+              <Select label="Status" value={form.status} onChange={e=>set("status",e.target.value)}>
+                <option value="Ativo">Ativo</option>
+                <option value="Inativo">Inativo</option>
+              </Select>
+            )}
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
+              <Btn variant="secondary" onClick={()=>setModal(null)}>Cancelar</Btn>
+              <Btn onClick={salvar} disabled={saving||readOnly}>{saving?"Salvando...":"Salvar"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// MÓDULO FINANCEIRO — Caixa (saldo + extrato cronológico)
+// ══════════════════════════════════════════════════════════════
+function CrudCaixa({ show, readOnly }) {
+  const { data: _ut } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
+  const idTime = _ut?.[0]?.id_time;
+  const { data: timeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=saldo_inicial,nome`) : Promise.resolve([]), [idTime]);
+  const saldoInicial = Number(timeData?.[0]?.saldo_inicial || 0);
+
+  const { data: movimentos, loading, reload } = useQuery(
+    () => idTime ? api.get(`movimento_caixa?id_time=eq.${idTime}&select=*,tipo_movimento(descricao),evento(nome,id_temporada),partida(data,adversario(nome))&order=data_movimento.asc,id_movimento.asc`) : Promise.resolve([]),
+    [idTime]
+  );
+  const { data: temporadas } = useQuery(() => idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*&order=data_inicio.desc`) : Promise.resolve([]), [idTime]);
+  const [filtroOrigem, setFiltroOrigem] = useState("todos");
+  const [filtroTemporada, setFiltroTemporada] = useState("todas");
+  const [filtroNatureza, setFiltroNatureza] = useState("todas");
+  const [filtroTipo, setFiltroTipo] = useState("todos");
+  const [buscaObs, setBuscaObs] = useState("");
+  const [dataDe, setDataDe] = useState("");
+  const [dataAte, setDataAte] = useState("");
+
+  if (loading) return <Spinner/>;
+
+  const movs = movimentos || [];
+  const totalReceitas = movs.filter(m=>m.natureza==="receita").reduce((s,m)=>s+Number(m.valor||0),0);
+  const totalDespesas = movs.filter(m=>m.natureza==="despesa").reduce((s,m)=>s+Number(m.valor||0),0);
+  const saldoAtual = saldoInicial + totalReceitas - totalDespesas;
+
+  // Aplicar filtros (origem, temporada via evento, intervalo de datas, natureza, tipo)
+  const filtrados = movs.filter(m => {
+    if (filtroOrigem !== "todos" && m.origem !== filtroOrigem) return false;
+    if (filtroNatureza !== "todas" && m.natureza !== filtroNatureza) return false;
+    if (filtroTipo !== "todos" && String(m.id_tipo_movimento) !== String(filtroTipo)) return false;
+    if (filtroTemporada !== "todas") {
+      // só movimentos de eventos daquela temporada (mensalidade/partida não têm temporada direta)
+      if (m.origem !== "evento" || String(m.evento?.id_temporada) !== String(filtroTemporada)) return false;
+    }
+    if (dataDe && m.data_movimento < dataDe) return false;
+    if (dataAte && m.data_movimento > dataAte) return false;
+    if (buscaObs.trim()) {
+      const termos = buscaObs.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const alvo = ((m.observacao || "") + " " + (m.tipo_movimento?.descricao || "")).toLowerCase();
+      // precisa conter TODAS as palavras (em qualquer ordem)
+      if (!termos.every(t => alvo.includes(t))) return false;
+    }
+    return true;
+  });
+
+  // Tipos presentes nos movimentos (para o dropdown), respeitando a natureza escolhida
+  const tiposDisponiveis = Array.from(
+    new Map(
+      movs
+        .filter(m => filtroNatureza === "todas" || m.natureza === filtroNatureza)
+        .filter(m => m.id_tipo_movimento && m.tipo_movimento?.descricao)
+        .map(m => [m.id_tipo_movimento, m.tipo_movimento.descricao])
+    ).entries()
+  ).sort((a,b) => a[1].localeCompare(b[1]));
+
+  // Extrato com saldo acumulado
+  const temFiltro = filtroOrigem!=="todos" || filtroNatureza!=="todas" || filtroTipo!=="todos" || filtroTemporada!=="todas" || !!dataDe || !!dataAte || !!buscaObs.trim();
+  let acc = saldoInicial;
+  const extrato = filtrados.map(m => {
+    const delta = m.natureza==="receita" ? Number(m.valor||0) : -Number(m.valor||0);
+    acc += delta;
+    return { ...m, saldoAcc: acc, delta };
+  });
+
+  function origemLabel(m) {
+    if (m.origem==="mensalidade") return "💰 Mensalidade";
+    if (m.origem==="evento") return `🎉 ${m.evento?.nome || "Evento"}`;
+    if (m.origem==="partida") return `📅 vs ${m.partida?.adversario?.nome || "Adversário"}`;
+    return m.origem;
+  }
+
+  function origemTexto(m) {
+    if (m.origem==="mensalidade") return "Mensalidade";
+    if (m.origem==="evento") return `Evento: ${m.evento?.nome || ""}`;
+    if (m.origem==="partida") return `Partida vs ${m.partida?.adversario?.nome || ""}`;
+    return m.origem;
+  }
+
+  // Monta as linhas do extrato (recalcula saldo acumulado sobre o filtrado)
+  function linhasRelatorio() {
+    let a = saldoInicial;
+    return filtrados.map(m => {
+      a += m.natureza==="receita" ? Number(m.valor||0) : -Number(m.valor||0);
+      return {
+        Data: new Date(m.data_movimento+"T12:00:00").toLocaleDateString("pt-BR"),
+        Descrição: m.tipo_movimento?.descricao || "",
+        Origem: origemTexto(m),
+        Tipo: m.natureza==="receita" ? "Receita" : "Despesa",
+        Valor: Number(m.valor||0),
+        Saldo: a,
+        Observação: m.observacao || "",
+      };
+    });
+  }
+
+  const nomeArq = `extrato_caixa_${timeData?.[0]?.nome?.replace(/\s+/g,"_") || "time"}`;
+
+  function exportarExcel() {
+    const XLSX = window.XLSX;
+    if (!XLSX) { alert("Recarregue a página para usar esta função."); return; }
+    const linhas = linhasRelatorio();
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(linhas);
+    XLSX.utils.book_append_sheet(wb, ws, "Extrato");
+    // Resumo
+    const resumo = [
+      { Campo:"Saldo Inicial", Valor: saldoInicial },
+      { Campo:"Total Receitas", Valor: filtrados.filter(m=>m.natureza==="receita").reduce((s,m)=>s+Number(m.valor||0),0) },
+      { Campo:"Total Despesas", Valor: filtrados.filter(m=>m.natureza==="despesa").reduce((s,m)=>s+Number(m.valor||0),0) },
+      { Campo:"Saldo Final", Valor: linhas.length ? linhas[linhas.length-1].Saldo : saldoInicial },
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumo), "Resumo");
+    XLSX.writeFile(wb, `${nomeArq}.xlsx`);
+  }
+
+  function exportarCSV() {
+    const linhas = linhasRelatorio();
+    if (!linhas.length) { alert("Nenhum movimento para exportar."); return; }
+    const cab = Object.keys(linhas[0]);
+    const csv = [cab.join(";")].concat(
+      linhas.map(l => cab.map(k => {
+        let v = l[k];
+        if (typeof v === "number") v = v.toFixed(2).replace(".",",");
+        return `"${String(v).replace(/"/g,'""')}"`;
+      }).join(";"))
+    ).join("\n");
+    const blob = new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${nomeArq}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportarPDF() {
+    const linhas = linhasRelatorio();
+    const totR = filtrados.filter(m=>m.natureza==="receita").reduce((s,m)=>s+Number(m.valor||0),0);
+    const totD = filtrados.filter(m=>m.natureza==="despesa").reduce((s,m)=>s+Number(m.valor||0),0);
+    const saldoFim = linhas.length ? linhas[linhas.length-1].Saldo : saldoInicial;
+    const brl = v => "R$ " + Number(v).toFixed(2).replace(".",",");
+    const linhasHtml = linhas.map(l => `<tr>
+      <td>${l.Data}</td><td>${l.Descrição}</td><td>${l.Origem}</td>
+      <td style="color:${l.Tipo==="Receita"?"#2e7d32":"#c62828"}">${l.Tipo}</td>
+      <td style="text-align:right">${brl(l.Valor)}</td>
+      <td style="text-align:right">${brl(l.Saldo)}</td>
+      <td>${l.Observação}</td></tr>`).join("");
+    const periodo = (dataDe||dataAte) ? `Período: ${dataDe?new Date(dataDe+"T12:00:00").toLocaleDateString("pt-BR"):"início"} a ${dataAte?new Date(dataAte+"T12:00:00").toLocaleDateString("pt-BR"):"hoje"}` : "Período: completo";
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Extrato de Caixa</title>
+      <style>
+        body{font-family:Arial,sans-serif;color:#222;padding:24px;}
+        h1{color:#0B3D2E;font-size:20px;margin:0;}
+        .sub{color:#777;font-size:12px;margin:4px 0 16px;}
+        .resumo{display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;}
+        .box{border:1px solid #ccc;border-radius:8px;padding:10px 16px;}
+        .box b{display:block;font-size:16px;}
+        .box span{font-size:11px;color:#777;text-transform:uppercase;}
+        table{width:100%;border-collapse:collapse;font-size:11px;}
+        th{background:#0B3D2E;color:#fff;padding:6px 8px;text-align:left;}
+        td{padding:5px 8px;border-bottom:1px solid #eee;}
+        tr:nth-child(even) td{background:#f7f7f5;}
+        .assinatura{margin-top:24px;text-align:center;color:#E8A020;font-size:11px;}
+      </style></head><body>
+      <h1>⚽ Extrato de Caixa — ${timeData?.[0]?.nome || ""}</h1>
+      <div class="sub">${periodo} · Gerado em ${new Date().toLocaleDateString("pt-BR")}</div>
+      <div class="resumo">
+        <div class="box"><span>Saldo Inicial</span><b>${brl(saldoInicial)}</b></div>
+        <div class="box"><span>Receitas</span><b style="color:#2e7d32">${brl(totR)}</b></div>
+        <div class="box"><span>Despesas</span><b style="color:#c62828">${brl(totD)}</b></div>
+        <div class="box"><span>Saldo Final</span><b style="color:#0B3D2E">${brl(saldoFim)}</b></div>
+      </div>
+      <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table><thead><tr>
+        <th>Data</th><th>Descrição</th><th>Origem</th><th>Tipo</th>
+        <th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th><th>Obs.</th>
+      </tr></thead><tbody>${linhasHtml || '<tr><td colspan="7" style="text-align:center;padding:16px">Nenhum movimento.</td></tr>'}</tbody></table></div>
+      <div class="assinatura">⚽ Designed by Caxpa Augsten — Nerd do Campo</div>
+      </body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) { alert("Permita pop-ups para gerar o PDF."); return; }
+    w.document.write(html); w.document.close();
+    setTimeout(() => w.print(), 400);
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {/* Cards de saldo */}
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+        {[
+          { label:"Saldo Inicial", valor:saldoInicial, cor:C.dim },
+          { label:"Receitas", valor:totalReceitas, cor:C.win },
+          { label:"Despesas", valor:totalDespesas, cor:C.loss },
+          { label:"Saldo Atual", valor:saldoAtual, cor: saldoAtual>=0?C.gold:C.loss, destaque:true },
+        ].map(c => (
+          <div key={c.label} style={{ flex:1, minWidth:140, background: c.destaque?C.gold+"11":C.surface,
+            border:`1px solid ${c.destaque?C.gold:C.border}`, borderRadius:12, padding:"16px 20px" }}>
+            <div style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:4 }}>{c.label}</div>
+            <div style={{ fontSize:20, fontWeight:800, color:c.cor }}>{fmtMoeda(c.valor)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtro de origem */}
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+        {[["todos","Todos"],["partida","📅 Partidas"],["evento","🎉 Eventos"],["mensalidade","💰 Mensalidades"]].map(([k,l]) => (
+          <button key={k} onClick={()=>setFiltroOrigem(k)}
+            style={{ background: filtroOrigem===k?C.gold:C.surface, color: filtroOrigem===k?"#0B3D2E":C.dim,
+              border:`1px solid ${filtroOrigem===k?C.gold:C.border}`, borderRadius:8, padding:"6px 14px",
+              fontFamily:"inherit", fontWeight:700, fontSize:11, cursor:"pointer", textTransform:"uppercase" }}>{l}</button>
+        ))}
+      </div>
+
+      {/* Filtros temporada + datas + exportação */}
+      <Card style={{ padding:"14px 16px" }}>
+        <div style={{ marginBottom:12 }}>
+          <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", marginBottom:4 }}>🔍 Buscar na observação/descrição</div>
+          <input type="text" value={buscaObs} onChange={e=>setBuscaObs(e.target.value)}
+            placeholder="Ex: maroto sapiranga (traz o que tiver as duas palavras)"
+            style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"9px 12px", outline:"none" }}/>
+        </div>
+        <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"flex-end" }}>
+          <div style={{ minWidth:130 }}>
+            <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", marginBottom:4 }}>Receita/Despesa</div>
+            <select value={filtroNatureza} onChange={e=>{ setFiltroNatureza(e.target.value); setFiltroTipo("todos"); }}
+              style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"8px 10px" }}>
+              <option value="todas">Ambos</option>
+              <option value="receita">Só Receitas</option>
+              <option value="despesa">Só Despesas</option>
+            </select>
+          </div>
+          <div style={{ minWidth:170 }}>
+            <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", marginBottom:4 }}>Tipo de movimento</div>
+            <select value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}
+              style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"8px 10px" }}>
+              <option value="todos">Todos os tipos</option>
+              {tiposDisponiveis.map(([id,desc])=><option key={id} value={id}>{desc}</option>)}
+            </select>
+          </div>
+          <div style={{ minWidth:160 }}>
+            <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", marginBottom:4 }}>Temporada (eventos)</div>
+            <select value={filtroTemporada} onChange={e=>setFiltroTemporada(e.target.value)}
+              style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"8px 10px" }}>
+              <option value="todas">Todas</option>
+              {(temporadas||[]).map(t=><option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", marginBottom:4 }}>De</div>
+            <input type="date" value={dataDe} onChange={e=>setDataDe(e.target.value)}
+              style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"8px 10px" }}/>
+          </div>
+          <div>
+            <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", marginBottom:4 }}>Até</div>
+            <input type="date" value={dataAte} onChange={e=>setDataAte(e.target.value)}
+              style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"8px 10px" }}/>
+          </div>
+          {(filtroTemporada!=="todas"||dataDe||dataAte||filtroNatureza!=="todas"||filtroTipo!=="todos"||buscaObs) && (
+            <Btn variant="secondary" style={{ fontSize:11, padding:"8px 12px" }}
+              onClick={()=>{ setFiltroTemporada("todas"); setDataDe(""); setDataAte(""); setFiltroNatureza("todas"); setFiltroTipo("todos"); setBuscaObs(""); }}>Limpar</Btn>
+          )}
+          <div style={{ flex:1 }}/>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+            <Btn variant="secondary" style={{ fontSize:11, padding:"8px 12px" }} onClick={exportarExcel}>📊 Excel</Btn>
+            <Btn variant="secondary" style={{ fontSize:11, padding:"8px 12px" }} onClick={exportarCSV}>📄 CSV</Btn>
+            <Btn variant="secondary" style={{ fontSize:11, padding:"8px 12px" }} onClick={exportarPDF}>📕 PDF</Btn>
+          </div>
+        </div>
+      </Card>
+
+      {/* Extrato cronológico */}
+      <Card style={{ padding:0, overflow:"hidden" }}>
+        <div style={{ padding:"12px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+          <span style={{ fontSize:14, fontWeight:700, color:C.cream }}>📋 Extrato de Movimentos</span>
+          <span style={{ fontSize:12, color:C.dim }}>
+            {filtrados.length} mov. ·
+            <span style={{ color:C.win }}> +{fmtMoeda(filtrados.filter(m=>m.natureza==="receita").reduce((s,m)=>s+Number(m.valor||0),0))}</span> ·
+            <span style={{ color:C.loss }}> −{fmtMoeda(filtrados.filter(m=>m.natureza==="despesa").reduce((s,m)=>s+Number(m.valor||0),0))}</span>
+          </span>
+        </div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <thead><tr style={{ background:C.surf2 }}>
+              {["Data","Descrição","Origem","Valor", temFiltro?"Acum. (seleção)":"Saldo","Obs."].map(h=>(
+                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {extrato.map((m,i) => (
+                <tr key={m.id_movimento} style={{ background:i%2===0?C.surface:C.bg }}>
+                  <td style={{ padding:"10px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{new Date(m.data_movimento+"T12:00:00").toLocaleDateString("pt-BR")}</td>
+                  <td style={{ padding:"10px 14px", color:C.cream }}>{m.tipo_movimento?.descricao || "—"}</td>
+                  <td style={{ padding:"10px 14px", color:C.dim, fontSize:12 }}>{origemLabel(m)}</td>
+                  <td style={{ padding:"10px 14px", fontWeight:700, whiteSpace:"nowrap", color: m.natureza==="receita"?C.win:C.loss }}>
+                    {m.natureza==="receita"?"+":"−"} {fmtMoeda(m.valor)}
+                  </td>
+                  <td style={{ padding:"10px 14px", fontWeight:700, whiteSpace:"nowrap", color: m.saldoAcc>=0?C.cream:C.loss }}>{fmtMoeda(m.saldoAcc)}</td>
+                  <td style={{ padding:"10px 14px", color:C.dim, fontSize:11, maxWidth:160 }}>{m.observacao || "—"}</td>
+                </tr>
+              ))}
+              {extrato.length===0 && <tr><td colSpan={6} style={{ padding:24, textAlign:"center", color:C.dim }}>Nenhum movimento registrado.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      {temFiltro && (
+        <div style={{ fontSize:11, color:C.gold, fontStyle:"italic" }}>
+          ℹ️ Com filtros ativos, a coluna "Acum. (seleção)" soma apenas os movimentos exibidos — não representa o saldo real do caixa.
+        </div>
+      )}
+      <div style={{ fontSize:11, color:C.dim, fontStyle:"italic" }}>
+        💡 Movimentos são lançados nas Partidas (custos do jogo), nos Eventos (arrecadações) e automaticamente nas Mensalidades pagas.
+      </div>
+    </div>
+  );
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// MÓDULO FINANCEIRO — Eventos (arrecadações)
+// ══════════════════════════════════════════════════════════════
+function CrudEventos({ show, readOnly }) {
+  const { data: _ut } = useQuery(() => api.get(`usuario_time?select=id_time&limit=1`));
+  const idTime = _ut?.[0]?.id_time;
+  const { data: eventos, loading, reload } = useQuery(
+    () => idTime ? api.get(`evento?id_time=eq.${idTime}&select=*,temporada(nome)&order=data_evento.desc,id_evento.desc`) : Promise.resolve([]),
+    [idTime]
+  );
+  const { data: temporadas } = useQuery(() => idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*&order=data_inicio.desc`) : Promise.resolve([]), [idTime]);
+  const { data: tiposMov } = useQuery(() => idTime ? api.get(`tipo_movimento?id_time=eq.${idTime}&status=eq.Ativo&select=*&order=descricao.asc`) : Promise.resolve([]), [idTime]);
+  const { data: movsEvento, reload: reloadMovs } = useQuery(
+    () => idTime ? api.get(`movimento_caixa?id_time=eq.${idTime}&origem=eq.evento&select=*,tipo_movimento(descricao)`) : Promise.resolve([]),
+    [idTime]
+  );
+
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [detalhe, setDetalhe] = useState(null); // evento aberto para ver/lançar movimentos
+  const [formMov, setFormMov] = useState({});
+
+  function abrirNovo() {
+    setForm({ nome:"", data_evento:new Date().toISOString().split("T")[0], meta:"", modo:"detalhado", resultado_direto:"", id_temporada: temporadas?.[0]?.id_temporada || "", observacoes:"" });
+    setModal("novo");
+  }
+  function set(k,v){ setForm(f=>({ ...f, [k]:v })); }
+
+  function resultadoCalculado(idEvento) {
+    const ms = (movsEvento||[]).filter(m=>m.id_evento===idEvento);
+    const r = ms.filter(m=>m.natureza==="receita").reduce((s,m)=>s+Number(m.valor||0),0);
+    const d = ms.filter(m=>m.natureza==="despesa").reduce((s,m)=>s+Number(m.valor||0),0);
+    return r - d;
+  }
+
+  async function salvar() {
+    if (!form.nome?.trim()) { show("Informe o nome do evento.", "error"); return; }
+    setSaving(true);
+    try {
+      const body = {
+        nome: form.nome.trim(), data_evento: form.data_evento||null,
+        meta: Number(form.meta)||0, modo: form.modo,
+        resultado_direto: form.modo==="direto" ? (Number(form.resultado_direto)||0) : null,
+        id_temporada: form.id_temporada?Number(form.id_temporada):null,
+        observacoes: form.observacoes||null, id_time: idTime,
+      };
+      if (modal==="editar") await api.patch(`evento?id_evento=eq.${form.id_evento}`, body);
+      else await api.post(`evento`, body);
+      show("Evento salvo!"); setModal(null); reload();
+    } catch(e){ show("Erro: "+e.message, "error"); }
+    finally { setSaving(false); }
+  }
+
+  function abrirEditar(ev) {
+    if (ev.status==="encerrado") { show("Evento encerrado não pode ser editado.", "error"); return; }
+    setForm({ ...ev, meta:ev.meta||"", resultado_direto:ev.resultado_direto||"" }); setModal("editar");
+  }
+
+  async function encerrar(ev) {
+    const resultado = ev.modo==="direto" ? Number(ev.resultado_direto||0) : resultadoCalculado(ev.id_evento);
+    const atingiu = resultado >= Number(ev.meta||0);
+    if (!confirm(`Encerrar "${ev.nome}"?\nResultado: ${fmtMoeda(resultado)}\nMeta: ${fmtMoeda(ev.meta)}\n${atingiu?"✅ Meta atingida":"❌ Abaixo da meta"}`)) return;
+    try {
+      await api.patch(`evento?id_evento=eq.${ev.id_evento}`, { status:"encerrado", resultado_final:resultado, meta_atingida:atingiu });
+      show("Evento encerrado!"); reload();
+    } catch(e){ show("Erro: "+e.message, "error"); }
+  }
+
+  async function reabrir(ev) {
+    if (!confirm(`Reabrir "${ev.nome}"?\nO resultado deixará de ficar congelado e voltará a ser ${ev.modo==="direto"?"o valor digitado":"calculado pelos lançamentos"}.`)) return;
+    try {
+      await api.patch(`evento?id_evento=eq.${ev.id_evento}`, { status:"aberto", resultado_final:null, meta_atingida:null });
+      show("Evento reaberto!"); reload();
+    } catch(e){ show("Erro: "+e.message, "error"); }
+  }
+
+  async function excluir(ev) {
+    const temMov = (movsEvento||[]).some(m=>m.id_evento===ev.id_evento);
+    if (temMov) { show("Este evento tem lançamentos vinculados e não pode ser excluído.", "error"); return; }
+    if (!confirm(`Excluir o evento "${ev.nome}"?`)) return;
+    try { await api.delete(`evento?id_evento=eq.${ev.id_evento}`); show("Evento excluído."); reload(); }
+    catch(e){ show("Erro: "+e.message, "error"); }
+  }
+
+  // Lançar movimento dentro de um evento detalhado
+  function abrirLancar(ev) {
+    setFormMov({ id_evento:ev.id_evento, id_tipo_movimento:"", valor:"", data_movimento:ev.data_evento||new Date().toISOString().split("T")[0], observacao:"" });
+    setDetalhe(ev);
+  }
+  function setM(k,v){ setFormMov(f=>({ ...f, [k]:v })); }
+
+  async function salvarMov() {
+    const tipo = (tiposMov||[]).find(t=>String(t.id_tipo_movimento)===String(formMov.id_tipo_movimento));
+    if (!tipo) { show("Selecione o tipo.", "error"); return; }
+    if (!formMov.valor || Number(formMov.valor)<=0) { show("Informe um valor válido.", "error"); return; }
+    setSaving(true);
+    try {
+      await api.post(`movimento_caixa`, {
+        id_time: idTime, id_tipo_movimento: tipo.id_tipo_movimento, natureza: tipo.natureza,
+        valor: Number(formMov.valor), data_movimento: formMov.data_movimento,
+        observacao: formMov.observacao||null, origem:"evento", id_evento: formMov.id_evento,
+      });
+      show("Lançamento adicionado!"); setFormMov(f=>({ ...f, valor:"", observacao:"" })); reloadMovs();
+    } catch(e){ show("Erro: "+e.message, "error"); }
+    finally { setSaving(false); }
+  }
+
+  async function removerMov(m) {
+    if (!confirm("Remover este lançamento?")) return;
+    try { await api.delete(`movimento_caixa?id_movimento=eq.${m.id_movimento}`); show("Removido."); reloadMovs(); }
+    catch(e){ show("Erro: "+e.message, "error"); }
+  }
+
+  if (loading) return <Spinner/>;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {!readOnly && <div><Btn onClick={abrirNovo}>+ Novo Evento</Btn></div>}
+
+      {(eventos||[]).map(ev => {
+        const resultado = ev.status==="encerrado" ? Number(ev.resultado_final||0)
+          : ev.modo==="direto" ? Number(ev.resultado_direto||0) : resultadoCalculado(ev.id_evento);
+        const meta = Number(ev.meta||0);
+        const atingiu = resultado >= meta;
+        const movs = (movsEvento||[]).filter(m=>m.id_evento===ev.id_evento);
+        return (
+          <Card key={ev.id_evento} style={{ padding:20 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
+              <div>
+                <div style={{ fontSize:16, fontWeight:800, color:C.cream }}>
+                  🎉 {ev.nome}
+                  {ev.status==="encerrado" && <span style={{ fontSize:11, color:C.dim, marginLeft:8 }}>(encerrado)</span>}
+                </div>
+                <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>
+                  {ev.data_evento ? new Date(ev.data_evento+"T12:00:00").toLocaleDateString("pt-BR") : "Sem data"}
+                  {ev.temporada?.nome && ` · ${ev.temporada.nome}`}
+                  {` · Modo ${ev.modo==="direto"?"resultado direto":"detalhado"}`}
+                </div>
+              </div>
+              <div style={{ textAlign:"right" }}>
+                <div style={{ fontSize:20, fontWeight:800, color: resultado>=0?C.win:C.loss }}>{fmtMoeda(resultado)}</div>
+                <div style={{ fontSize:11, color:C.dim }}>Meta: {fmtMoeda(meta)}</div>
+                {meta>0 && <div style={{ fontSize:11, fontWeight:700, color: atingiu?C.win:C.loss }}>{atingiu?"✅ Meta atingida":"❌ Abaixo da meta"}</div>}
+              </div>
+            </div>
+
+            {/* Movimentos do evento (modo detalhado) */}
+            {ev.modo==="detalhado" && movs.length>0 && (
+              <div style={{ marginTop:14, background:C.surf2, borderRadius:8, padding:"10px 14px" }}>
+                {movs.map(m => (
+                  <div key={m.id_movimento} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 0", fontSize:12 }}>
+                    <span style={{ color:C.dim }}>{m.tipo_movimento?.descricao}{m.observacao?` — ${m.observacao}`:""}</span>
+                    <span style={{ display:"flex", gap:10, alignItems:"center" }}>
+                      <span style={{ color: m.natureza==="receita"?C.win:C.loss, fontWeight:700 }}>{m.natureza==="receita"?"+":"−"} {fmtMoeda(m.valor)}</span>
+                      {!readOnly && ev.status!=="encerrado" && <button onClick={()=>removerMov(m)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:14 }}>✕</button>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Ações */}
+            {!readOnly && (
+              <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
+                {ev.status!=="encerrado" && ev.modo==="detalhado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>abrirLancar(ev)}>+ Lançar receita/despesa</Btn>}
+                {ev.status!=="encerrado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>abrirEditar(ev)}>Editar</Btn>}
+                {ev.status!=="encerrado" && <Btn style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>encerrar(ev)}>Encerrar</Btn>}
+                {ev.status==="encerrado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>reabrir(ev)}>🔓 Reabrir</Btn>}
+                {!movs.length && <Btn variant="danger" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>excluir(ev)}>Excluir</Btn>}
+              </div>
+            )}
+          </Card>
+        );
+      })}
+      {(eventos||[]).length===0 && <Card style={{ padding:24, textAlign:"center", color:C.dim }}>Nenhum evento cadastrado.</Card>}
+
+      {/* Modal criar/editar evento */}
+      {modal && (
+        <Modal title={modal==="novo"?"Novo Evento":"Editar Evento"} onClose={()=>setModal(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <Input label="Nome do Evento" value={form.nome||""} onChange={e=>set("nome",e.target.value)} placeholder="Ex: Buffet de cachorro-quente"/>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Input label="Data" type="date" value={form.data_evento||""} onChange={e=>set("data_evento",e.target.value)}/>
+              <Input label="Meta (R$)" type="number" min="0" step="0.01" value={form.meta||""} onChange={e=>set("meta",e.target.value)}/>
+            </div>
+            <Select label="Temporada" value={form.id_temporada} onChange={e=>set("id_temporada",e.target.value)}>
+              <option value="">Sem vínculo</option>
+              {(temporadas||[]).map(t=><option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
+            </Select>
+            <Select label="Modo de apuração" value={form.modo} onChange={e=>set("modo",e.target.value)}>
+              <option value="detalhado">Detalhado (vincular receitas/despesas)</option>
+              <option value="direto">Resultado direto (digitar valor final)</option>
+            </Select>
+            {form.modo==="direto" && (
+              <Input label="Resultado Final (R$)" type="number" step="0.01" value={form.resultado_direto||""} onChange={e=>set("resultado_direto",e.target.value)}/>
+            )}
+            <Input label="Observações" value={form.observacoes||""} onChange={e=>set("observacoes",e.target.value)}/>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
+              <Btn variant="secondary" onClick={()=>setModal(null)}>Cancelar</Btn>
+              <Btn onClick={salvar} disabled={saving||readOnly}>{saving?"Salvando...":"Salvar"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal lançar movimento no evento */}
+      {detalhe && (
+        <Modal title={`Lançar em — ${detalhe.nome}`} onClose={()=>setDetalhe(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <Select label="Tipo (receita/despesa)" value={formMov.id_tipo_movimento} onChange={e=>setM("id_tipo_movimento",e.target.value)}>
+              <option value="">Selecione...</option>
+              <optgroup label="Receitas">
+                {(tiposMov||[]).filter(t=>t.natureza==="receita").map(t=><option key={t.id_tipo_movimento} value={t.id_tipo_movimento}>{t.descricao}</option>)}
+              </optgroup>
+              <optgroup label="Despesas">
+                {(tiposMov||[]).filter(t=>t.natureza==="despesa").map(t=><option key={t.id_tipo_movimento} value={t.id_tipo_movimento}>{t.descricao}</option>)}
+              </optgroup>
+            </Select>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Input label="Valor (R$)" type="number" min="0" step="0.01" value={formMov.valor||""} onChange={e=>setM("valor",e.target.value)}/>
+              <Input label="Data" type="date" value={formMov.data_movimento||""} onChange={e=>setM("data_movimento",e.target.value)}/>
+            </div>
+            <Input label="Observação" value={formMov.observacao||""} onChange={e=>setM("observacao",e.target.value)}/>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
+              <Btn variant="secondary" onClick={()=>setDetalhe(null)}>Fechar</Btn>
+              <Btn onClick={salvarMov} disabled={saving}>{saving?"Salvando...":"Adicionar"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+
 export default function AdminAppCompleto() {
   const [session, setSession]       = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [idTime, setIdTime]         = useState(null);
@@ -2378,7 +3161,7 @@ export default function AdminAppCompleto() {
 
   const perms = React.useMemo(() => {
     const mapa = {};
-    ["inicio","app","partidas","jogadores","adversarios","campos","cidades","posicoes","temporadas","time","mensalidades"]
+    ["inicio","app","partidas","jogadores","adversarios","campos","cidades","posicoes","temporadas","time","mensalidades","caixa","eventos","tiposmov"]
       .forEach(m => {
         const p = (permissoesRaw||[]).find(x => x.modulo === m);
         mapa[m] = { ver: p ? p.pode_ver : true, editar: p ? p.pode_editar : true };
@@ -2477,7 +3260,7 @@ export default function AdminAppCompleto() {
       <Toast {...(toast||{msg:null})} />
 
       {/* Header */}
-      <header style={{ background:"#091F15", borderBottom:`3px solid ${C.gold}`, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:64, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 20px #00000066" }}>
+      <header className="admin-header" style={{ background:"#091F15", borderBottom:`3px solid ${C.gold}`, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:64, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 20px #00000066" }}>
         <img src="/logo.png" alt="Nerd do Campo" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
         <div style={{ fontSize:18, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream }}>Nerd do Campo</div>
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"2px 8px" }}>Admin</div>
@@ -2494,7 +3277,7 @@ export default function AdminAppCompleto() {
             ? <img src={time.escudo_url} alt={time.nome} style={{ width:32, height:32, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
             : null
           }
-          <span style={{ fontSize:12, color:C.dim }}>{time?.nome || ""}</span>
+          <span className="header-time-nome" style={{ fontSize:12, color:C.dim }}>{time?.nome || ""}</span>
           {(temporadas||[]).length > 1 && (
             <select value={temporadaSel?.id_temporada||""} onChange={e => setTemporadaSel(temporadas.find(t=>t.id_temporada===Number(e.target.value)))}
               style={{ background:C.surf2, color:C.cream, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 10px", fontFamily:"inherit", fontSize:12 }}>
@@ -2505,9 +3288,9 @@ export default function AdminAppCompleto() {
         </div>
       </header>
 
-      <div style={{ display:"flex", flex:1 }}>
+      <div className="admin-layout" style={{ display:"flex", flex:1 }}>
         {/* Sidebar */}
-        <aside style={{ width:210, background:"#091F15", borderRight:`1px solid ${C.border}`, padding:"16px 0", flexShrink:0, position:"sticky", top:64, height:"calc(100vh - 64px)", overflowY:"auto" }}>
+        <aside className="admin-sidebar" style={{ width:210, background:"#091F15", borderRight:`1px solid ${C.border}`, padding:"16px 0", flexShrink:0, position:"sticky", top:64, height:"calc(100vh - 64px)", overflowY:"auto" }}>
           {/* Itens sem grupo: Início e Visão App */}
           {MENU.filter(m => m.grupo === "").map(m => (
             <button key={m.id} onClick={() => navMenu(m.id)} style={{
@@ -2526,8 +3309,8 @@ export default function AdminAppCompleto() {
             const itens = MENU.filter(m => m.grupo === grupo);
             if (!itens.length) return null;
             return (
-              <div key={grupo}>
-                <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, padding:"12px 20px 6px" }}>{grupo}</div>
+              <div key={grupo} className="menu-grupo">
+                <div className="menu-grupo-titulo" style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, padding:"12px 20px 6px" }}>{grupo}</div>
                 {itens.map(m => (
                   <button key={m.id} onClick={() => navMenu(m.id)} style={{
                     display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 20px",
@@ -2546,7 +3329,7 @@ export default function AdminAppCompleto() {
         </aside>
 
         {/* Conteúdo */}
-        <main style={{ flex:1, padding:"28px 28px", minWidth:0 }}>
+        <main className="admin-main" style={{ flex:1, padding:"28px 28px", minWidth:0 }}>
           {/* Badge somente leitura */}
           {menu !== "inicio" && menu !== "app" && !canEdit(menu) && (
             <div style={{ background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:8,
@@ -2576,7 +3359,7 @@ export default function AdminAppCompleto() {
               <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", marginTop:-20 }} onClick={()=>setNovaPartida(false)}>← Voltar</Btn>
             </div>
             <Card style={{ padding:24 }}>
-              <FormNovaPartida temporada={temporadaSel} onSalvo={()=>setNovaPartida(false)} onCancelar={()=>setNovaPartida(false)} />
+              <FormNovaPartida temporada={temporadaSel} onSalvo={()=>setNovaPartida(false)} onCancelar={()=>setNovaPartida(false)} readOnly={!canEdit("partidas")} />
             </Card>
           </>)}
 
@@ -2595,6 +3378,9 @@ export default function AdminAppCompleto() {
           {menu === "posicoes"    && (<>{secTitle("Posições")}<CrudPosicoes show={show} readOnly={!canEdit("posicoes")} /></>)}
           {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas show={show} readOnly={!canEdit("temporadas")} /></>)}
           {menu === "mensalidades" && (<CrudMensalidades show={show} readOnly={!canEdit("mensalidades")}/>)}
+          {menu === "caixa"         && (<CrudCaixa show={show} readOnly={!canEdit("caixa")}/>)}
+          {menu === "eventos"       && (<CrudEventos show={show} readOnly={!canEdit("eventos")}/>)}
+          {menu === "tiposmov"      && (<CrudTiposMov show={show} readOnly={!canEdit("tiposmov")}/>)}
           {menu === "ajuda"         && (<PaginaAjuda/>)}
           {menu === "time"        && (<>{secTitle("Configurações do Time")}<ConfigTime show={show} readOnly={!canEdit("time")} /></>)}
         </main>
@@ -2613,7 +3399,7 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
     <div>
       <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>{grupo} ({lista.length})</div>
       <Card style={{ padding:0, overflow:"hidden" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
           <thead><tr style={{ background:C.surf2 }}>
             <ThSortable colKey="camisa"      sortKey={sk} asc={asc} onSort={onSort}>#</ThSortable>
             <ThSortable colKey="nome"        sortKey={sk} asc={asc} onSort={onSort}>Nome</ThSortable>
@@ -2648,7 +3434,7 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
     </div>
   );
@@ -2917,7 +3703,7 @@ function CrudAdversarios({ show, readOnly }) {
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
                   <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
                   <ThSortable colKey="campo.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Campo</ThSortable>
@@ -2940,7 +3726,7 @@ function CrudAdversarios({ show, readOnly }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
       {modal && (
         <Modal title={modal === "novo" ? "Novo Adversário" : "Editar Adversário"} onClose={() => setModal(null)}>
@@ -3048,7 +3834,7 @@ function CrudCampos({ show, readOnly }) {
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
                   <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
                   <ThSortable colKey="endereco" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Endereço</ThSortable>
@@ -3067,7 +3853,7 @@ function CrudCampos({ show, readOnly }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
       {modal && (
         <Modal title={modal === "novo" ? "Novo Campo" : "Editar Campo"} onClose={() => setModal(null)}>
@@ -3168,7 +3954,7 @@ function CrudCidades({ show, readOnly }) {
         {!readOnly && <Btn onClick={abrirNovo}>+ Nova Cidade</Btn>}
       </div>
       <Card style={{ padding:0, overflow:"hidden" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
                   <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Cidade</ThSortable>
                   <ThSortable colKey="estado" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Estado</ThSortable>
@@ -3183,7 +3969,7 @@ function CrudCidades({ show, readOnly }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       {modal && (
@@ -3295,7 +4081,7 @@ function CrudPosicoes({ show, readOnly }) {
           <div key={titulo}>
             <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>{titulo}</div>
             <Card style={{ padding:0, overflow:"hidden" }}>
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+              <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
                 <thead><tr style={{ background:C.surf2 }}>
                   <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
                   <ThSortable colKey="descricao" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Descrição</ThSortable>
@@ -3319,7 +4105,7 @@ function CrudPosicoes({ show, readOnly }) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </Card>
           </div>
         );
@@ -3441,7 +4227,7 @@ function CrudTemporadas({ show, readOnly }) {
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImportTemporadas} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
-        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
                   <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Temporada</ThSortable>
                   <ThSortable colKey="time.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Time</ThSortable>
@@ -3490,7 +4276,7 @@ function CrudTemporadas({ show, readOnly }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
       {modal && (
         <Modal title={modal === "novo" ? "Nova Temporada" : "Editar Temporada"} onClose={() => setModal(null)}>
@@ -3535,7 +4321,7 @@ function CrudTemporadas({ show, readOnly }) {
 
             {/* Uniformes */}
             <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginTop:4 }}>Uniformes</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(90px, 1fr))", gap:12 }}>
               {/* Uniforme 1 */}
               <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                 <div style={{ fontSize:11, color:C.dim, fontWeight:700 }}>👕 Uniforme 1</div>
@@ -3640,6 +4426,7 @@ function ConfigTime({ show, readOnly }) {
         id_cidade_sede: form.id_cidade_sede ? Number(form.id_cidade_sede) : null,
         id_tipo_time: form.id_tipo_time ? Number(form.id_tipo_time) : null,
         valor_mensalidade: form.valor_mensalidade ? Number(form.valor_mensalidade) : null,
+        saldo_inicial: form.saldo_inicial ? Number(form.saldo_inicial) : 0,
         data_fundacao: form.data_fundacao||null,
         numero_titulares: form.numero_titulares ? Number(form.numero_titulares) : null,
         quantidade_periodos: form.quantidade_periodos ? Number(form.quantidade_periodos) : null,
@@ -3680,6 +4467,7 @@ function ConfigTime({ show, readOnly }) {
               {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
             </Select>
             <Input label="Valor Mensalidade (R$)" type="number" min="0" step="0.01" value={form.valor_mensalidade||""} onChange={e => set("valor_mensalidade", e.target.value)}/>
+            <Input label="Saldo Inicial do Caixa (R$)" type="number" step="0.01" value={form.saldo_inicial||""} onChange={e => set("saldo_inicial", e.target.value)}/>
           </div>
         </div>
 
@@ -3697,7 +4485,7 @@ function ConfigTime({ show, readOnly }) {
 
         {/* Regras do Jogo */}
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Regras do Jogo</div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))", gap:12 }}>
           <Input label="Nº Titulares"    type="number" min="1" value={form.numero_titulares||""} onChange={e => set("numero_titulares", e.target.value)} />
           <Input label="Qtd. Períodos"   type="number" min="1" value={form.quantidade_periodos||""} onChange={e => set("quantidade_periodos", e.target.value)} />
           <Input label="Min. por Período" type="number" min="1" value={form.minutos_padrao_periodo||""} onChange={e => set("minutos_padrao_periodo", e.target.value)} />
