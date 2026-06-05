@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // ── Supabase ──────────────────────────────────────────────────
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
@@ -116,7 +116,14 @@ function useQuery(fetcher, deps=[]) {
 
 function useToast() {
   const [toast, setToast] = useState(null);
-  const show = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3500); };
+  const timerRef = useRef(null);
+  const show = (msg, type="success") => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setToast({msg,type});
+    const base = type === "error" ? 7000 : 4000;
+    const dur = Math.min(base + String(msg||"").length * 60, type === "error" ? 16000 : 9000);
+    timerRef.current = setTimeout(()=>setToast(null), dur);
+  };
   return { toast, show };
 }
 
@@ -1977,7 +1984,7 @@ function CrudTipoTime({ show }) {
 
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.4";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.5";
 
   if (!session) return <LoginSuper onLogin={setSession}/>;
 

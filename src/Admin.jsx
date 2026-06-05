@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.4";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.5";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 // Distância em km entre dois pontos (lat/long) — fórmula de Haversine
 function distanciaKm(lat1, lon1, lat2, lon2) {
@@ -976,9 +976,15 @@ function Modal({ title, children, onClose }) {
 
 function useToast() {
   const [toast, setToast] = useState(null);
+  const timerRef = React.useRef(null);
   const show = (msg, type = "success") => {
+    if (timerRef.current) clearTimeout(timerRef.current);
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    // Erros ficam mais tempo; mensagens longas ganham tempo proporcional à leitura.
+    const base = type === "error" ? 7000 : 4000;
+    const leitura = String(msg || "").length * 60;
+    const dur = Math.min(base + leitura, type === "error" ? 16000 : 9000);
+    timerRef.current = setTimeout(() => setToast(null), dur);
   };
   return { toast, show };
 }
@@ -1335,7 +1341,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
   const dataPartida = partida.data ? partida.data.split("T")[0] : null;
   const { data: disponiveis, loading: loadingDisp } = useQuery(
     () => (semAdversario && dataPartida)
-      ? api.get(`partida?id_adversario=is.null&cancelada=eq.N&data=gte.${dataPartida}T00:00:00&data=lte.${dataPartida}T23:59:59&select=id_partida,data,temporada(id_time,time(id_time,nome,escudo_url,telefone,resp_redes_sociais,marca_jogos,data_fundacao,publico,id_tipo_time,cidade:id_cidade_sede(nome,estado,latitude,longitude),campo:id_campo(nome)))`)
+      ? api.get(`partida?id_adversario=is.null&cancelada=eq.N&data=gte.${dataPartida}T00:00:00&data=lte.${dataPartida}T23:59:59&select=id_partida,data,temporada(id_time,time(id_time,nome,escudo_url,telefone,resp_redes_sociais,marca_jogos,data_fundacao,publico,destaque,id_tipo_time,cidade:id_cidade_sede(nome,estado,latitude,longitude),campo:id_campo(nome)))`)
       : Promise.resolve([]),
     [semAdversario, dataPartida]
   );
@@ -1636,7 +1642,11 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
         if (temCoordenadas) {
           semLocalizacao = times.filter(t => t._dist == null).length;
           times = times.filter(t => t._dist != null && t._dist <= raioAtual);
-          times.sort((a, b) => a._dist - b._dist);
+          // Destaque primeiro; depois por distância
+          times.sort((a, b) => (b.destaque === true) - (a.destaque === true) || a._dist - b._dist);
+        } else {
+          // Sem coordenadas: ao menos destaque vem primeiro, depois alfabético
+          times.sort((a, b) => (b.destaque === true) - (a.destaque === true) || (a.nome || "").localeCompare(b.nome || ""));
         }
         return (
           <Card style={{ padding: "20px 24px", marginTop: 16 }}>
