@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.6";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.7";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 // Distância em km entre dois pontos (lat/long) — fórmula de Haversine
 function distanciaKm(lat1, lon1, lat2, lon2) {
@@ -1937,7 +1937,6 @@ const MENU_BASE = [
   { id:"jogadores",   label:"Jogadores",   icon:"👕", grupo:"Cadastros" },
   { id:"adversarios", label:"Adversários", icon:"⚔️", grupo:"Cadastros" },
   { id:"campos",      label:"Campos",      icon:"🏟️", grupo:"Cadastros" },
-  { id:"cidades",     label:"Cidades",     icon:"📍", grupo:"Cadastros" },
   { id:"posicoes",    label:"Posições",    icon:"🎯", grupo:"Cadastros" },
   { id:"temporadas",  label:"Temporadas",  icon:"📆", grupo:"Configurações" },
   { id:"time",        label:"Meu Time",    icon:"⚙️", grupo:"Configurações" },
@@ -1958,17 +1957,6 @@ function PaginaInicio({ dados, onNavegar }) {
   const etapas = [
     {
       numero: 1,
-      titulo: "Cidades",
-      icone: "📍",
-      menu: "cidades",
-      descricao: "Cadastre as cidades onde os jogos acontecem.",
-      exemplo: "Ex: Sapiranga, Ivoti, Novo Hamburgo",
-      concluido: (cidades||[]).length > 0,
-      obrigatorio: true,
-      dica: "Necessário antes de cadastrar campos.",
-    },
-    {
-      numero: 2,
       titulo: "Campos",
       icone: "🏟️",
       menu: "campos",
@@ -1979,7 +1967,7 @@ function PaginaInicio({ dados, onNavegar }) {
       dica: "Necessário antes de cadastrar adversários e partidas.",
     },
     {
-      numero: 3,
+      numero: 2,
       titulo: "Posições",
       icone: "🎯",
       menu: "posicoes",
@@ -1990,7 +1978,7 @@ function PaginaInicio({ dados, onNavegar }) {
       dica: "Necessário antes de cadastrar jogadores.",
     },
     {
-      numero: 4,
+      numero: 3,
       titulo: "Adversários",
       icone: "⚔️",
       menu: "adversarios",
@@ -2001,7 +1989,7 @@ function PaginaInicio({ dados, onNavegar }) {
       dica: "Necessário antes de cadastrar partidas.",
     },
     {
-      numero: 5,
+      numero: 4,
       titulo: "Jogadores",
       icone: "👕",
       menu: "jogadores",
@@ -2012,7 +2000,7 @@ function PaginaInicio({ dados, onNavegar }) {
       dica: "Necessário para registrar escalações e gols.",
     },
     {
-      numero: 6,
+      numero: 5,
       titulo: "Temporada",
       icone: "📆",
       menu: "temporadas",
@@ -2023,7 +2011,7 @@ function PaginaInicio({ dados, onNavegar }) {
       dica: "Necessário antes de cadastrar partidas.",
     },
     {
-      numero: 7,
+      numero: 6,
       titulo: "Partidas",
       icone: "📅",
       menu: "partidas",
@@ -3394,7 +3382,7 @@ export default function AdminAppCompleto() {
 
   const perms = React.useMemo(() => {
     const mapa = {};
-    ["inicio","app","partidas","jogadores","adversarios","campos","cidades","posicoes","temporadas","time","mensalidades","caixa","eventos","tiposmov"]
+    ["inicio","app","partidas","jogadores","adversarios","campos","posicoes","temporadas","time","mensalidades","caixa","eventos","tiposmov"]
       .forEach(m => {
         const p = (permissoesRaw||[]).find(x => x.modulo === m);
         mapa[m] = { ver: p ? p.pode_ver : true, editar: p ? p.pode_editar : true };
@@ -3628,7 +3616,6 @@ export default function AdminAppCompleto() {
           {menu === "jogadores"   && (<>{secTitle("Jogadores")}<CrudJogadores idTime={idTime} show={show} readOnly={!canEdit("jogadores")} /></>)}
           {menu === "adversarios" && (<>{secTitle("Adversários")}<CrudAdversarios idTime={idTime} show={show} readOnly={!canEdit("adversarios")} /></>)}
           {menu === "campos"      && (<>{secTitle("Campos")}<CrudCampos idTime={idTime} show={show} readOnly={!canEdit("campos")} /></>)}
-          {menu === "cidades"     && (<>{secTitle("Cidades")}<CrudCidades idTime={idTime} show={show} readOnly={!canEdit("cidades")} /></>)}
           {menu === "posicoes"    && (<>{secTitle("Posições")}<CrudPosicoes idTime={idTime} show={show} readOnly={!canEdit("posicoes")} /></>)}
           {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas idTime={idTime} show={show} readOnly={!canEdit("temporadas")} /></>)}
           {menu === "mensalidades" && (<CrudMensalidades idTime={idTime} show={show} readOnly={!canEdit("mensalidades")}/>)}
@@ -4126,128 +4113,6 @@ function CrudCampos({ idTime, show, readOnly }) {
               <option value="">{cidades === null ? "Carregando..." : "Selecione..."}</option>
               {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
             </Select>
-            <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
-            <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
-              <Btn variant="secondary" onClick={() => setModal(null)}>Cancelar</Btn>
-              <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar"}</Btn>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-// ── CRUD CIDADES ──────────────────────────────────────────────
-function CrudCidades({ idTime, show, readOnly }) {
-  const [ufFiltro, setUfFiltro] = useState("RS");
-  const { data: cidades, loading, reload } = useQuery(() => ufFiltro ? api.get(`cidade?estado=eq.${ufFiltro}&select=*&order=nome.asc`) : Promise.resolve([]), [ufFiltro]);
-  const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
-  const [modal, setModal]   = useState(null);
-  const [form, setForm]     = useState({});
-  const [saving, setSaving]           = useState(false);
-  const [loadingImport, setLoadingImport] = useState(null);
-  const [resultadoImport, setResultadoImport] = useState(null);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  async function confirmarImport() {
-    const { _dados, _tipo } = resultadoImport;
-    setSaving(true);
-    try {
-      for (const row of _dados) {
-        const body = { nome: String(row.nome||"").trim(), estado: String(row.estado||"").trim().toUpperCase() };
-        if (row.id_cidade) await api.patch(`cidade?id_cidade=eq.${row.id_cidade}`, body);
-        else await api.post("cidade", body);
-      }
-      show(`${_dados.length} registro(s) importado(s)!`); setResultadoImport(null); reload();
-    } catch(e) { show(e.message, "error"); } finally { setSaving(false); }
-  }
-
-  function abrirNovo() { setForm({ nome:"", estado:"", observacoes:"" }); setModal("novo"); }
-  function abrirEditar(c) { setForm({ ...c }); setModal(c); }
-
-  async function salvar() {
-    if (!form.nome) { show("Nome obrigatório.", "error"); return; }
-    setSaving(true);
-    try {
-      const body = { nome: form.nome, estado: form.estado||null, observacoes: form.observacoes||null };
-      if (modal === "novo") await api.post("cidade", body);
-      else await api.patch(`cidade?id_cidade=eq.${form.id_cidade}`, body);
-      show("Salvo!"); setModal(null); reload();
-    } catch (e) { show(e.message, "error"); } finally { setSaving(false); }
-  }
-
-  if (loading) return <Spinner />;
-
-  return (
-    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
-        <BotoesImportExport
-          onExportar={() => exportarExcel(
-            cidades||[],
-            [
-              { key:"id_cidade",    label:"id",     width:8,  descricao:"NÃO altere este campo. Deixe vazio para criar nova cidade." },
-              { key:"nome",         label:"nome",   width:25, descricao:"Nome da cidade. OBRIGATÓRIO." },
-              { key:"estado",       label:"estado", width:8,  descricao:"UF com 2 letras. Ex: RS, SP. OBRIGATÓRIO." },
-            ],
-            "cidades",
-            ["Regras:", "- id preenchido = atualiza registro existente", "- id vazio = cria novo registro", "- Todos os erros devem ser corrigidos antes de importar"]
-          )}
-          onImportar={async (file) => {
-            setLoadingImport("cidades");
-            try {
-              const rows = await lerExcel(file);
-              const erros = [];
-              const validos = [];
-              rows.forEach((row, i) => {
-                const linha = i + 2;
-                const nome = String(row["nome"]||"").trim();
-                const estado = String(row["estado"]||"").trim().toUpperCase();
-                if (!nome) erros.push({ linha, mensagem: "Campo 'nome' é obrigatório." });
-                if (!estado) erros.push({ linha, mensagem: "Campo 'estado' é obrigatório." });
-                else if (estado.length !== 2) erros.push({ linha, mensagem: `Estado '${estado}' inválido. Use 2 letras (ex: RS).` });
-                if (!erros.find(e => e.linha === linha)) validos.push({ ...row, nome, estado });
-              });
-              setResultadoImport({ erros, validos: validos.length, mensagem: `${validos.filter(r=>r.id_cidade).length} atualizações + ${validos.filter(r=>!r.id_cidade).length} novos registros.`, _dados: validos, _tipo: "cidades" });
-            } catch(e) { show(e.message, "error"); }
-            finally { setLoadingImport(null); }
-          }}
-          loadingImport={loadingImport==="cidades"}
-        />
-        {!readOnly && <Btn onClick={abrirNovo}>+ Nova Cidade</Btn>}
-      </div>
-      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
-        <span style={{ fontSize:12, color:C.dim }}>Filtrar por estado:</span>
-        <select value={ufFiltro} onChange={e => setUfFiltro(e.target.value)}
-          style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 10px", outline:"none" }}>
-          {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
-        </select>
-        <span style={{ fontSize:12, color:C.dim }}>{(cidades||[]).length} cidades</span>
-      </div>
-      <Card style={{ padding:0, overflow:"hidden" }}>
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-          <thead><tr style={{ background:C.surf2 }}>
-                  <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Cidade</ThSortable>
-                  <ThSortable colKey="estado" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Estado</ThSortable>
-                  <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
-          </tr></thead>
-          <tbody>
-            {(sortData(cidades, _sk, _asc)||[]).map((c,i) => (
-              <tr key={c.id_cidade} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:700 }}>{c.nome}</td>
-                <td style={{ padding:"11px 14px", color:C.dim }}>{c.estado || "—"}</td>
-                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(c)}>Editar</Btn>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
-      </Card>
-      <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
-      {modal && (
-        <Modal title={modal === "novo" ? "Nova Cidade" : "Editar Cidade"} onClose={() => setModal(null)}>
-          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} />
-            <Input label="Estado (UF)" value={form.estado||""} onChange={e => set("estado", e.target.value.toUpperCase().slice(0,2))} placeholder="RS" />
             <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
               <Btn variant="secondary" onClick={() => setModal(null)}>Cancelar</Btn>

@@ -6,6 +6,8 @@ const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON || "eyJhbGciOiJIUzI1NiI
 
 let SESSION_TOKEN = sessionStorage.getItem("ndc_super_token") || null;
 
+const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+
 async function sbAuth(path, body) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
     method: "POST",
@@ -213,6 +215,7 @@ function DashboardSuper() {
           { id:"mensalidades", label:"💵 Mensalidades" },
           { id:"solicitacoes", label:`📋 Solicitações${(solPendentes||[]).length > 0 ? ` (${(solPendentes||[]).length})` : ""}` },
           { id:"tipos",        label:"⚽ Tipos de Time" },
+          { id:"cidades",      label:"📍 Cidades" },
           { id:"config",       label:"⚙️ Configurações" },
           { id:"ajuda",        label:"❓ Ajuda" },
         ].map(a => {
@@ -234,6 +237,7 @@ function DashboardSuper() {
       </div>
 
       {aba === "tipos"        && <CrudTipoTime show={show}/>}
+      {aba === "cidades"      && <GestaoCidades show={show}/>}
       {aba === "config"       && <ConfigSistema show={show}/>}
       {aba === "ajuda"        && <AjudaSuper/>}
       {aba === "mensalidades" && <CrudMensalidadeTimes show={show}/>}
@@ -575,7 +579,6 @@ const MODULOS_ADMIN = [
   { id:"jogadores",    label:"👕 Jogadores" },
   { id:"adversarios",  label:"⚔️ Adversários" },
   { id:"campos",       label:"🏟️ Campos" },
-  { id:"cidades",      label:"📍 Cidades" },
   { id:"posicoes",     label:"🎯 Posições" },
   { id:"temporadas",   label:"📆 Temporadas" },
   { id:"time",         label:"⚙️ Meu Time" },
@@ -1715,6 +1718,112 @@ function AjudaSuper() {
 }
 
 // ══════════════════════════════════════════════════════════════
+// GESTÃO DE CIDADES (global — só super admin)
+// ══════════════════════════════════════════════════════════════
+function GestaoCidades({ show }) {
+  const [uf, setUf] = useState("RS");
+  const { data: cidades, loading, reload } = useQuery(() => uf ? api.get(`cidade?estado=eq.${uf}&select=*&order=nome.asc`) : Promise.resolve([]), [uf]);
+  const [busca, setBusca] = useState("");
+  const [modal, setModal] = useState(null);
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  function abrirNovo() { setForm({ nome:"", estado:uf, latitude:"", longitude:"" }); setModal("novo"); }
+  function abrirEditar(c) { setForm({ ...c, latitude: c.latitude ?? "", longitude: c.longitude ?? "" }); setModal(c); }
+
+  async function salvar() {
+    if (!form.nome?.trim() || !form.estado?.trim()) { show("Informe nome e estado.", "error"); return; }
+    setSaving(true);
+    try {
+      const body = {
+        nome: form.nome.trim(),
+        estado: form.estado.trim().toUpperCase().slice(0,2),
+        latitude: form.latitude !== "" && form.latitude != null ? Number(form.latitude) : null,
+        longitude: form.longitude !== "" && form.longitude != null ? Number(form.longitude) : null,
+      };
+      if (modal === "novo") await api.post("cidade", body);
+      else await api.patch(`cidade?id_cidade=eq.${modal.id_cidade}`, body);
+      show("Cidade salva!"); setModal(null); setUf(body.estado); reload();
+    } catch (e) { show(e.message, "error"); }
+    finally { setSaving(false); }
+  }
+
+  async function excluir(c) {
+    if (!confirm(`Excluir a cidade "${c.nome}"? Times, campos ou adversários que apontam para ela ficarão sem cidade.`)) return;
+    try { await api.delete(`cidade?id_cidade=eq.${c.id_cidade}`); show("Cidade excluída."); reload(); }
+    catch (e) { show("Não foi possível excluir (pode estar em uso): " + e.message, "error"); }
+  }
+
+  const lista = (cidades||[]).filter(c => !busca || c.nome.toLowerCase().includes(busca.toLowerCase()));
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <Card style={{ padding:24 }}>
+        <div style={{ fontSize:15, fontWeight:700, color:C.cream, marginBottom:8, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>📍 Cidades do Brasil</div>
+        <div style={{ fontSize:12, color:C.dim, marginBottom:16, paddingLeft:10 }}>
+          Base global de cidades (IBGE), compartilhada por todos os times. Usada na cidade-sede, campos e adversários.
+        </div>
+        <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"flex-end" }}>
+          <Select label="Estado" value={uf} onChange={e => { setUf(e.target.value); setBusca(""); }} style={{ width:120 }}>
+            {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+          </Select>
+          <Input label="Buscar cidade" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Digite o nome..." style={{ flex:1, minWidth:160 }} />
+          <Btn onClick={abrirNovo}>+ Nova Cidade</Btn>
+        </div>
+        <div style={{ fontSize:12, color:C.dim, marginTop:10 }}>{lista.length} cidade{lista.length===1?"":"s"} em {uf}</div>
+      </Card>
+
+      {loading ? <Spinner /> : (
+        <Card style={{ padding:0, overflow:"hidden" }}>
+          <div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+            <thead><tr style={{ background:C.surf2 }}>
+              {["Cidade","UF","Latitude","Longitude",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {lista.length === 0
+                ? <tr><td colSpan={5} style={{ padding:"18px 14px", textAlign:"center", color:C.dim }}>Nenhuma cidade encontrada.</td></tr>
+                : lista.map((c, i) => (
+                  <tr key={c.id_cidade} style={{ background:i%2===0?C.surface:C.bg }}>
+                    <td style={{ padding:"10px 14px", fontWeight:700, color:C.cream }}>{c.nome}</td>
+                    <td style={{ padding:"10px 14px", color:C.dim }}>{c.estado}</td>
+                    <td style={{ padding:"10px 14px", color:C.dim, fontSize:12 }}>{c.latitude ?? "—"}</td>
+                    <td style={{ padding:"10px 14px", color:C.dim, fontSize:12 }}>{c.longitude ?? "—"}</td>
+                    <td style={{ padding:"10px 14px", display:"flex", gap:6 }}>
+                      <Btn variant="secondary" style={{ fontSize:11, padding:"4px 10px" }} onClick={() => abrirEditar(c)}>Editar</Btn>
+                      <Btn variant="danger" style={{ fontSize:11, padding:"4px 10px" }} onClick={() => excluir(c)}>Excluir</Btn>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table></div>
+        </Card>
+      )}
+
+      {modal && (
+        <Modal title={modal === "novo" ? "Nova Cidade" : "Editar Cidade"} onClose={() => setModal(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} />
+            <Select label="Estado *" value={form.estado||"RS"} onChange={e => set("estado", e.target.value)}>
+              {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+            </Select>
+            <div style={{ display:"flex", gap:12 }}>
+              <Input label="Latitude" value={form.latitude} onChange={e => set("latitude", e.target.value)} placeholder="-29.6383" style={{ flex:1 }} />
+              <Input label="Longitude" value={form.longitude} onChange={e => set("longitude", e.target.value)} placeholder="-51.0069" style={{ flex:1 }} />
+            </div>
+            <div style={{ fontSize:11, color:C.dim }}>As coordenadas são usadas no cálculo de distância para a busca de adversários.</div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
+              <Btn variant="secondary" onClick={() => setModal(null)}>Cancelar</Btn>
+              <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // CRUD TIPOS DE TIME
 // ══════════════════════════════════════════════════════════════
 function CrudTipoTime({ show }) {
@@ -1846,7 +1955,7 @@ function CrudTipoTime({ show }) {
 
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.6";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.7";
 
   if (!session) return <LoginSuper onLogin={setSession}/>;
 
