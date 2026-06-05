@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.2";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.5";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 // Distância em km entre dois pontos (lat/long) — fórmula de Haversine
 function distanciaKm(lat1, lon1, lat2, lon2) {
@@ -1405,6 +1405,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
           id_adversario: null, id_campo: null, gols_marcados: null, gols_sofridos: null,
         });
         setPartida(u => ({ ...u, id_adversario: null, adversario: null, id_campo: null, gols_marcados: null, gols_sofridos: null }));
+        setPlacar({ gols_marcados: "", gols_sofridos: "" });
         show("Adversário removido — partida procurando jogo.");
       }
       setModalAdv(false); setAdvSel("");
@@ -1465,10 +1466,10 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div>
             <div style={{ fontSize: 12, color: C.dim, marginBottom: 4 }}>{fmtData(partida.data)} · {fmtHora(partida.data)} · {partida.em_casa === "S" ? "🏠 Em Casa" : "✈️ Fora"}</div>
-            {(partida.adversario?.nome || p0.adversario?.nome) ? (
+            {partida.id_adversario ? (
               <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                {partida.adversario?.nome || p0.adversario?.nome}
-                {!readOnly && <button onClick={() => { setAdvSel(String(partida.id_adversario || p0.id_adversario || "")); setModalAdv(true); }} title="Trocar ou remover adversário" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 6, padding: "2px 8px", fontFamily: "inherit", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✏️ alterar</button>}
+                {partida.adversario?.nome || "Adversário"}
+                {!readOnly && <button onClick={() => { setAdvSel(String(partida.id_adversario || "")); setModalAdv(true); }} title="Trocar ou remover adversário" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 6, padding: "2px 8px", fontFamily: "inherit", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✏️ alterar</button>}
               </div>
             ) : (
               <div style={{ marginBottom: 6 }}>
@@ -1476,7 +1477,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
                 {!readOnly && <button onClick={() => { setAdvSel(""); setModalAdv(true); }} style={{ marginTop: 6, background: "none", border: `1px solid ${C.gold}`, color: C.gold, borderRadius: 8, padding: "4px 12px", fontFamily: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Definir adversário</button>}
               </div>
             )}
-            <div style={{ fontSize: 13, color: C.dim }}>🏟️ {partida.campo?.nome || p0.campo?.nome}</div>
+            <div style={{ fontSize: 13, color: C.dim }}>🏟️ {partida.campo?.nome || (partida.id_campo ? p0.campo?.nome : "")}</div>
             {partida.observacoes && <div style={{ fontSize: 13, color: C.dim, marginTop: 4 }}>📝 {partida.observacoes}</div>}
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
@@ -1606,10 +1607,13 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
           const dist = temCoordenadas ? distanciaKm(minhaCidade.latitude, minhaCidade.longitude, t.cidade?.latitude, t.cidade?.longitude) : null;
           times.push({ ...t, _dist: dist });
         }
-        // Se sei calcular distância, filtra pelo raio (times sem coordenada ficam de fora do filtro por raio, mas aparecem com aviso)
+        // Se sei calcular distância, filtra pelo raio. Times sem coordenada calculável
+        // (sem cidade-sede definida) são ocultados, pois não dá para saber se estão no raio.
+        let semLocalizacao = 0;
         if (temCoordenadas) {
-          times = times.filter(t => t._dist == null || t._dist <= raioAtual);
-          times.sort((a, b) => (a._dist ?? 99999) - (b._dist ?? 99999));
+          semLocalizacao = times.filter(t => t._dist == null).length;
+          times = times.filter(t => t._dist != null && t._dist <= raioAtual);
+          times.sort((a, b) => a._dist - b._dist);
         }
         return (
           <Card style={{ padding: "20px 24px", marginTop: 16 }}>
@@ -1630,6 +1634,11 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
                 <input type="number" min="1" step="5" value={raioAtual} onChange={e => setRaioKm(Number(e.target.value) || 1)}
                   style={{ width: 80, background: C.surf2, border: `1px solid ${C.border}`, borderRadius: 8, color: C.cream, fontFamily: "inherit", fontSize: 13, padding: "6px 10px", outline: "none" }} />
                 <span style={{ fontSize: 12, color: C.dim }}>km a partir de {minhaCidade.nome}</span>
+              </div>
+            )}
+            {temCoordenadas && semLocalizacao > 0 && (
+              <div style={{ fontSize: 11, color: C.dim, marginBottom: 12, fontStyle: "italic" }}>
+                {semLocalizacao} {semLocalizacao === 1 ? "time disponível foi ocultado" : "times disponíveis foram ocultados"} por não ter cidade sede definida.
               </div>
             )}
             {loadingDisp ? <Spinner /> : times.length === 0 ? (
@@ -3615,7 +3624,7 @@ export default function AdminAppCompleto() {
 
 // ── CRUD JOGADORES ────────────────────────────────────────────
 
-function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, onReativar, readOnly }) {
+function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, onReativar, readOnly, mapaPosJog }) {
   if (!lista.length) return null;
   const S = k => <ThSortable colKey={k} sortKey={sk} asc={asc} onSort={onSort}/>;
   return (
@@ -3794,12 +3803,12 @@ function CrudJogadores({ idTime, show, readOnly }) {
       {ativos.length > 0 && (
         <TabelaJogadores grupo="Ativos" lista={sortData(ativos, _sk, _asc)} sk={_sk} asc={_asc}
           onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
-          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly}/>
+          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly} mapaPosJog={mapaPosJog}/>
       )}
       {inativos.length > 0 && (
         <TabelaJogadores grupo="Inativos" lista={sortData(inativos, _sk, _asc)} sk={_sk} asc={_asc}
           onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
-          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly}/>
+          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly} mapaPosJog={mapaPosJog}/>
       )}
       {modal && (
         <Modal title={modal === "novo" ? "Novo Jogador" : "Editar Jogador"} onClose={() => setModal(null)}>
@@ -3850,6 +3859,11 @@ function CrudAdversarios({ idTime, show, readOnly }) {
   const { data: campos }  = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
   const [ufAdv, setUfAdv] = useState("RS");
   const { data: cidades } = useQuery(() => ufAdv ? api.get(`cidade?estado=eq.${ufAdv}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufAdv]);
+  const [modal, setModal]   = useState(null);
+  const [form, setForm]     = useState({});
+  const [saving, setSaving] = useState(false);
+  const [loadingImport, setLoadingImport] = useState(null);
+  const [resultadoImport, setResultadoImport] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   async function confirmarImport() {
