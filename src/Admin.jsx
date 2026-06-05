@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.1";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.2";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 // Distância em km entre dois pontos (lat/long) — fórmula de Haversine
 function distanciaKm(lat1, lon1, lat2, lon2) {
@@ -3848,12 +3848,8 @@ function CrudAdversarios({ idTime, show, readOnly }) {
   );
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
   const { data: campos }  = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
-  const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
-  const [modal, setModal]   = useState(null);
-  const [form, setForm]     = useState({});
-  const [saving, setSaving] = useState(false);
-  const [loadingImport, setLoadingImport] = useState(null);
-  const [resultadoImport, setResultadoImport] = useState(null);
+  const [ufAdv, setUfAdv] = useState("RS");
+  const { data: cidades } = useQuery(() => ufAdv ? api.get(`cidade?estado=eq.${ufAdv}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufAdv]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   async function confirmarImport() {
@@ -3871,7 +3867,7 @@ function CrudAdversarios({ idTime, show, readOnly }) {
   }
 
   function abrirNovo() { setForm({ nome:"", id_campo:"", id_cidade:"", contato:"", observacoes:"" }); setModal("novo"); }
-  function abrirEditar(a) { setForm({ ...a, id_campo: a.id_campo?String(a.id_campo):"", id_cidade: a.id_cidade?String(a.id_cidade):"" }); setModal(a); }
+  function abrirEditar(a) { setForm({ ...a, id_campo: a.id_campo?String(a.id_campo):"", id_cidade: a.id_cidade?String(a.id_cidade):"" }); setModal(a); if (a.id_cidade) { api.get(`cidade?id_cidade=eq.${a.id_cidade}&select=estado&limit=1`).then(d => { if (d?.[0]?.estado) setUfAdv(d[0].estado); }).catch(()=>{}); } }
 
   async function salvar() {
     if (!form.nome) { show("Nome obrigatório.", "error"); return; }
@@ -3958,9 +3954,12 @@ function CrudAdversarios({ idTime, show, readOnly }) {
               <option value="">Selecione...</option>
               {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
             </Select>
+            <Select label="Estado (UF)" value={ufAdv} onChange={e => { setUfAdv(e.target.value); set("id_cidade", ""); }}>
+              {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+            </Select>
             <Select label="Cidade" value={form.id_cidade||""} onChange={e => set("id_cidade", e.target.value)}>
-              <option value="">Selecione...</option>
-              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}/{c.estado}</option>)}
+              <option value="">{cidades === null ? "Carregando..." : "Selecione..."}</option>
+              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
             </Select>
             <Input label="Contato" value={form.contato||""} onChange={e => set("contato", e.target.value)} />
             <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
@@ -3978,7 +3977,8 @@ function CrudAdversarios({ idTime, show, readOnly }) {
 // ── CRUD CAMPOS ───────────────────────────────────────────────
 function CrudCampos({ idTime, show, readOnly }) {
   const { data: campos, loading, reload } = useQuery(() => api.get(`campo?select=*,cidade(nome,estado)&order=nome.asc`));
-  const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
+  const [ufCampo, setUfCampo] = useState("RS");
+  const { data: cidades } = useQuery(() => ufCampo ? api.get(`cidade?estado=eq.${ufCampo}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufCampo]);
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
@@ -4001,7 +4001,7 @@ function CrudCampos({ idTime, show, readOnly }) {
   }
 
   function abrirNovo() { setForm({ nome:"", endereco:"", id_cidade:"", observacoes:"" }); setModal("novo"); }
-  function abrirEditar(c) { setForm({ ...c, id_cidade: c.id_cidade?String(c.id_cidade):"" }); setModal(c); }
+  function abrirEditar(c) { setForm({ ...c, id_cidade: c.id_cidade?String(c.id_cidade):"" }); setModal(c); if (c.id_cidade) { api.get(`cidade?id_cidade=eq.${c.id_cidade}&select=estado&limit=1`).then(d => { if (d?.[0]?.estado) setUfCampo(d[0].estado); }).catch(()=>{}); } }
 
   async function salvar() {
     if (!form.nome) { show("Nome obrigatório.", "error"); return; }
@@ -4082,9 +4082,12 @@ function CrudCampos({ idTime, show, readOnly }) {
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} />
             <Input label="Endereço" value={form.endereco||""} onChange={e => set("endereco", e.target.value)} />
+            <Select label="Estado (UF)" value={ufCampo} onChange={e => { setUfCampo(e.target.value); set("id_cidade", ""); }}>
+              {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+            </Select>
             <Select label="Cidade" value={form.id_cidade||""} onChange={e => set("id_cidade", e.target.value)}>
-              <option value="">Selecione...</option>
-              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}/{c.estado}</option>)}
+              <option value="">{cidades === null ? "Carregando..." : "Selecione..."}</option>
+              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
             </Select>
             <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
@@ -4100,7 +4103,8 @@ function CrudCampos({ idTime, show, readOnly }) {
 
 // ── CRUD CIDADES ──────────────────────────────────────────────
 function CrudCidades({ idTime, show, readOnly }) {
-  const { data: cidades, loading, reload } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
+  const [ufFiltro, setUfFiltro] = useState("RS");
+  const { data: cidades, loading, reload } = useQuery(() => ufFiltro ? api.get(`cidade?estado=eq.${ufFiltro}&select=*&order=nome.asc`) : Promise.resolve([]), [ufFiltro]);
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
@@ -4174,6 +4178,14 @@ function CrudCidades({ idTime, show, readOnly }) {
           loadingImport={loadingImport==="cidades"}
         />
         {!readOnly && <Btn onClick={abrirNovo}>+ Nova Cidade</Btn>}
+      </div>
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+        <span style={{ fontSize:12, color:C.dim }}>Filtrar por estado:</span>
+        <select value={ufFiltro} onChange={e => setUfFiltro(e.target.value)}
+          style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 10px", outline:"none" }}>
+          {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+        </select>
+        <span style={{ fontSize:12, color:C.dim }}>{(cidades||[]).length} cidades</span>
       </div>
       <Card style={{ padding:0, overflow:"hidden" }}>
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
