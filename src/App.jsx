@@ -541,15 +541,17 @@ function Calendario({ temporada }) {
             <tbody>
               {lista.map((p,i) => {
                 const res = resultado(p);
+                const procurando = !p.id_adversario && p.cancelada !== "S";
+                const bgBase = procurando ? "rgba(232,160,32,0.12)" : (i%2===0?C.surface:C.bg);
                 return (
                   <tr key={p.id_partida}
                     onClick={() => { if (p.gols_marcados !== null && p.cancelada !== "S") setPartidaSel(p); }}
-                    style={{ background:i%2===0?C.surface:C.bg, cursor: p.gols_marcados !== null && p.cancelada !== "S" ? "pointer" : "default" }}
+                    style={{ background:bgBase, cursor: p.gols_marcados !== null && p.cancelada !== "S" ? "pointer" : "default", borderLeft: procurando ? `3px solid ${C.gold}` : "3px solid transparent" }}
                     onMouseEnter={e=>{ e.currentTarget.style.background=C.surf2; }}
-                    onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.surface:C.bg}>
+                    onMouseLeave={e=>e.currentTarget.style.background=bgBase}>
                     <td style={{ padding:"12px 14px", fontWeight:600, whiteSpace:"nowrap" }}>{fmtData(p.data)}</td>
                     <td style={{ padding:"12px 14px", color:C.dim }}>{fmtHora(p.data)}</td>
-                    <td style={{ padding:"12px 14px", fontWeight:700 }}>{p.adversario?.nome||"A definir"}</td>
+                    <td style={{ padding:"12px 14px", fontWeight:700, color: procurando ? C.gold : C.cream }}>{procurando ? "🔍 Procurando adversário" : (p.adversario?.nome||"A definir")}</td>
                     <td style={{ padding:"12px 14px" }}>
                       <span style={{ padding:"2px 8px", borderRadius:4, fontSize:12, fontWeight:700, background:p.em_casa==="S"?C.gold+"22":C.surf2, color:p.em_casa==="S"?C.gold:C.dim }}>
                         {p.em_casa==="S"?"🏠 Casa":"✈️ Fora"}
@@ -875,17 +877,22 @@ function TimeApp({ time, onVoltar }) {
 // ══════════════════════════════════════════════════════════════
 // MODAL DE SOLICITAÇÃO DE CADASTRO
 // ══════════════════════════════════════════════════════════════
+const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+
 function ModalSolicitacao({ onClose }) {
   const [form, setForm] = useState({
-    nome_time:"", id_tipo_time:"", data_fundacao:"", cidade:"",
+    nome_time:"", id_tipo_time:"", data_fundacao:"", cidade:"", id_cidade:"",
     campo_principal:"", redes_sociais:"",
     nome_responsavel:"", email_responsavel:"", telefone:"",
   });
+  const [uf, setUf] = useState("RS"); // RS é o padrão (público inicial)
   const [step, setStep]     = useState(1); // 1=dados, 2=confirmação
   const [saving, setSaving] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [erro, setErro]     = useState("");
   const { data: tipos } = useQuery(() => sb(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
+  // Cidades da UF selecionada (dropdown encadeado)
+  const { data: cidadesUf } = useQuery(() => uf ? sb(`cidade?estado=eq.${uf}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [uf]);
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
@@ -903,11 +910,14 @@ function ModalSolicitacao({ onClose }) {
     if (err) { setErro(err); return; }
     setSaving(true); setErro("");
     try {
+      const cidadeSel = (cidadesUf || []).find(c => String(c.id_cidade) === String(form.id_cidade));
+      const cidadeTexto = cidadeSel ? `${cidadeSel.nome} - ${cidadeSel.estado}` : null;
       const body = {
         nome_time:          form.nome_time.trim(),
         id_tipo_time:       form.id_tipo_time ? Number(form.id_tipo_time) : null,
         data_fundacao:      form.data_fundacao || null,
-        cidade:             form.cidade.trim() || null,
+        cidade:             cidadeTexto,
+        id_cidade:          form.id_cidade ? Number(form.id_cidade) : null,
         campo_principal:    form.campo_principal.trim() || null,
         redes_sociais:      form.redes_sociais.trim() || null,
         nome_responsavel:   form.nome_responsavel.trim(),
@@ -983,18 +993,28 @@ function ModalSolicitacao({ onClose }) {
               </select>
             </div>
 
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"110px 1fr", gap:12 }}>
+              <div>
+                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Estado</div>
+                <select value={uf} onChange={e => { setUf(e.target.value); set("id_cidade", ""); }}
+                  style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}>
+                  {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
               <div>
                 <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Cidade</div>
-                <input value={form.cidade} onChange={e => set("cidade", e.target.value)}
-                  placeholder="Ex: Sapiranga/RS"
-                  style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
+                <select value={form.id_cidade} onChange={e => set("id_cidade", e.target.value)}
+                  style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}>
+                  <option value="">{cidadesUf === null ? "Carregando..." : "Selecione a cidade..."}</option>
+                  {(cidadesUf || []).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
+                </select>
               </div>
-              <div>
-                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Data de Fundação</div>
-                <input type="date" value={form.data_fundacao} onChange={e => set("data_fundacao", e.target.value)}
-                  style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
-              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Data de Fundação</div>
+              <input type="date" value={form.data_fundacao} onChange={e => set("data_fundacao", e.target.value)}
+                style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
             </div>
 
             <div>
@@ -1054,7 +1074,7 @@ function ModalSolicitacao({ onClose }) {
               <div style={{ fontSize:11, color:C.gold, fontWeight:700, marginBottom:8 }}>📋 Resumo da solicitação</div>
               <div style={{ fontSize:12, color:C.dim, lineHeight:1.8 }}>
                 <b style={{ color:C.cream }}>Time:</b> {form.nome_time}<br/>
-                {form.cidade && <><b style={{ color:C.cream }}>Cidade:</b> {form.cidade}<br/></>}
+                {form.id_cidade && (() => { const c = (cidadesUf||[]).find(x => String(x.id_cidade) === String(form.id_cidade)); return c ? <><b style={{ color:C.cream }}>Cidade:</b> {c.nome} - {c.estado}<br/></> : null; })()}
                 {form.id_tipo_time && (tipos||[]).find(t=>String(t.id_tipo_time)===String(form.id_tipo_time)) && (
                   <><b style={{ color:C.cream }}>Tipo:</b> {(tipos||[]).find(t=>String(t.id_tipo_time)===String(form.id_tipo_time))?.descricao}<br/></>
                 )}

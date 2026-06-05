@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.9.6";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.1";
+const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+// Distância em km entre dois pontos (lat/long) — fórmula de Haversine
+function distanciaKm(lat1, lon1, lat2, lon2) {
+  if ([lat1, lon1, lat2, lon2].some(v => v == null || isNaN(Number(v)))) return null;
+  const R = 6371; // raio da Terra em km
+  const rad = (g) => (Number(g) * Math.PI) / 180;
+  const dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon/2)**2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+}
 
 // ── Supabase ──────────────────────────────────────────────────
 const URL  = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
@@ -412,15 +422,17 @@ function Calendario({ temporada }) {
             <tbody>
               {lista.map((p,i) => {
                 const res = resultadoA(p);
+                const procurando = !p.id_adversario && p.cancelada !== "S";
+                const bgBase = procurando ? "rgba(232,160,32,0.12)" : (i%2===0?C.surface:C.bg);
                 return (
                   <tr key={p.id_partida}
                     onClick={() => { if (p.gols_marcados !== null && p.cancelada !== "S") setPartidaSel(p); }}
-                    style={{ background:i%2===0?C.surface:C.bg, cursor: p.gols_marcados !== null && p.cancelada !== "S" ? "pointer" : "default" }}
+                    style={{ background:bgBase, cursor: p.gols_marcados !== null && p.cancelada !== "S" ? "pointer" : "default", borderLeft: procurando ? `3px solid ${C.gold}` : "3px solid transparent" }}
                     onMouseEnter={e=>{ e.currentTarget.style.background=C.surf2; }}
-                    onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.surface:C.bg}>
+                    onMouseLeave={e=>e.currentTarget.style.background=bgBase}>
                     <td style={{ padding:"12px 14px", fontWeight:600, whiteSpace:"nowrap" }}>{fmtDataA(p.data)}</td>
                     <td style={{ padding:"12px 14px", color:C.dim }}>{fmtHoraA(p.data)}</td>
-                    <td style={{ padding:"12px 14px", fontWeight:700 }}>{p.adversario?.nome||"A definir"}</td>
+                    <td style={{ padding:"12px 14px", fontWeight:700, color: procurando ? C.gold : C.cream }}>{procurando ? "🔍 Procurando adversário" : (p.adversario?.nome||"A definir")}</td>
                     <td style={{ padding:"12px 14px" }}>
                       <span style={{ padding:"2px 8px", borderRadius:4, fontSize:12, fontWeight:700, background:p.em_casa==="S"?C.gold+"22":C.surf2, color:p.em_casa==="S"?C.gold:C.dim }}>
                         {p.em_casa==="S"?"🏠 Casa":"✈️ Fora"}
@@ -1173,19 +1185,20 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
         {lista.map(p => {
           const res = resultado(p);
           const pendente = p.gols_marcados === null && p.cancelada !== "S";
+          const procurando = !p.id_adversario && p.cancelada !== "S";
           return (
             <div key={p.id_partida}
               onClick={() => { onSelect(p); }}
-              style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "background 0.15s", background: C.surface, borderRadius: 12, border: `1px solid ${C.border}` }}
-              onMouseEnter={e => e.currentTarget.style.background = C.surf2}
-              onMouseLeave={e => e.currentTarget.style.background = C.surface}>
+              style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "background 0.15s", background: procurando ? "rgba(232,160,32,0.10)" : C.surface, borderRadius: 12, border: procurando ? `1px solid ${C.gold}` : `1px solid ${C.border}` }}
+              onMouseEnter={e => e.currentTarget.style.background = procurando ? "rgba(232,160,32,0.16)" : C.surf2}
+              onMouseLeave={e => e.currentTarget.style.background = procurando ? "rgba(232,160,32,0.10)" : C.surface}>
               <div style={{ minWidth: 80 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: pendente ? C.gold : C.cream }}>{fmtData(p.data)}</div>
                 <div style={{ fontSize: 12, color: C.dim }}>{fmtHora(p.data)}</div>
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{p.adversario?.nome || "A definir"}</div>
-                <div style={{ fontSize: 12, color: C.dim }}>{p.em_casa === "S" ? "🏠 Casa" : "✈️ Fora"} · {p.campo?.nome}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: procurando ? C.gold : C.cream }}>{procurando ? "🔍 Procurando adversário" : (p.adversario?.nome || "A definir")}</div>
+                <div style={{ fontSize: 12, color: C.dim }}>{p.em_casa === "S" ? "🏠 Casa" : "✈️ Fora"}{p.campo?.nome ? ` · ${p.campo.nome}` : ""}</div>
               </div>
               <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
                 {p.gols_marcados !== null
@@ -1232,6 +1245,13 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
 
   async function salvar() {
     if (!form.data || !form.id_campo) { show("Preencha a data e o campo.", "error"); return; }
+    // Validar que a data está dentro do intervalo da temporada
+    if (temporada?.data_inicio && form.data < temporada.data_inicio.split("T")[0]) {
+      show(`A data não pode ser anterior ao início da temporada (${temporada.data_inicio.split("T")[0].split("-").reverse().join("/")}).`, "error"); return;
+    }
+    if (temporada?.data_fim && form.data > temporada.data_fim.split("T")[0]) {
+      show(`A data não pode ser posterior ao fim da temporada (${temporada.data_fim.split("T")[0].split("-").reverse().join("/")}).`, "error"); return;
+    }
     setSaving(true);
     try {
       const dataTs = new Date(`${form.data}T${form.horario}:00`).toISOString();
@@ -1288,16 +1308,21 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
   const { data: jogadores }     = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=*,posicao(nome)&order=camisa.asc`) : Promise.resolve([]), [idTime]);
   const { data: posicoes }      = useQuery(() => api.get(`posicao?select=*&order=ordem.asc`));
   const { data: advsFicha } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
-  // Meu time (para saber o tipo) — usado na busca de adversários disponíveis
-  const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,id_tipo_time&limit=1`) : Promise.resolve([]), [idTime]);
-  const meuTipoTime = meuTimeData?.[0]?.id_tipo_time;
+  // Meu time: tipo, raio padrão e coordenadas da cidade-sede — usado na busca por raio
+  const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,id_tipo_time,raio_busca_km,cidade:id_cidade_sede(nome,estado,latitude,longitude)&limit=1`) : Promise.resolve([]), [idTime]);
+  const meuTime = meuTimeData?.[0];
+  const meuTipoTime = meuTime?.id_tipo_time;
+  const minhaCidade = meuTime?.cidade; // {nome, estado, latitude, longitude}
+  // Raio ajustável na tela (inicia com o padrão do time; ajuste é temporário, não salva)
+  const [raioKm, setRaioKm] = useState(null);
+  useEffect(() => { if (meuTime?.raio_busca_km != null && raioKm === null) setRaioKm(meuTime.raio_busca_km); }, [meuTime]);
   // A partida está "procurando" se não tem adversário definido (usa estado atual, não o inicial)
   const semAdversario = !(partida.id_adversario);
   // Buscar times disponíveis na mesma data (partida em branco, público, mesmo tipo)
   const dataPartida = partida.data ? partida.data.split("T")[0] : null;
   const { data: disponiveis, loading: loadingDisp } = useQuery(
     () => (semAdversario && dataPartida)
-      ? api.get(`partida?id_adversario=is.null&cancelada=eq.N&data=gte.${dataPartida}T00:00:00&data=lte.${dataPartida}T23:59:59&select=id_partida,data,temporada(id_time,time(id_time,nome,escudo_url,telefone,resp_redes_sociais,marca_jogos,data_fundacao,publico,id_tipo_time,cidade(nome,estado),campo(nome)))`)
+      ? api.get(`partida?id_adversario=is.null&cancelada=eq.N&data=gte.${dataPartida}T00:00:00&data=lte.${dataPartida}T23:59:59&select=id_partida,data,temporada(id_time,time(id_time,nome,escudo_url,telefone,resp_redes_sociais,marca_jogos,data_fundacao,publico,id_tipo_time,cidade:id_cidade_sede(nome,estado,latitude,longitude),campo:id_campo(nome)))`)
       : Promise.resolve([]),
     [semAdversario, dataPartida]
   );
@@ -1352,16 +1377,36 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
 
   async function definirAdversario() {
     const novoId = advSel ? Number(advSel) : null;
-    // Aviso se for remover adversário de uma partida que já tem placar lançado
-    if (!novoId && (partida.gols_marcados !== null && partida.gols_marcados !== undefined)) {
-      if (!confirm("Esta partida já tem placar lançado. Remover o adversário pode deixar o resultado inconsistente. Deseja continuar?")) return;
+    const temPlacar = (partida.gols_marcados !== null && partida.gols_marcados !== undefined);
+    // Ao remover adversário de partida com placar/gols, avisar que tudo será apagado
+    if (!novoId && temPlacar) {
+      if (!confirm("Esta partida já tem placar e gols lançados. Ao remover o adversário, o resultado, os gols e a escalação desta partida serão APAGADOS. Deseja continuar?")) return;
     }
     setSavingAdv(true);
     try {
-      await api.patch(`partida?id_partida=eq.${partida.id_partida}`, { id_adversario: novoId });
-      const adv = (advsFicha || []).find(a => String(a.id_adversario) === String(advSel));
-      setPartida(u => ({ ...u, id_adversario: novoId, adversario: novoId ? (adv ? { nome: adv.nome } : u.adversario) : null }));
-      show(novoId ? "Adversário definido!" : "Adversário removido — partida procurando jogo.");
+      if (novoId) {
+        // Definir/trocar adversário (não mexe em placar/escalação)
+        await api.patch(`partida?id_partida=eq.${partida.id_partida}`, { id_adversario: novoId });
+        const adv = (advsFicha || []).find(a => String(a.id_adversario) === String(advSel));
+        setPartida(u => ({ ...u, id_adversario: novoId, adversario: adv ? { nome: adv.nome } : u.adversario }));
+        show("Adversário definido!");
+      } else {
+        // Remover adversário: apaga gols + participações + zera placar e remove o campo
+        const parts = await api.get(`participacao?id_partida=eq.${partida.id_partida}&select=id_participacao`);
+        const ids = (parts || []).map(p => p.id_participacao);
+        if (ids.length) {
+          // 1) deletar gols dessas participações
+          await api.delete(`gol?id_participacao=in.(${ids.join(",")})`);
+          // 2) deletar as participações
+          await api.delete(`participacao?id_partida=eq.${partida.id_partida}`);
+        }
+        // 3) zerar adversário, placar e campo da partida
+        await api.patch(`partida?id_partida=eq.${partida.id_partida}`, {
+          id_adversario: null, id_campo: null, gols_marcados: null, gols_sofridos: null,
+        });
+        setPartida(u => ({ ...u, id_adversario: null, adversario: null, id_campo: null, gols_marcados: null, gols_sofridos: null }));
+        show("Adversário removido — partida procurando jogo.");
+      }
       setModalAdv(false); setAdvSel("");
     } catch (e) { show(e.message, "error"); }
     finally { setSavingAdv(false); }
@@ -1544,29 +1589,51 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
 
       {/* Times disponíveis nesta data (só quando a partida está procurando adversário) */}
       {semAdversario && partida.cancelada !== "S" && (() => {
-        // Filtra: público, mesmo tipo de time, não o próprio time; dedupe por time
+        // Sei calcular distância? (meu time precisa ter cidade-sede com coordenadas)
+        const temCoordenadas = !!(minhaCidade?.latitude != null && minhaCidade?.longitude != null);
+        const raioAtual = raioKm ?? 50;
+        // Filtra: público, mesmo tipo, não o próprio time; dedupe; calcula distância
         const vistos = new Set();
-        const times = [];
+        let times = [];
         for (const pt of (disponiveis || [])) {
           const t = pt.temporada?.time;
           if (!t) continue;
-          if (t.id_time === idTime) continue;                 // não mostra o próprio time
-          if (t.publico === false) continue;                  // só públicos
-          if (meuTipoTime && t.id_tipo_time !== meuTipoTime) continue; // mesmo tipo
-          if (vistos.has(t.id_time)) continue;                // sem repetir
+          if (t.id_time === idTime) continue;
+          if (t.publico === false) continue;
+          if (meuTipoTime && t.id_tipo_time !== meuTipoTime) continue;
+          if (vistos.has(t.id_time)) continue;
           vistos.add(t.id_time);
-          times.push(t);
+          const dist = temCoordenadas ? distanciaKm(minhaCidade.latitude, minhaCidade.longitude, t.cidade?.latitude, t.cidade?.longitude) : null;
+          times.push({ ...t, _dist: dist });
+        }
+        // Se sei calcular distância, filtra pelo raio (times sem coordenada ficam de fora do filtro por raio, mas aparecem com aviso)
+        if (temCoordenadas) {
+          times = times.filter(t => t._dist == null || t._dist <= raioAtual);
+          times.sort((a, b) => (a._dist ?? 99999) - (b._dist ?? 99999));
         }
         return (
           <Card style={{ padding: "20px 24px", marginTop: 16 }}>
             <div style={{ fontSize: 13, color: C.gold, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 4 }}>
               🤝 Times disponíveis nesta data
             </div>
-            <div style={{ fontSize: 12, color: C.dim, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: C.dim, marginBottom: 12 }}>
               Outros times do mesmo tipo que também têm {fmtData(partida.data)} livre. Entre em contato para combinar o jogo.
             </div>
+            {!temCoordenadas && (
+              <div style={{ fontSize: 12, color: C.gold, background: C.gold + "18", border: `1px solid ${C.gold}55`, borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>
+                ⚠️ Defina a Cidade Sede do seu time (em Meu Time) para filtrar adversários por distância. Mostrando todos por enquanto.
+              </div>
+            )}
+            {temCoordenadas && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12, color: C.dim }}>Raio de busca:</span>
+                <input type="number" min="1" step="5" value={raioAtual} onChange={e => setRaioKm(Number(e.target.value) || 1)}
+                  style={{ width: 80, background: C.surf2, border: `1px solid ${C.border}`, borderRadius: 8, color: C.cream, fontFamily: "inherit", fontSize: 13, padding: "6px 10px", outline: "none" }} />
+                <span style={{ fontSize: 12, color: C.dim }}>km a partir de {minhaCidade.nome}</span>
+              </div>
+            )}
             {loadingDisp ? <Spinner /> : times.length === 0 ? (
-              <div style={{ color: C.dim, fontSize: 13 }}>Nenhum time disponível nesta data por enquanto. Volte a consultar mais perto da data.</div>
+              <div style={{ color: C.dim, fontSize: 13 }}>{temCoordenadas ? `Nenhum time disponível nesta data dentro de ${raioAtual} km. Tente aumentar o raio.` : "Nenhum time disponível nesta data por enquanto."}</div>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 12 }}>
                 {times.map(t => (
@@ -1576,7 +1643,9 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
                       : <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.surf2, border: `2px solid ${C.gold}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px", fontSize: 22 }}>⚽</div>
                     }
                     <div style={{ fontSize: 15, fontWeight: 800, textTransform: "uppercase", marginBottom: 6 }}>{t.nome}</div>
+                    {t._dist != null && <div style={{ fontSize: 12, color: C.gold, fontWeight: 700, marginBottom: 4 }}>📏 ~{t._dist} km</div>}
                     {t.cidade && <div style={{ fontSize: 12, color: C.dim, marginBottom: 3 }}>📍 <span style={{ color: C.cream }}>{t.cidade.nome}{t.cidade.estado ? ` — ${t.cidade.estado}` : ""}</span></div>}
+                    {t.campo && <div style={{ fontSize: 12, color: C.dim, marginBottom: 3 }}>🏟️ <span style={{ color: C.cream }}>{t.campo.nome}</span></div>}
                     {t.marca_jogos && <div style={{ fontSize: 12, color: C.dim, marginBottom: 3 }}>📋 <span style={{ color: C.cream }}>{t.marca_jogos}</span></div>}
                     {t.telefone && <div style={{ fontSize: 13, color: C.dim, marginBottom: 2 }}>📞 <span style={{ color: C.cream, fontWeight: 700 }}>{t.telefone}</span></div>}
                     {t.resp_redes_sociais && <div style={{ fontSize: 12, color: C.dim }}>📱 <span style={{ color: C.cream }}>{t.resp_redes_sociais}</span></div>}
@@ -2551,7 +2620,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.9.0" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.12.0" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -3572,7 +3641,7 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
                 <td style={{ padding:"11px 14px", fontWeight:800, color:C.gold, whiteSpace:"nowrap" }}>{j.camisa}</td>
                 <td style={{ padding:"11px 14px", fontWeight:700, whiteSpace:"nowrap" }}>{j.nome}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.apelido || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.posicao?.nome ? (j.posicao.posicao_pai?.nome ? `${j.posicao.posicao_pai.nome} › ${j.posicao.nome}` : j.posicao.nome) : "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.posicao?.nome ? (j.posicao.id_posicao_pai && mapaPosJog[j.posicao.id_posicao_pai] ? `${mapaPosJog[j.posicao.id_posicao_pai]} › ${j.posicao.nome}` : j.posicao.nome) : "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.telefone || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.email || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_inicio ? new Date(j.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
@@ -3598,9 +3667,14 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
 function CrudJogadores({ idTime, show, readOnly }) {
   const _idTimeJ = idTime; // recebido por prop (filtrado pelo usuário logado)
   const { data: jogadores, loading, reload } = useQuery(() => 
-    _idTimeJ ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${_idTimeJ}&select=*,posicao(nome,ordem,posicao_pai:posicao!id_posicao_pai(nome))&order=camisa.asc`) : Promise.resolve([]),
+    _idTimeJ ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${_idTimeJ}&select=*,posicao(nome,ordem,id_posicao_pai)&order=camisa.asc`) : Promise.resolve([]),
     [_idTimeJ]
   );
+  // Todas as posições (para resolver nome do grupo pai no front) e só as filhas (para o select)
+  const { data: todasPosicoes } = useQuery(() => api.get(`posicao?select=id_posicao,nome&order=nome.asc`));
+  const mapaPosJog = React.useMemo(() => {
+    const m = {}; (todasPosicoes||[]).forEach(p => { m[p.id_posicao] = p.nome; }); return m;
+  }, [todasPosicoes]);
   const { data: posicoes } = useQuery(() => api.get(`posicao?id_posicao_pai=not.is.null&select=*&order=nome.asc`));
   const posicoesLista = posicoes || [];
   const [modal, setModal] = useState(null);
@@ -4140,8 +4214,14 @@ function CrudCidades({ idTime, show, readOnly }) {
 // ── CRUD POSIÇÕES ─────────────────────────────────────────────
 function CrudPosicoes({ idTime, show, readOnly }) {
   const { data: posicoes, loading, reload } = useQuery(() =>
-    api.get(`posicao?select=*,posicao_pai:posicao!id_posicao_pai(nome)&order=ordem.asc,nome.asc`)
+    api.get(`posicao?select=*&order=ordem.asc,nome.asc`)
   );
+  // Mapa id_posicao → nome, para resolver o grupo pai no front (evita self-join frágil do PostgREST)
+  const mapaPosicoes = React.useMemo(() => {
+    const m = {};
+    (posicoes||[]).forEach(p => { m[p.id_posicao] = p.nome; });
+    return m;
+  }, [posicoes]);
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
@@ -4234,7 +4314,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
                   <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
                   <ThSortable colKey="descricao" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Descrição</ThSortable>
                   <ThSortable colKey="ordem" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Ordem</ThSortable>
-                  <ThSortable colKey="posicao_pai.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Grupo pai</ThSortable>
+                  <th style={{ padding:"12px 14px", textAlign:"left", fontSize:11, textTransform:"uppercase", letterSpacing:"0.08em", color:C.dim, fontWeight:700, whiteSpace:"nowrap" }}>Grupo pai</th>
                   <ThSortable colKey="data_fim" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Inativo em</ThSortable>
                   <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
                 </tr></thead>
@@ -4244,7 +4324,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
                       <td style={{ padding:"11px 14px", fontWeight:700 }}>{p.nome}</td>
                       <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{p.descricao || "—"}</td>
                       <td style={{ padding:"11px 14px", color:C.dim, textAlign:"center" }}>{p.ordem ?? "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{p.posicao_pai?.nome || "—"}</td>
+                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{mapaPosicoes[p.id_posicao_pai] || "—"}</td>
                       <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{p.data_fim ? new Date(p.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
                       <td style={{ padding:"11px 14px", display:"flex", gap:8 }}>
                         {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(p)}>Editar</Btn>}
@@ -4538,7 +4618,8 @@ function CrudTemporadas({ idTime, show, readOnly }) {
 function ConfigTime({ idTime, show, readOnly }) {
   const { data: times, loading, reload } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=*,campo(nome)&limit=1`) : Promise.resolve([]), [idTime]);
   const { data: campos  } = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
-  const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
+  const [ufSede, setUfSede] = useState("RS");
+  const { data: cidades } = useQuery(() => ufSede ? api.get(`cidade?estado=eq.${ufSede}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufSede]);
   const { data: tipos   } = useQuery(() => api.get(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
   const [form, setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
@@ -4548,6 +4629,12 @@ function ConfigTime({ idTime, show, readOnly }) {
     if (times?.[0] && !form) {
       const t = times[0];
       setForm({ ...t, id_campo: t.id_campo ? String(t.id_campo) : "", id_cidade_sede: t.id_cidade_sede ? String(t.id_cidade_sede) : "", id_tipo_time: t.id_tipo_time ? String(t.id_tipo_time) : "", data_fundacao: t.data_fundacao ? t.data_fundacao.split("T")[0] : "" });
+      // Descobre a UF da cidade-sede atual para pré-selecionar o dropdown de estado
+      if (t.id_cidade_sede) {
+        api.get(`cidade?id_cidade=eq.${t.id_cidade_sede}&select=estado&limit=1`)
+          .then(d => { if (d?.[0]?.estado) setUfSede(d[0].estado); })
+          .catch(() => {});
+      }
     }
   }, [times]);
 
@@ -4584,6 +4671,7 @@ function ConfigTime({ idTime, show, readOnly }) {
         vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null,
         vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null,
         resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null,
+        raio_busca_km: form.raio_busca_km ? Number(form.raio_busca_km) : 50,
         observacoes: form.observacoes||null, publico: form.publico !== false
       };
       await api.patch(`time?id_time=eq.${form.id_time}`, body);
@@ -4606,15 +4694,19 @@ function ConfigTime({ idTime, show, readOnly }) {
             <Input label="Nome do Time *" value={form.nome||""} onChange={e => set("nome", e.target.value)}/>
             <Input label="Telefone" value={form.telefone||""} onChange={e => set("telefone", e.target.value)}/>
             <Input label="Data de Fundação" type="date" value={form.data_fundacao||""} onChange={e => set("data_fundacao", e.target.value)}/>
+            <Select label="Estado (UF)" value={ufSede} onChange={e => { setUfSede(e.target.value); set("id_cidade_sede", ""); }}>
+              {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+            </Select>
             <Select label="Cidade Sede" value={form.id_cidade_sede||""} onChange={e => set("id_cidade_sede", e.target.value)}>
-              <option value="">Selecione...</option>
-              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}{c.estado ? ` — ${c.estado}` : ""}</option>)}
+              <option value="">{cidades === null ? "Carregando..." : "Selecione..."}</option>
+              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
             </Select>
             <Select label="Campo Principal" value={form.id_campo||""} onChange={e => set("id_campo", e.target.value)}>
               <option value="">Selecione...</option>
               {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
             </Select>
             <Input label="Valor Mensalidade (R$)" type="number" min="0" step="0.01" value={form.valor_mensalidade||""} onChange={e => set("valor_mensalidade", e.target.value)}/>
+            <Input label="Raio de busca de adversários (km)" type="number" min="1" step="1" value={form.raio_busca_km ?? 50} onChange={e => set("raio_busca_km", e.target.value)}/>
             <Input label="Saldo Inicial do Caixa (R$)" type="number" step="0.01" value={form.saldo_inicial||""} onChange={e => set("saldo_inicial", e.target.value)}/>
           </div>
         </div>

@@ -756,12 +756,21 @@ function CrudSolicitacoes({ show }) {
   async function aprovar() {
     setSaving(true);
     try {
+      // 0. Buscar o raio padrão geral do sistema (semente para o novo time)
+      let raioPadrao = 50;
+      try {
+        const cfg = await api.get(`config_sistema?chave=eq.raio_busca_padrao_km&select=valor&limit=1`);
+        if (cfg?.[0]?.valor) raioPadrao = parseInt(cfg[0].valor) || 50;
+      } catch {}
+
       // 1. Criar time
       const timeRes = await api.post(`time`, {
         nome: modalSol.nome_time,
         id_tipo_time: modalSol.id_tipo_time || null,
         data_fundacao: modalSol.data_fundacao || null,
         telefone: modalSol.telefone || null,
+        id_cidade_sede: modalSol.id_cidade || null,
+        raio_busca_km: raioPadrao,
         publico: false,
       });
 
@@ -1011,6 +1020,7 @@ function ConfigSistema({ show }) {
   );
   const [saving, setSaving] = useState(null);
   const [niveis, setNiveis] = useState({});
+  const [raioPadrao, setRaioPadrao] = useState("");
 
   // Sincronizar valores de níveis para edição local
   useEffect(() => {
@@ -1020,8 +1030,21 @@ function ConfigSistema({ show }) {
         n[c.chave] = c.valor;
       });
       setNiveis(n);
+      const r = configs.find(c => c.chave === "raio_busca_padrao_km");
+      if (r) setRaioPadrao(r.valor);
     }
   }, [configs]);
+
+  async function salvarRaioPadrao() {
+    setSaving("raio_busca_padrao_km");
+    try {
+      await api.patch(`config_sistema?chave=eq.raio_busca_padrao_km`, {
+        valor: String(parseInt(raioPadrao) || 50), atualizado_em: new Date().toISOString(),
+      });
+      show("Raio padrão salvo!"); reload();
+    } catch(e) { show("Erro: " + e.message, "error"); }
+    finally { setSaving(null); }
+  }
 
   async function toggle(cfg) {
     setSaving(cfg.chave);
@@ -1128,13 +1151,36 @@ function ConfigSistema({ show }) {
           );
         })}
       </Card>
+
+      {/* Raio de busca padrão */}
+      <Card style={{ padding:24, maxWidth:600 }}>
+        <div style={{ fontSize:15, fontWeight:700, color:C.cream, marginBottom:8,
+          borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>
+          📏 Raio de Busca de Adversários
+        </div>
+        <div style={{ fontSize:12, color:C.dim, marginBottom:16, paddingLeft:10 }}>
+          Raio padrão (km) com que novos times nascem. Cada time pode ajustar o seu depois, em Meu Time.
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0" }}>
+          <div style={{ width:90, fontSize:13, fontWeight:700, color:C.cream }}>Padrão</div>
+          <div style={{ display:"flex", alignItems:"center", gap:6, flex:1 }}>
+            <input type="number" min="1" step="1"
+              value={raioPadrao}
+              onChange={e => setRaioPadrao(e.target.value)}
+              style={{ width:120, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8,
+                color:C.cream, fontFamily:"inherit", fontSize:14, padding:"8px 12px", outline:"none" }}/>
+            <span style={{ fontSize:13, color:C.dim }}>km</span>
+          </div>
+          <Btn variant="secondary" style={{ fontSize:11, padding:"6px 14px" }}
+            disabled={saving === "raio_busca_padrao_km"}
+            onClick={salvarRaioPadrao}>
+            {saving === "raio_busca_padrao_km" ? "..." : "Salvar"}
+          </Btn>
+        </div>
+      </Card>
     </div>
   );
 }
-
-// ══════════════════════════════════════════════════════════════
-// MODAL EDITAR NÍVEL DE MENSALIDADE DO TIME
-// ══════════════════════════════════════════════════════════════
 function ModalNivelMensalidade({ time, onClose, onSalvo, show }) {
   const { data: niveis } = useQuery(() =>
     api.get(`config_sistema?chave=like.mensalidade_nivel_*&select=*`)
@@ -1636,7 +1682,7 @@ function AjudaSuper() {
           Guia completo de gestão do sistema: times, mensalidades, solicitações,
           tipos, configurações, permissões e os fluxos do dia a dia.
         </div>
-        <a href="/manual-super.pdf?v=1.9.0" target="_blank" rel="noopener noreferrer"
+        <a href="/manual-super.pdf?v=1.12.0" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -1800,7 +1846,7 @@ function CrudTipoTime({ show }) {
 
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.9.6";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.1";
 
   if (!session) return <LoginSuper onLogin={setSession}/>;
 
