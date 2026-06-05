@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.9.0";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.5";
+const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+// Distância em km entre dois pontos (lat/long) — fórmula de Haversine
+function distanciaKm(lat1, lon1, lat2, lon2) {
+  if ([lat1, lon1, lat2, lon2].some(v => v == null || isNaN(Number(v)))) return null;
+  const R = 6371; // raio da Terra em km
+  const rad = (g) => (Number(g) * Math.PI) / 180;
+  const dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon/2)**2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+}
 
 // ── Supabase ──────────────────────────────────────────────────
 const URL  = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
@@ -244,7 +254,7 @@ function VisaoGeral({ temporada }) {
           <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginBottom:14, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Último Jogo</div>
           {ultima ? (<>
             <div style={{ fontSize:13, color:C.dim, marginBottom:4 }}>{fmtDataA(ultima.data)} · {ultima.em_casa==="S"?"Em Casa":"Fora"}</div>
-            <div style={{ fontSize:20, fontWeight:700, marginBottom:8 }}>{ultima.adversario?.nome}</div>
+            <div style={{ fontSize:20, fontWeight:700, marginBottom:8 }}>{ultima.adversario?.nome || "A definir"}</div>
             <div style={{ display:"flex", alignItems:"center", gap:12 }}>
               <span style={{ fontSize:32, fontWeight:800, color:C.gold }}>{ultima.gols_marcados} × {ultima.gols_sofridos}</span>
               <BadgeA {...resultadoA(ultima)}/>
@@ -298,7 +308,7 @@ function FichaPartidaPublica({ partida, onVoltar }) {
         <div style={{ fontSize:12, color:C.dim, marginBottom:4 }}>
           {fmtDataA(partida.data)} · {fmtHoraA(partida.data)} · {partida.em_casa==="S"?"🏠 Em Casa":"✈️ Fora"}
         </div>
-        <div style={{ fontSize:24, fontWeight:800, textTransform:"uppercase", marginBottom:12 }}>{partida.adversario?.nome}</div>
+        <div style={{ fontSize:24, fontWeight:800, textTransform:"uppercase", marginBottom:12 }}>{partida.adversario?.nome || "🔍 Procurando adversário"}</div>
         <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:8 }}>
           <span style={{ fontSize:42, fontWeight:800, color:C.gold }}>{partida.gols_marcados} × {partida.gols_sofridos}</span>
           <BadgeA {...res}/>
@@ -412,15 +422,17 @@ function Calendario({ temporada }) {
             <tbody>
               {lista.map((p,i) => {
                 const res = resultadoA(p);
+                const procurando = !p.id_adversario && p.cancelada !== "S";
+                const bgBase = procurando ? "rgba(232,160,32,0.12)" : (i%2===0?C.surface:C.bg);
                 return (
                   <tr key={p.id_partida}
                     onClick={() => { if (p.gols_marcados !== null && p.cancelada !== "S") setPartidaSel(p); }}
-                    style={{ background:i%2===0?C.surface:C.bg, cursor: p.gols_marcados !== null && p.cancelada !== "S" ? "pointer" : "default" }}
+                    style={{ background:bgBase, cursor: p.gols_marcados !== null && p.cancelada !== "S" ? "pointer" : "default", borderLeft: procurando ? `3px solid ${C.gold}` : "3px solid transparent" }}
                     onMouseEnter={e=>{ e.currentTarget.style.background=C.surf2; }}
-                    onMouseLeave={e=>e.currentTarget.style.background=i%2===0?C.surface:C.bg}>
+                    onMouseLeave={e=>e.currentTarget.style.background=bgBase}>
                     <td style={{ padding:"12px 14px", fontWeight:600, whiteSpace:"nowrap" }}>{fmtDataA(p.data)}</td>
                     <td style={{ padding:"12px 14px", color:C.dim }}>{fmtHoraA(p.data)}</td>
-                    <td style={{ padding:"12px 14px", fontWeight:700 }}>{p.adversario?.nome||"A definir"}</td>
+                    <td style={{ padding:"12px 14px", fontWeight:700, color: procurando ? C.gold : C.cream }}>{procurando ? "🔍 Procurando adversário" : (p.adversario?.nome||"A definir")}</td>
                     <td style={{ padding:"12px 14px" }}>
                       <span style={{ padding:"2px 8px", borderRadius:4, fontSize:12, fontWeight:700, background:p.em_casa==="S"?C.gold+"22":C.surf2, color:p.em_casa==="S"?C.gold:C.dim }}>
                         {p.em_casa==="S"?"🏠 Casa":"✈️ Fora"}
@@ -445,12 +457,17 @@ function Calendario({ temporada }) {
 
 function Elenco({ time, temporada }) {
   const { data: jogadores, loading } = useQuery(
-    () => sb(`jogador?id_jogador=gt.0&id_time=eq.${time.id_time}&select=*,posicao(nome)&order=camisa.asc`),
+    () => sb(`jogador?id_jogador=gt.0&id_time=eq.${time.id_time}&select=*,posicao(nome,ordem)&order=camisa.asc`),
     [time.id_time]
   );
   if (loading) return <Spinner />;
   const ativos = (jogadores||[]).filter(j => !j.data_fim);
-  const grupos = [...new Set(ativos.map(j => j.posicao?.nome).filter(Boolean))];
+  const grupos = [...new Set(ativos.map(j => j.posicao?.nome).filter(Boolean))]
+    .sort((a, b) => {
+      const ordemA = ativos.find(j => j.posicao?.nome === a)?.posicao?.ordem ?? 999;
+      const ordemB = ativos.find(j => j.posicao?.nome === b)?.posicao?.ordem ?? 999;
+      return ordemA - ordemB;
+    });
   const uniformes = [
     { url: temporada?.uniforme_1_url, label:"Uniforme 1" },
     { url: temporada?.uniforme_2_url, label:"Uniforme 2" },
@@ -499,7 +516,12 @@ function Elenco({ time, temporada }) {
         </div>
       </Card>
       {grupos.map(grupo => {
-        const jogs = ativos.filter(j => j.posicao?.nome === grupo);
+        const jogs = ativos.filter(j => j.posicao?.nome === grupo)
+          .sort((a, b) => {
+            const na = Number(a.camisa), nb = Number(b.camisa);
+            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+            return String(a.camisa||"").localeCompare(String(b.camisa||""));
+          });
         return (
           <div key={grupo}>
             <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>{grupo}</div>
@@ -603,7 +625,7 @@ function Gols({ temporada }) {
           <option value="todos">Todos os jogos ({(gols||[]).length} gols)</option>
           {(partidas||[]).map(p => {
             const qtd = (gols||[]).filter(g=>g.id_partida===p.id_partida).length;
-            return <option key={p.id_partida} value={p.id_partida}>{fmtDataA(p.data)} — {p.adversario?.nome} ({qtd} gol{qtd!==1?"s":""})</option>;
+            return <option key={p.id_partida} value={p.id_partida}>{fmtDataA(p.data)} — {p.adversario?.nome || "A definir"} ({qtd} gol{qtd!==1?"s":""})</option>;
           })}
         </select>
       </div>
@@ -840,8 +862,21 @@ function sortData(dados, sortKey, asc) {
       for (const p of parts) v = v?.[p];
       return v ?? "";
     }
-    const va = String(getVal(a, sortKey)).toLowerCase();
-    const vb = String(getVal(b, sortKey)).toLowerCase();
+    const rawA = getVal(a, sortKey);
+    const rawB = getVal(b, sortKey);
+    // Comparação numérica quando ambos são números (ex: camisa, ordem)
+    const numA = Number(rawA), numB = Number(rawB);
+    const ambosNum = rawA !== "" && rawB !== "" && !isNaN(numA) && !isNaN(numB);
+    if (ambosNum) {
+      if (numA < numB) return asc ? -1 : 1;
+      if (numA > numB) return asc ? 1 : -1;
+      return 0;
+    }
+    // Vazios sempre por último
+    if (rawA === "" && rawB !== "") return 1;
+    if (rawA !== "" && rawB === "") return -1;
+    const va = String(rawA).toLowerCase();
+    const vb = String(rawB).toLowerCase();
     if (va < vb) return asc ? -1 : 1;
     if (va > vb) return asc ? 1 : -1;
     return 0;
@@ -1058,11 +1093,11 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
         const gs = row["gols_sofridos"] !== "" ? Number(row["gols_sofridos"]) : null;
         const body = {
           id_temporada: temporada.id_temporada,
-          id_adversario: adv.id_adversario,
+          id_adversario: adv?.id_adversario || null,
           data: dataISO,
           em_casa: String(row.em_casa||"NAO").toUpperCase()==="SIM"?"S":"N",
           cancelada: String(row.cancelada||"NAO").toUpperCase()==="SIM"?"S":"N",
-          id_campo: campo?.id_campo || adv.id_campo || null,
+          id_campo: campo?.id_campo || adv?.id_campo || null,
           gols_marcados: gm,
           gols_sofridos: gs,
           observacoes: row.observacoes||null,
@@ -1102,7 +1137,7 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
               })),
               [
                 { key:"id_partida",    label:"id",            width:8,  descricao:"NÃO altere. Vazio = nova partida." },
-                { key:"adversario",    label:"adversario",    width:25, descricao:"Nome exato do adversário cadastrado. OBRIGATÓRIO." },
+                { key:"adversario",    label:"adversario",    width:25, descricao:"Nome exato do adversário cadastrado. Deixe vazio se ainda está procurando." },
                 { key:"data",          label:"data",          width:14, descricao:"Data no formato DD/MM/AAAA. OBRIGATÓRIO." },
                 { key:"hora",          label:"hora",          width:8,  descricao:"Hora no formato HH:MM. OBRIGATÓRIO." },
                 { key:"em_casa",       label:"em_casa",       width:8,  descricao:"SIM ou NAO." },
@@ -1113,7 +1148,7 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
                 { key:"observacoes",   label:"observacoes",   width:40, descricao:"Observações da partida." },
               ],
               "partidas",
-              ["- id preenchido = atualiza partida existente", "- id vazio = cria nova partida", "- Adversário e Campo devem estar cadastrados", "- Data: DD/MM/AAAA | Hora: HH:MM"]
+              ["- id preenchido = atualiza partida existente", "- id vazio = cria nova partida", "- Campo deve estar cadastrado; Adversário é opcional (vazio = procurando jogo)", "- Data: DD/MM/AAAA | Hora: HH:MM"]
             )}
             onImportar={async (file) => {
               setLoadingImportPartida(true);
@@ -1123,9 +1158,11 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
                 rows.forEach((row, i) => {
                   const linha = i + 2;
                   const advNome = String(row["adversario"]||"").trim();
-                  if (!advNome) { erros.push({ linha, mensagem: "Campo 'adversario' é obrigatório." }); return; }
-                  const advOk = (adversarios||[]).find(a => a.nome.toUpperCase() === advNome.toUpperCase());
-                  if (!advOk) { erros.push({ linha, mensagem: `Adversário '${advNome}' não encontrado.` }); return; }
+                  let advOk = null;
+                  if (advNome) {
+                    advOk = (adversarios||[]).find(a => a.nome.toUpperCase() === advNome.toUpperCase());
+                    if (!advOk) { erros.push({ linha, mensagem: `Adversário '${advNome}' não encontrado.` }); return; }
+                  }
                   if (!String(row["data"]||"").trim()) { erros.push({ linha, mensagem: "Campo 'data' é obrigatório." }); return; }
                   if (!String(row["hora"]||"").trim()) { erros.push({ linha, mensagem: "Campo 'hora' é obrigatório." }); return; }
                   const gm = row["gols_marcados"] !== "" ? Number(row["gols_marcados"]) : null;
@@ -1148,19 +1185,20 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
         {lista.map(p => {
           const res = resultado(p);
           const pendente = p.gols_marcados === null && p.cancelada !== "S";
+          const procurando = !p.id_adversario && p.cancelada !== "S";
           return (
             <div key={p.id_partida}
               onClick={() => { onSelect(p); }}
-              style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "background 0.15s", background: C.surface, borderRadius: 12, border: `1px solid ${C.border}` }}
-              onMouseEnter={e => e.currentTarget.style.background = C.surf2}
-              onMouseLeave={e => e.currentTarget.style.background = C.surface}>
+              style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "background 0.15s", background: procurando ? "rgba(232,160,32,0.10)" : C.surface, borderRadius: 12, border: procurando ? `1px solid ${C.gold}` : `1px solid ${C.border}` }}
+              onMouseEnter={e => e.currentTarget.style.background = procurando ? "rgba(232,160,32,0.16)" : C.surf2}
+              onMouseLeave={e => e.currentTarget.style.background = procurando ? "rgba(232,160,32,0.10)" : C.surface}>
               <div style={{ minWidth: 80 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: pendente ? C.gold : C.cream }}>{fmtData(p.data)}</div>
                 <div style={{ fontSize: 12, color: C.dim }}>{fmtHora(p.data)}</div>
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{p.adversario?.nome || "A definir"}</div>
-                <div style={{ fontSize: 12, color: C.dim }}>{p.em_casa === "S" ? "🏠 Casa" : "✈️ Fora"} · {p.campo?.nome}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: procurando ? C.gold : C.cream }}>{procurando ? "🔍 Procurando adversário" : (p.adversario?.nome || "A definir")}</div>
+                <div style={{ fontSize: 12, color: C.dim }}>{p.em_casa === "S" ? "🏠 Casa" : "✈️ Fora"}{p.campo?.nome ? ` · ${p.campo.nome}` : ""}</div>
               </div>
               <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
                 {p.gols_marcados !== null
@@ -1206,20 +1244,27 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
   }, [form.em_casa, form.id_adversario, time, adversarios]);
 
   async function salvar() {
-    if (!form.data || !form.id_adversario || !form.id_campo) { show("Preencha todos os campos obrigatórios.", "error"); return; }
+    if (!form.data || !form.id_campo) { show("Preencha a data e o campo.", "error"); return; }
+    // Validar que a data está dentro do intervalo da temporada
+    if (temporada?.data_inicio && form.data < temporada.data_inicio.split("T")[0]) {
+      show(`A data não pode ser anterior ao início da temporada (${temporada.data_inicio.split("T")[0].split("-").reverse().join("/")}).`, "error"); return;
+    }
+    if (temporada?.data_fim && form.data > temporada.data_fim.split("T")[0]) {
+      show(`A data não pode ser posterior ao fim da temporada (${temporada.data_fim.split("T")[0].split("-").reverse().join("/")}).`, "error"); return;
+    }
     setSaving(true);
     try {
       const dataTs = new Date(`${form.data}T${form.horario}:00`).toISOString();
       await api.post("partida", {
         id_temporada: temporada.id_temporada,
-        id_adversario: Number(form.id_adversario),
+        id_adversario: form.id_adversario ? Number(form.id_adversario) : null,
         data: dataTs,
         em_casa: form.em_casa,
         id_campo: Number(form.id_campo),
         observacoes: form.observacoes,
         cancelada: "N",
       });
-      show("Partida criada!");
+      show(form.id_adversario ? "Partida criada!" : "Partida criada (procurando adversário)!");
       setTimeout(onSalvo, 800);
     } catch (e) { show(e.message, "error"); }
     finally { setSaving(false); }
@@ -1234,8 +1279,8 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
         <Input label="Data *" type="date" value={form.data} onChange={e => set("data", e.target.value)} />
         <Input label="Horário *" type="time" value={form.horario} onChange={e => set("horario", e.target.value)} />
       </div>
-      <Select label="Adversário *" value={form.id_adversario} onChange={e => set("id_adversario", e.target.value)}>
-        <option value="">Selecione...</option>
+      <Select label="Adversário (deixe em branco se ainda está procurando)" value={form.id_adversario} onChange={e => set("id_adversario", e.target.value)}>
+        <option value="">🔍 Procurando adversário</option>
         {(adversarios || []).map(a => <option key={a.id_adversario} value={a.id_adversario}>{a.nome}</option>)}
       </Select>
       <Select label="Local" value={form.em_casa} onChange={e => set("em_casa", e.target.value)}>
@@ -1262,6 +1307,28 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
 
   const { data: jogadores }     = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=*,posicao(nome)&order=camisa.asc`) : Promise.resolve([]), [idTime]);
   const { data: posicoes }      = useQuery(() => api.get(`posicao?select=*&order=ordem.asc`));
+  const { data: advsFicha } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
+  // Meu time: tipo, raio padrão e coordenadas da cidade-sede — usado na busca por raio
+  const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,id_tipo_time,raio_busca_km,cidade:id_cidade_sede(nome,estado,latitude,longitude)&limit=1`) : Promise.resolve([]), [idTime]);
+  const meuTime = meuTimeData?.[0];
+  const meuTipoTime = meuTime?.id_tipo_time;
+  const minhaCidade = meuTime?.cidade; // {nome, estado, latitude, longitude}
+  // Raio ajustável na tela (inicia com o padrão do time; ajuste é temporário, não salva)
+  const [raioKm, setRaioKm] = useState(null);
+  useEffect(() => { if (meuTime?.raio_busca_km != null && raioKm === null) setRaioKm(meuTime.raio_busca_km); }, [meuTime]);
+  // A partida está "procurando" se não tem adversário definido (usa estado atual, não o inicial)
+  const semAdversario = !(partida.id_adversario);
+  // Buscar times disponíveis na mesma data (partida em branco, público, mesmo tipo)
+  const dataPartida = partida.data ? partida.data.split("T")[0] : null;
+  const { data: disponiveis, loading: loadingDisp } = useQuery(
+    () => (semAdversario && dataPartida)
+      ? api.get(`partida?id_adversario=is.null&cancelada=eq.N&data=gte.${dataPartida}T00:00:00&data=lte.${dataPartida}T23:59:59&select=id_partida,data,temporada(id_time,time(id_time,nome,escudo_url,telefone,resp_redes_sociais,marca_jogos,data_fundacao,publico,id_tipo_time,cidade:id_cidade_sede(nome,estado,latitude,longitude),campo:id_campo(nome)))`)
+      : Promise.resolve([]),
+    [semAdversario, dataPartida]
+  );
+  const [modalAdv, setModalAdv] = useState(false);
+  const [advSel, setAdvSel] = useState("");
+  const [savingAdv, setSavingAdv] = useState(false);
   const { data: participacoes, reload: reloadPart } = useQuery(
     () => api.get(`participacao?id_partida=eq.${partida.id_partida}&id_jogador=gt.0&select=*,jogador(nome,apelido,camisa),posicao(nome)&order=camisa.asc`),
     [partida.id_partida]
@@ -1306,6 +1373,44 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
       setPartida(u => ({ ...u, cancelada: "S" }));
       show("Partida cancelada.");
     } catch (e) { show(e.message, "error"); }
+  }
+
+  async function definirAdversario() {
+    const novoId = advSel ? Number(advSel) : null;
+    const temPlacar = (partida.gols_marcados !== null && partida.gols_marcados !== undefined);
+    // Ao remover adversário de partida com placar/gols, avisar que tudo será apagado
+    if (!novoId && temPlacar) {
+      if (!confirm("Esta partida já tem placar e gols lançados. Ao remover o adversário, o resultado, os gols e a escalação desta partida serão APAGADOS. Deseja continuar?")) return;
+    }
+    setSavingAdv(true);
+    try {
+      if (novoId) {
+        // Definir/trocar adversário (não mexe em placar/escalação)
+        await api.patch(`partida?id_partida=eq.${partida.id_partida}`, { id_adversario: novoId });
+        const adv = (advsFicha || []).find(a => String(a.id_adversario) === String(advSel));
+        setPartida(u => ({ ...u, id_adversario: novoId, adversario: adv ? { nome: adv.nome } : u.adversario }));
+        show("Adversário definido!");
+      } else {
+        // Remover adversário: apaga gols + participações + zera placar e remove o campo
+        const parts = await api.get(`participacao?id_partida=eq.${partida.id_partida}&select=id_participacao`);
+        const ids = (parts || []).map(p => p.id_participacao);
+        if (ids.length) {
+          // 1) deletar gols dessas participações
+          await api.delete(`gol?id_participacao=in.(${ids.join(",")})`);
+          // 2) deletar as participações
+          await api.delete(`participacao?id_partida=eq.${partida.id_partida}`);
+        }
+        // 3) zerar adversário, placar e campo da partida
+        await api.patch(`partida?id_partida=eq.${partida.id_partida}`, {
+          id_adversario: null, id_campo: null, gols_marcados: null, gols_sofridos: null,
+        });
+        setPartida(u => ({ ...u, id_adversario: null, adversario: null, id_campo: null, gols_marcados: null, gols_sofridos: null }));
+        setPlacar({ gols_marcados: "", gols_sofridos: "" });
+        show("Adversário removido — partida procurando jogo.");
+      }
+      setModalAdv(false); setAdvSel("");
+    } catch (e) { show(e.message, "error"); }
+    finally { setSavingAdv(false); }
   }
 
   async function removerGol(id_gol) {
@@ -1361,8 +1466,18 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div>
             <div style={{ fontSize: 12, color: C.dim, marginBottom: 4 }}>{fmtData(partida.data)} · {fmtHora(partida.data)} · {partida.em_casa === "S" ? "🏠 Em Casa" : "✈️ Fora"}</div>
-            <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 6 }}>{partida.adversario?.nome || p0.adversario?.nome}</div>
-            <div style={{ fontSize: 13, color: C.dim }}>🏟️ {partida.campo?.nome || p0.campo?.nome}</div>
+            {partida.id_adversario ? (
+              <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {partida.adversario?.nome || "Adversário"}
+                {!readOnly && <button onClick={() => { setAdvSel(String(partida.id_adversario || "")); setModalAdv(true); }} title="Trocar ou remover adversário" style={{ background: "none", border: `1px solid ${C.border}`, color: C.dim, borderRadius: 6, padding: "2px 8px", fontFamily: "inherit", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>✏️ alterar</button>}
+              </div>
+            ) : (
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>🔍 Procurando adversário</div>
+                {!readOnly && <button onClick={() => { setAdvSel(""); setModalAdv(true); }} style={{ marginTop: 6, background: "none", border: `1px solid ${C.gold}`, color: C.gold, borderRadius: 8, padding: "4px 12px", fontFamily: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Definir adversário</button>}
+              </div>
+            )}
+            <div style={{ fontSize: 13, color: C.dim }}>🏟️ {partida.campo?.nome || (partida.id_campo ? p0.campo?.nome : "")}</div>
             {partida.observacoes && <div style={{ fontSize: 13, color: C.dim, marginTop: 4 }}>📝 {partida.observacoes}</div>}
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
@@ -1473,6 +1588,85 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
         </Card>
       )}
 
+      {/* Times disponíveis nesta data (só quando a partida está procurando adversário) */}
+      {semAdversario && partida.cancelada !== "S" && (() => {
+        // Sei calcular distância? (meu time precisa ter cidade-sede com coordenadas)
+        const temCoordenadas = !!(minhaCidade?.latitude != null && minhaCidade?.longitude != null);
+        const raioAtual = raioKm ?? 50;
+        // Filtra: público, mesmo tipo, não o próprio time; dedupe; calcula distância
+        const vistos = new Set();
+        let times = [];
+        for (const pt of (disponiveis || [])) {
+          const t = pt.temporada?.time;
+          if (!t) continue;
+          if (t.id_time === idTime) continue;
+          if (t.publico === false) continue;
+          if (meuTipoTime && t.id_tipo_time !== meuTipoTime) continue;
+          if (vistos.has(t.id_time)) continue;
+          vistos.add(t.id_time);
+          const dist = temCoordenadas ? distanciaKm(minhaCidade.latitude, minhaCidade.longitude, t.cidade?.latitude, t.cidade?.longitude) : null;
+          times.push({ ...t, _dist: dist });
+        }
+        // Se sei calcular distância, filtra pelo raio. Times sem coordenada calculável
+        // (sem cidade-sede definida) são ocultados, pois não dá para saber se estão no raio.
+        let semLocalizacao = 0;
+        if (temCoordenadas) {
+          semLocalizacao = times.filter(t => t._dist == null).length;
+          times = times.filter(t => t._dist != null && t._dist <= raioAtual);
+          times.sort((a, b) => a._dist - b._dist);
+        }
+        return (
+          <Card style={{ padding: "20px 24px", marginTop: 16 }}>
+            <div style={{ fontSize: 13, color: C.gold, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 4 }}>
+              🤝 Times disponíveis nesta data
+            </div>
+            <div style={{ fontSize: 12, color: C.dim, marginBottom: 12 }}>
+              Outros times do mesmo tipo que também têm {fmtData(partida.data)} livre. Entre em contato para combinar o jogo.
+            </div>
+            {!temCoordenadas && (
+              <div style={{ fontSize: 12, color: C.gold, background: C.gold + "18", border: `1px solid ${C.gold}55`, borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>
+                ⚠️ Defina a Cidade Sede do seu time (em Meu Time) para filtrar adversários por distância. Mostrando todos por enquanto.
+              </div>
+            )}
+            {temCoordenadas && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12, color: C.dim }}>Raio de busca:</span>
+                <input type="number" min="1" step="5" value={raioAtual} onChange={e => setRaioKm(Number(e.target.value) || 1)}
+                  style={{ width: 80, background: C.surf2, border: `1px solid ${C.border}`, borderRadius: 8, color: C.cream, fontFamily: "inherit", fontSize: 13, padding: "6px 10px", outline: "none" }} />
+                <span style={{ fontSize: 12, color: C.dim }}>km a partir de {minhaCidade.nome}</span>
+              </div>
+            )}
+            {temCoordenadas && semLocalizacao > 0 && (
+              <div style={{ fontSize: 11, color: C.dim, marginBottom: 12, fontStyle: "italic" }}>
+                {semLocalizacao} {semLocalizacao === 1 ? "time disponível foi ocultado" : "times disponíveis foram ocultados"} por não ter cidade sede definida.
+              </div>
+            )}
+            {loadingDisp ? <Spinner /> : times.length === 0 ? (
+              <div style={{ color: C.dim, fontSize: 13 }}>{temCoordenadas ? `Nenhum time disponível nesta data dentro de ${raioAtual} km. Tente aumentar o raio.` : "Nenhum time disponível nesta data por enquanto."}</div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 12 }}>
+                {times.map(t => (
+                  <div key={t.id_time} style={{ background: C.surface, borderRadius: 12, padding: "18px 16px", border: `1px solid ${C.border}`, textAlign: "center" }}>
+                    {t.escudo_url
+                      ? <img src={t.escudo_url} alt={t.nome} style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: `2px solid ${C.gold}`, margin: "0 auto 10px", display: "block" }} />
+                      : <div style={{ width: 56, height: 56, borderRadius: "50%", background: C.surf2, border: `2px solid ${C.gold}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px", fontSize: 22 }}>⚽</div>
+                    }
+                    <div style={{ fontSize: 15, fontWeight: 800, textTransform: "uppercase", marginBottom: 6 }}>{t.nome}</div>
+                    {t._dist != null && <div style={{ fontSize: 12, color: C.gold, fontWeight: 700, marginBottom: 4 }}>📏 ~{t._dist} km</div>}
+                    {t.cidade && <div style={{ fontSize: 12, color: C.dim, marginBottom: 3 }}>📍 <span style={{ color: C.cream }}>{t.cidade.nome}{t.cidade.estado ? ` — ${t.cidade.estado}` : ""}</span></div>}
+                    {t.campo && <div style={{ fontSize: 12, color: C.dim, marginBottom: 3 }}>🏟️ <span style={{ color: C.cream }}>{t.campo.nome}</span></div>}
+                    {t.marca_jogos && <div style={{ fontSize: 12, color: C.dim, marginBottom: 3 }}>📋 <span style={{ color: C.cream }}>{t.marca_jogos}</span></div>}
+                    {t.telefone && <div style={{ fontSize: 13, color: C.dim, marginBottom: 2 }}>📞 <span style={{ color: C.cream, fontWeight: 700 }}>{t.telefone}</span></div>}
+                    {t.resp_redes_sociais && <div style={{ fontSize: 12, color: C.dim }}>📱 <span style={{ color: C.cream }}>{t.resp_redes_sociais}</span></div>}
+                    {!t.telefone && !t.resp_redes_sociais && <div style={{ fontSize: 11, color: C.dim, fontStyle: "italic" }}>Sem contato cadastrado</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        );
+      })()}
+
       {/* Financeiro da Partida */}
       {partida.cancelada !== "S" && (() => {
         const receitas = (movsPartida||[]).filter(m=>m.natureza==="receita").reduce((s,m)=>s+Number(m.valor||0),0);
@@ -1513,6 +1707,21 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
       })()}
 
       {/* Modais */}
+      {modalAdv && (
+        <Modal title={partida.id_adversario || p0.id_adversario ? "Trocar ou Remover Adversário" : "Definir Adversário"} onClose={() => setModalAdv(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <Select label="Adversário" value={advSel} onChange={e => setAdvSel(e.target.value)}>
+              <option value="">🔍 Procurando adversário (deixar em branco)</option>
+              {(advsFicha || []).map(a => <option key={a.id_adversario} value={a.id_adversario}>{a.nome}</option>)}
+            </Select>
+            <div style={{ fontSize: 12, color: C.dim }}>Deixe em branco para liberar a data e procurar outro time. Não encontrou o adversário? Cadastre-o primeiro em Adversários.</div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <Btn variant="secondary" onClick={() => setModalAdv(false)}>Cancelar</Btn>
+              <Btn onClick={definirAdversario} disabled={savingAdv}>{savingAdv ? "Salvando..." : "Salvar"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
       {modalMovP && (
         <Modal title="Lançar Movimento — Partida" onClose={() => setModalMovP(false)}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -2420,7 +2629,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.9.0" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.12.0" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -3415,7 +3624,7 @@ export default function AdminAppCompleto() {
 
 // ── CRUD JOGADORES ────────────────────────────────────────────
 
-function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, onReativar, readOnly }) {
+function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, onReativar, readOnly, mapaPosJog }) {
   if (!lista.length) return null;
   const S = k => <ThSortable colKey={k} sortKey={sk} asc={asc} onSort={onSort}/>;
   return (
@@ -3441,7 +3650,7 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
                 <td style={{ padding:"11px 14px", fontWeight:800, color:C.gold, whiteSpace:"nowrap" }}>{j.camisa}</td>
                 <td style={{ padding:"11px 14px", fontWeight:700, whiteSpace:"nowrap" }}>{j.nome}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.apelido || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.posicao?.nome || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.posicao?.nome ? (j.posicao.id_posicao_pai && mapaPosJog[j.posicao.id_posicao_pai] ? `${mapaPosJog[j.posicao.id_posicao_pai]} › ${j.posicao.nome}` : j.posicao.nome) : "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.telefone || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.email || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_inicio ? new Date(j.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
@@ -3467,9 +3676,14 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
 function CrudJogadores({ idTime, show, readOnly }) {
   const _idTimeJ = idTime; // recebido por prop (filtrado pelo usuário logado)
   const { data: jogadores, loading, reload } = useQuery(() => 
-    _idTimeJ ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${_idTimeJ}&select=*,posicao(nome)&order=camisa.asc`) : Promise.resolve([]),
+    _idTimeJ ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${_idTimeJ}&select=*,posicao(nome,ordem,id_posicao_pai)&order=camisa.asc`) : Promise.resolve([]),
     [_idTimeJ]
   );
+  // Todas as posições (para resolver nome do grupo pai no front) e só as filhas (para o select)
+  const { data: todasPosicoes } = useQuery(() => api.get(`posicao?select=id_posicao,nome&order=nome.asc`));
+  const mapaPosJog = React.useMemo(() => {
+    const m = {}; (todasPosicoes||[]).forEach(p => { m[p.id_posicao] = p.nome; }); return m;
+  }, [todasPosicoes]);
   const { data: posicoes } = useQuery(() => api.get(`posicao?id_posicao_pai=not.is.null&select=*&order=nome.asc`));
   const posicoesLista = posicoes || [];
   const [modal, setModal] = useState(null);
@@ -3589,12 +3803,12 @@ function CrudJogadores({ idTime, show, readOnly }) {
       {ativos.length > 0 && (
         <TabelaJogadores grupo="Ativos" lista={sortData(ativos, _sk, _asc)} sk={_sk} asc={_asc}
           onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
-          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly}/>
+          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly} mapaPosJog={mapaPosJog}/>
       )}
       {inativos.length > 0 && (
         <TabelaJogadores grupo="Inativos" lista={sortData(inativos, _sk, _asc)} sk={_sk} asc={_asc}
           onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
-          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly}/>
+          onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly} mapaPosJog={mapaPosJog}/>
       )}
       {modal && (
         <Modal title={modal === "novo" ? "Novo Jogador" : "Editar Jogador"} onClose={() => setModal(null)}>
@@ -3643,7 +3857,8 @@ function CrudAdversarios({ idTime, show, readOnly }) {
   );
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
   const { data: campos }  = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
-  const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
+  const [ufAdv, setUfAdv] = useState("RS");
+  const { data: cidades } = useQuery(() => ufAdv ? api.get(`cidade?estado=eq.${ufAdv}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufAdv]);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
   const [saving, setSaving] = useState(false);
@@ -3666,7 +3881,7 @@ function CrudAdversarios({ idTime, show, readOnly }) {
   }
 
   function abrirNovo() { setForm({ nome:"", id_campo:"", id_cidade:"", contato:"", observacoes:"" }); setModal("novo"); }
-  function abrirEditar(a) { setForm({ ...a, id_campo: a.id_campo?String(a.id_campo):"", id_cidade: a.id_cidade?String(a.id_cidade):"" }); setModal(a); }
+  function abrirEditar(a) { setForm({ ...a, id_campo: a.id_campo?String(a.id_campo):"", id_cidade: a.id_cidade?String(a.id_cidade):"" }); setModal(a); if (a.id_cidade) { api.get(`cidade?id_cidade=eq.${a.id_cidade}&select=estado&limit=1`).then(d => { if (d?.[0]?.estado) setUfAdv(d[0].estado); }).catch(()=>{}); } }
 
   async function salvar() {
     if (!form.nome) { show("Nome obrigatório.", "error"); return; }
@@ -3753,9 +3968,12 @@ function CrudAdversarios({ idTime, show, readOnly }) {
               <option value="">Selecione...</option>
               {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
             </Select>
+            <Select label="Estado (UF)" value={ufAdv} onChange={e => { setUfAdv(e.target.value); set("id_cidade", ""); }}>
+              {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+            </Select>
             <Select label="Cidade" value={form.id_cidade||""} onChange={e => set("id_cidade", e.target.value)}>
-              <option value="">Selecione...</option>
-              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}/{c.estado}</option>)}
+              <option value="">{cidades === null ? "Carregando..." : "Selecione..."}</option>
+              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
             </Select>
             <Input label="Contato" value={form.contato||""} onChange={e => set("contato", e.target.value)} />
             <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
@@ -3773,7 +3991,8 @@ function CrudAdversarios({ idTime, show, readOnly }) {
 // ── CRUD CAMPOS ───────────────────────────────────────────────
 function CrudCampos({ idTime, show, readOnly }) {
   const { data: campos, loading, reload } = useQuery(() => api.get(`campo?select=*,cidade(nome,estado)&order=nome.asc`));
-  const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
+  const [ufCampo, setUfCampo] = useState("RS");
+  const { data: cidades } = useQuery(() => ufCampo ? api.get(`cidade?estado=eq.${ufCampo}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufCampo]);
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
@@ -3796,7 +4015,7 @@ function CrudCampos({ idTime, show, readOnly }) {
   }
 
   function abrirNovo() { setForm({ nome:"", endereco:"", id_cidade:"", observacoes:"" }); setModal("novo"); }
-  function abrirEditar(c) { setForm({ ...c, id_cidade: c.id_cidade?String(c.id_cidade):"" }); setModal(c); }
+  function abrirEditar(c) { setForm({ ...c, id_cidade: c.id_cidade?String(c.id_cidade):"" }); setModal(c); if (c.id_cidade) { api.get(`cidade?id_cidade=eq.${c.id_cidade}&select=estado&limit=1`).then(d => { if (d?.[0]?.estado) setUfCampo(d[0].estado); }).catch(()=>{}); } }
 
   async function salvar() {
     if (!form.nome) { show("Nome obrigatório.", "error"); return; }
@@ -3877,9 +4096,12 @@ function CrudCampos({ idTime, show, readOnly }) {
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} />
             <Input label="Endereço" value={form.endereco||""} onChange={e => set("endereco", e.target.value)} />
+            <Select label="Estado (UF)" value={ufCampo} onChange={e => { setUfCampo(e.target.value); set("id_cidade", ""); }}>
+              {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+            </Select>
             <Select label="Cidade" value={form.id_cidade||""} onChange={e => set("id_cidade", e.target.value)}>
-              <option value="">Selecione...</option>
-              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}/{c.estado}</option>)}
+              <option value="">{cidades === null ? "Carregando..." : "Selecione..."}</option>
+              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
             </Select>
             <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
@@ -3895,7 +4117,8 @@ function CrudCampos({ idTime, show, readOnly }) {
 
 // ── CRUD CIDADES ──────────────────────────────────────────────
 function CrudCidades({ idTime, show, readOnly }) {
-  const { data: cidades, loading, reload } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
+  const [ufFiltro, setUfFiltro] = useState("RS");
+  const { data: cidades, loading, reload } = useQuery(() => ufFiltro ? api.get(`cidade?estado=eq.${ufFiltro}&select=*&order=nome.asc`) : Promise.resolve([]), [ufFiltro]);
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
@@ -3970,6 +4193,14 @@ function CrudCidades({ idTime, show, readOnly }) {
         />
         {!readOnly && <Btn onClick={abrirNovo}>+ Nova Cidade</Btn>}
       </div>
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+        <span style={{ fontSize:12, color:C.dim }}>Filtrar por estado:</span>
+        <select value={ufFiltro} onChange={e => setUfFiltro(e.target.value)}
+          style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 10px", outline:"none" }}>
+          {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+        </select>
+        <span style={{ fontSize:12, color:C.dim }}>{(cidades||[]).length} cidades</span>
+      </div>
       <Card style={{ padding:0, overflow:"hidden" }}>
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
@@ -4009,8 +4240,14 @@ function CrudCidades({ idTime, show, readOnly }) {
 // ── CRUD POSIÇÕES ─────────────────────────────────────────────
 function CrudPosicoes({ idTime, show, readOnly }) {
   const { data: posicoes, loading, reload } = useQuery(() =>
-    api.get(`posicao?select=*,posicao_pai:posicao!id_posicao_pai(nome)&order=ordem.asc,nome.asc`)
+    api.get(`posicao?select=*&order=ordem.asc,nome.asc`)
   );
+  // Mapa id_posicao → nome, para resolver o grupo pai no front (evita self-join frágil do PostgREST)
+  const mapaPosicoes = React.useMemo(() => {
+    const m = {};
+    (posicoes||[]).forEach(p => { m[p.id_posicao] = p.nome; });
+    return m;
+  }, [posicoes]);
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
@@ -4103,7 +4340,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
                   <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
                   <ThSortable colKey="descricao" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Descrição</ThSortable>
                   <ThSortable colKey="ordem" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Ordem</ThSortable>
-                  <ThSortable colKey="posicao_pai.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Grupo pai</ThSortable>
+                  <th style={{ padding:"12px 14px", textAlign:"left", fontSize:11, textTransform:"uppercase", letterSpacing:"0.08em", color:C.dim, fontWeight:700, whiteSpace:"nowrap" }}>Grupo pai</th>
                   <ThSortable colKey="data_fim" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Inativo em</ThSortable>
                   <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
                 </tr></thead>
@@ -4113,7 +4350,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
                       <td style={{ padding:"11px 14px", fontWeight:700 }}>{p.nome}</td>
                       <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{p.descricao || "—"}</td>
                       <td style={{ padding:"11px 14px", color:C.dim, textAlign:"center" }}>{p.ordem ?? "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{p.posicao_pai?.nome || "—"}</td>
+                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{mapaPosicoes[p.id_posicao_pai] || "—"}</td>
                       <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{p.data_fim ? new Date(p.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
                       <td style={{ padding:"11px 14px", display:"flex", gap:8 }}>
                         {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(p)}>Editar</Btn>}
@@ -4407,7 +4644,8 @@ function CrudTemporadas({ idTime, show, readOnly }) {
 function ConfigTime({ idTime, show, readOnly }) {
   const { data: times, loading, reload } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=*,campo(nome)&limit=1`) : Promise.resolve([]), [idTime]);
   const { data: campos  } = useQuery(() => api.get(`campo?select=*&order=nome.asc`));
-  const { data: cidades } = useQuery(() => api.get(`cidade?select=*&order=nome.asc`));
+  const [ufSede, setUfSede] = useState("RS");
+  const { data: cidades } = useQuery(() => ufSede ? api.get(`cidade?estado=eq.${ufSede}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufSede]);
   const { data: tipos   } = useQuery(() => api.get(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
   const [form, setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
@@ -4417,6 +4655,12 @@ function ConfigTime({ idTime, show, readOnly }) {
     if (times?.[0] && !form) {
       const t = times[0];
       setForm({ ...t, id_campo: t.id_campo ? String(t.id_campo) : "", id_cidade_sede: t.id_cidade_sede ? String(t.id_cidade_sede) : "", id_tipo_time: t.id_tipo_time ? String(t.id_tipo_time) : "", data_fundacao: t.data_fundacao ? t.data_fundacao.split("T")[0] : "" });
+      // Descobre a UF da cidade-sede atual para pré-selecionar o dropdown de estado
+      if (t.id_cidade_sede) {
+        api.get(`cidade?id_cidade=eq.${t.id_cidade_sede}&select=estado&limit=1`)
+          .then(d => { if (d?.[0]?.estado) setUfSede(d[0].estado); })
+          .catch(() => {});
+      }
     }
   }, [times]);
 
@@ -4453,6 +4697,7 @@ function ConfigTime({ idTime, show, readOnly }) {
         vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null,
         vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null,
         resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null,
+        raio_busca_km: form.raio_busca_km ? Number(form.raio_busca_km) : 50,
         observacoes: form.observacoes||null, publico: form.publico !== false
       };
       await api.patch(`time?id_time=eq.${form.id_time}`, body);
@@ -4475,15 +4720,19 @@ function ConfigTime({ idTime, show, readOnly }) {
             <Input label="Nome do Time *" value={form.nome||""} onChange={e => set("nome", e.target.value)}/>
             <Input label="Telefone" value={form.telefone||""} onChange={e => set("telefone", e.target.value)}/>
             <Input label="Data de Fundação" type="date" value={form.data_fundacao||""} onChange={e => set("data_fundacao", e.target.value)}/>
+            <Select label="Estado (UF)" value={ufSede} onChange={e => { setUfSede(e.target.value); set("id_cidade_sede", ""); }}>
+              {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
+            </Select>
             <Select label="Cidade Sede" value={form.id_cidade_sede||""} onChange={e => set("id_cidade_sede", e.target.value)}>
-              <option value="">Selecione...</option>
-              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}{c.estado ? ` — ${c.estado}` : ""}</option>)}
+              <option value="">{cidades === null ? "Carregando..." : "Selecione..."}</option>
+              {(cidades||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
             </Select>
             <Select label="Campo Principal" value={form.id_campo||""} onChange={e => set("id_campo", e.target.value)}>
               <option value="">Selecione...</option>
               {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
             </Select>
             <Input label="Valor Mensalidade (R$)" type="number" min="0" step="0.01" value={form.valor_mensalidade||""} onChange={e => set("valor_mensalidade", e.target.value)}/>
+            <Input label="Raio de busca de adversários (km)" type="number" min="1" step="1" value={form.raio_busca_km ?? 50} onChange={e => set("raio_busca_km", e.target.value)}/>
             <Input label="Saldo Inicial do Caixa (R$)" type="number" step="0.01" value={form.saldo_inicial||""} onChange={e => set("saldo_inicial", e.target.value)}/>
           </div>
         </div>
