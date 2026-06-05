@@ -83,30 +83,30 @@ function CardTime({ t, onSelect, destaque = false }) {
       onMouseEnter={e => { e.currentTarget.style.background = C.surf2; e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.transform = "translateY(-2px)"; }}
       onMouseLeave={e => { e.currentTarget.style.background = C.surface; e.currentTarget.style.borderColor = destaque ? C.gold : C.border; e.currentTarget.style.transform = "none"; }}>
       {destaque && (
-        <div style={{ position:"absolute", top:12, right:12, fontSize:10, fontWeight:800, color:C.gold, background:`${C.gold}1A`, border:`1px solid ${C.gold}55`, borderRadius:6, padding:"2px 8px", textTransform:"uppercase", letterSpacing:"0.06em" }}>⭐ Oficial</div>
+        <div style={{ position:"absolute", top:12, right:12, fontSize:11, fontWeight:800, color:C.gold, background:`${C.gold}1A`, border:`1px solid ${C.gold}55`, borderRadius:6, padding:"2px 8px", textTransform:"uppercase", letterSpacing:"0.06em" }}>⭐ Oficial</div>
       )}
       {t.escudo_url
         ? <img src={t.escudo_url} alt={t.nome} style={{ width:96, height:96, borderRadius:"50%", objectFit:"cover", border:`3px solid ${C.gold}`, margin:"0 auto 16px", display:"block" }}/>
         : <div style={{ width:96, height:96, borderRadius:"50%", background:C.surf2, border:`3px solid ${C.gold}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", fontSize:36 }}>⚽</div>
       }
-      <div style={{ fontSize:18, fontWeight:800, textTransform:"uppercase", marginBottom:8 }}>{t.nome}</div>
+      <div style={{ fontSize:22, fontWeight:800, textTransform:"uppercase", marginBottom:10 }}>{t.nome}</div>
       {t.data_fundacao && (
-        <div style={{ fontSize:11, color:C.dim, marginBottom:6 }}>Fundado em {new Date(t.data_fundacao).getFullYear()}</div>
+        <div style={{ fontSize:13, color:C.dim, marginBottom:8 }}>Fundado em {new Date(t.data_fundacao).getFullYear()}</div>
       )}
       {t.marca_jogos && (
-        <div style={{ fontSize:12, color:C.dim, marginBottom:4 }}>📋 <span style={{ color:C.cream }}>Marca jogos:</span> {t.marca_jogos}</div>
+        <div style={{ fontSize:15, color:C.dim, marginBottom:6 }}>📋 <span style={{ color:C.cream }}>Marca jogos:</span> {t.marca_jogos}</div>
       )}
       {t.telefone && (
-        <div style={{ fontSize:12, color:C.dim }}>📞 <span style={{ color:C.cream }}>{t.telefone}</span></div>
+        <div style={{ fontSize:15, color:C.dim, marginBottom:4 }}>📞 <span style={{ color:C.cream }}>{t.telefone}</span></div>
       )}
       {t.resp_redes_sociais && (
-        <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>📱 <span style={{ color:C.cream }}>{t.resp_redes_sociais}</span></div>
+        <div style={{ fontSize:15, color:C.dim, marginTop:4 }}>📱 <span style={{ color:C.cream }}>{t.resp_redes_sociais}</span></div>
       )}
       {t.cidade && (
-        <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>📍 <span style={{ color:C.cream }}>{t.cidade.nome}{t.cidade.estado ? ` — ${t.cidade.estado}` : ""}</span></div>
+        <div style={{ fontSize:15, color:C.dim, marginTop:4 }}>📍 <span style={{ color:C.cream }}>{t.cidade.nome}{t.cidade.estado ? ` — ${t.cidade.estado}` : ""}</span></div>
       )}
       {t.campo && (
-        <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>🏟️ <span style={{ color:C.cream }}>{t.campo.nome}</span></div>
+        <div style={{ fontSize:15, color:C.dim, marginTop:4 }}>🏟️ <span style={{ color:C.cream }}>{t.campo.nome}</span></div>
       )}
     </div>
   );
@@ -836,18 +836,16 @@ function TimeApp({ time, onVoltar }) {
           <div style={{ fontSize:13, fontWeight:800, textTransform:"uppercase", color:C.cream, lineHeight:1.1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{time.nome}</div>
         </div>
         {(temporadas||[]).length > 0 && (
-          <div style={{ display:"flex", gap:4, flexShrink:0, flexWrap:"nowrap", overflowX:"auto", maxWidth:200 }}>
+          <select
+            value={temporadaSel?.id_temporada || ""}
+            onChange={e => { const t = (temporadas||[]).find(x => String(x.id_temporada) === e.target.value); if (t) setTemporadaSel(t); }}
+            style={{ flexShrink:0, maxWidth:170, background:C.gold, color:"#0B3D2E", border:`1px solid ${C.gold}`,
+              borderRadius:8, padding:"6px 10px", fontFamily:"inherit", fontWeight:800, fontSize:12,
+              cursor:"pointer", textTransform:"uppercase", outline:"none" }}>
             {(temporadas||[]).map(t => (
-              <button key={t.id_temporada} onClick={() => setTemporadaSel(t)}
-                style={{ background: temporadaSel?.id_temporada === t.id_temporada ? C.gold : "transparent",
-                  color: temporadaSel?.id_temporada === t.id_temporada ? "#0B3D2E" : C.dim,
-                  border:`1px solid ${temporadaSel?.id_temporada === t.id_temporada ? C.gold : C.border}`,
-                  borderRadius:6, padding:"3px 8px", fontFamily:"inherit", fontWeight:700,
-                  fontSize:10, cursor:"pointer", textTransform:"uppercase", whiteSpace:"nowrap", flexShrink:0 }}>
-                {t.nome}
-              </button>
+              <option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>
             ))}
-          </div>
+          </select>
         )}
       </header>
 
