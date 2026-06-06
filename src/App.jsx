@@ -283,7 +283,7 @@ function SeletorTimes({ onSelect }) {
 // ── VISÃO GERAL ───────────────────────────────────────────────
 function VisaoGeral({ temporada }) {
   const { data: partidas, loading } = useQuery(
-    () => sb(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo(nome)&order=data.asc`),
+    () => sb(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo:id_campo(nome)&order=data.asc`),
     [temporada.id_temporada]
   );
   const { data: topGols }   = useQuery(() => sb(`vw_stats_temporada?id_temporada=eq.${temporada.id_temporada}&select=*&order=gols_marcados.desc&limit=5`), [temporada.id_temporada]);
@@ -525,7 +525,7 @@ function Calendario({ temporada }) {
   const [filtro, setFiltro] = useState("pendentes");
   const [partidaSel, setPartidaSel] = useState(null);
   const { data: partidas, loading } = useQuery(
-    () => sb(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo(nome)&order=data.asc`),
+    () => sb(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo:id_campo(nome)&order=data.asc`),
     [temporada.id_temporada]
   );
   if (loading) return <Spinner />;
@@ -987,7 +987,7 @@ function ModalSolicitacao({ onClose }) {
             <div>
               <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Nome do Time *</div>
               <input value={form.nome_time} onChange={e => set("nome_time", e.target.value)}
-                placeholder="Ex: Juventus FC"
+                placeholder="Ex: Nerd do Campo FC"
                 style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
             </div>
 

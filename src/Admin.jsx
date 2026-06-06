@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.17";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.18";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 // Distância em km entre dois pontos (lat/long) — fórmula de Haversine
 function distanciaKm(lat1, lon1, lat2, lon2) {
@@ -167,7 +167,7 @@ function BadgeA({ label, cor }) {
 
 function VisaoGeral({ temporada }) {
   const { data: partidas, loading } = useQuery(
-    () => sb(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo(nome)&order=data.asc`),
+    () => sb(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo:id_campo(nome)&order=data.asc`),
     [temporada.id_temporada]
   );
   const { data: topGols }   = useQuery(() => sb(`vw_stats_temporada?id_temporada=eq.${temporada.id_temporada}&select=*&order=gols_marcados.desc&limit=5`), [temporada.id_temporada]);
@@ -406,7 +406,7 @@ function Calendario({ temporada }) {
   const [filtro, setFiltro] = useState("pendentes");
   const [partidaSel, setPartidaSel] = useState(null);
   const { data: partidas, loading } = useQuery(
-    () => sb(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo(nome)&order=data.asc`),
+    () => sb(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo:id_campo(nome)&order=data.asc`),
     [temporada.id_temporada]
   );
   if (loading) return <Spinner />;
@@ -1155,7 +1155,7 @@ function Login({ onLogin }) {
 // ── LISTA DE PARTIDAS ─────────────────────────────────────────
 function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show: onShow }) {
   const { data: partidas, loading, reload } = useQuery(
-    () => api.get(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo(nome)&order=data.asc`),
+    () => api.get(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo:id_campo(nome)&order=data.asc`),
     [temporada.id_temporada]
   );
 
@@ -2230,7 +2230,7 @@ function PaginaInicio({ dados, onNavegar }) {
       icone: "📅",
       menu: "partidas",
       descricao: "Monte o calendário com todos os jogos da temporada.",
-      exemplo: "Ex: Juventus x Trianon — 21/06/2025 14:00",
+      exemplo: "Ex: Nerd do Campo FC x Trianon — 21/06/2025 14:00",
       concluido: (partidas||[]).length > 0,
       obrigatorio: true,
       dica: "Após cadastrar, registre o placar e escalação após cada jogo.",
@@ -3135,7 +3135,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
       <td style="color:${l.Tipo==="Receita"?"#2e7d32":"#c62828"}">${l.Tipo}</td>
       <td style="text-align:right">${brl(l.Valor)}</td>
       <td style="text-align:right">${brl(l.Saldo)}</td>
-      <td>${l.Observação}</td></tr>`).join("");
+      <td>${l.Observação}</td><td>${l["Lançado por"]||""}</td></tr>`).join("");
     const periodo = (dataDe||dataAte) ? `Período: ${dataDe?new Date(dataDe+"T12:00:00").toLocaleDateString("pt-BR"):"início"} a ${dataAte?new Date(dataAte+"T12:00:00").toLocaleDateString("pt-BR"):"hoje"}` : "Período: completo";
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Extrato de Caixa</title>
       <style>
@@ -3162,8 +3162,8 @@ function CrudCaixa({ idTime, show, readOnly }) {
       </div>
       <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table><thead><tr>
         <th>Data</th><th>Descrição</th><th>Origem</th><th>Tipo</th>
-        <th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th><th>Obs.</th>
-      </tr></thead><tbody>${linhasHtml || '<tr><td colspan="7" style="text-align:center;padding:16px">Nenhum movimento.</td></tr>'}</tbody></table></div>
+        <th style="text-align:right">Valor</th><th style="text-align:right">Saldo</th><th>Obs.</th><th>Lançado por</th>
+      </tr></thead><tbody>${linhasHtml || '<tr><td colspan="8" style="text-align:center;padding:16px">Nenhum movimento.</td></tr>'}</tbody></table></div>
       <div class="assinatura">⚽ Designed by Caxpa Augsten — Nerd do Campo</div>
       </body></html>`;
     const w = window.open("", "_blank");
@@ -3205,7 +3205,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
         <div style={{ marginBottom:12 }}>
           <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", marginBottom:4 }}>🔍 Buscar na observação/descrição</div>
           <input type="text" value={buscaObs} onChange={e=>setBuscaObs(e.target.value)}
-            placeholder="Ex: maroto sapiranga (traz o que tiver as duas palavras)"
+            placeholder="Ex: nerd campo (traz o que tiver as duas palavras)"
             style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"9px 12px", outline:"none" }}/>
         </div>
         <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"flex-end" }}>
@@ -4107,7 +4107,7 @@ function CrudJogadores({ idTime, show, readOnly }) {
 function CrudAdversarios({ idTime, show, readOnly }) {
   const _idTimeA = idTime; // recebido por prop (filtrado pelo usuário logado)
   const { data: adversarios, loading, reload } = useQuery(() => 
-    _idTimeA ? api.get(`adversario?id_time=eq.${_idTimeA}&select=*,campo(nome),cidade(nome,estado)&order=nome.asc`) : Promise.resolve([]),
+    _idTimeA ? api.get(`adversario?id_time=eq.${_idTimeA}&select=*,campo:id_campo(nome),cidade(nome,estado)&order=nome.asc`) : Promise.resolve([]),
     [_idTimeA]
   );
   const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
@@ -4776,7 +4776,7 @@ function CrudTemporadas({ idTime, show, readOnly }) {
 
 // ── CONFIGURAÇÕES DO TIME ─────────────────────────────────────
 function ConfigTime({ idTime, show, readOnly }) {
-  const { data: times, loading, reload } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=*,campo(nome)&limit=1`) : Promise.resolve([]), [idTime]);
+  const { data: times, loading, reload } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=*&limit=1`) : Promise.resolve([]), [idTime]);
   const { data: campos  } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=*&order=nome.asc`) : Promise.resolve([]), [idTime]);
   const [ufSede, setUfSede] = useState("RS");
   const { data: cidades } = useQuery(() => ufSede ? api.get(`cidade?estado=eq.${ufSede}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufSede]);
@@ -4874,7 +4874,12 @@ function ConfigTime({ idTime, show, readOnly }) {
     finally { setSaving(false); }
   }
 
-  if (loading || !form) return <Spinner />;
+  if (loading) return <Spinner />;
+  if (!form) return (
+    <Card style={{ padding:24, textAlign:"center" }}>
+      <div style={{ fontSize:14, color:C.dim }}>Não foi possível carregar os dados do time. Tente recarregar a página.</div>
+    </Card>
+  );
 
   return (
     <Card style={{ padding:24 }}>
