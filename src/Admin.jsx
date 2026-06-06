@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.8";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.11";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 // Distância em km entre dois pontos (lat/long) — fórmula de Haversine
 function distanciaKm(lat1, lon1, lat2, lon2) {
@@ -1022,6 +1022,10 @@ function Login({ onLogin }) {
   const [senha, setSenha]   = useState("");
   const [erro, setErro]     = useState("");
   const [loading, setLoading] = useState(false);
+  const [modalRecuperar, setModalRecuperar] = useState(false);
+  const [emailRec, setEmailRec] = useState("");
+  const [enviandoRec, setEnviandoRec] = useState(false);
+  const [msgRec, setMsgRec] = useState(null);
 
   async function handleLogin() {
     setErro(""); setLoading(true);
@@ -1033,6 +1037,23 @@ function Login({ onLogin }) {
       onLogin(res);
     }
     else setErro("E-mail ou senha incorretos.");
+  }
+
+  async function enviarRecuperacao() {
+    setMsgRec(null);
+    if (!emailRec || !emailRec.includes("@")) { setMsgRec({ tipo:"error", txt:"Informe um e-mail válido." }); return; }
+    setEnviandoRec(true);
+    try {
+      // Dispara o e-mail de recuperação. O redirect_to leva o usuário de volta
+      // à raiz do app, onde a tela de redefinição de senha assume.
+      await sbAuth("recover", { email: emailRec.trim().toLowerCase(), redirect_to: window.location.origin });
+      // O Supabase responde OK mesmo se o e-mail não existir (por segurança). Mensagem genérica.
+      setMsgRec({ tipo:"ok", txt:"Se este e-mail estiver cadastrado, você receberá um link para redefinir a senha. Verifique a caixa de entrada e o spam." });
+    } catch (e) {
+      setMsgRec({ tipo:"error", txt:"Não foi possível enviar agora. Tente novamente em instantes." });
+    } finally {
+      setEnviandoRec(false);
+    }
   }
 
   return (
@@ -1059,11 +1080,39 @@ function Login({ onLogin }) {
           <Btn onClick={handleLogin} disabled={loading} style={{ marginTop: 8, padding: "12px" }}>
             {loading ? "Entrando..." : "Entrar"}
           </Btn>
+          <button onClick={() => { setModalRecuperar(true); setEmailRec(email); setMsgRec(null); }}
+            style={{ background:"none", border:"none", color:C.dim, fontSize:13, cursor:"pointer", fontFamily:"inherit", marginTop:4, textDecoration:"underline" }}>
+            Esqueci minha senha
+          </button>
         </div>
         <div style={{ textAlign:"center", marginTop:24, fontSize:11, color:C.gold, letterSpacing:"0.08em", opacity:0.8 }}>
           ⚽ Designed by Caxpa Augsten
         </div>
       </Card>
+
+      {modalRecuperar && (
+        <Modal title="Recuperar senha" onClose={() => setModalRecuperar(false)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ fontSize:13, color:C.dim }}>
+              Informe o e-mail cadastrado. Enviaremos um link para você criar uma nova senha.
+            </div>
+            <Input label="E-mail" type="email" value={emailRec} onChange={e => setEmailRec(e.target.value)} placeholder="seu@email.com"
+              onKeyDown={e => e.key === "Enter" && enviarRecuperacao()} />
+            {msgRec && (
+              <div style={{ fontSize:13, borderRadius:8, padding:"10px 14px",
+                background: msgRec.tipo === "ok" ? `${C.win}22` : `${C.loss}22`,
+                border: `1px solid ${msgRec.tipo === "ok" ? C.win : C.loss}55`,
+                color: msgRec.tipo === "ok" ? C.win : C.loss }}>
+                {msgRec.txt}
+              </div>
+            )}
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:4 }}>
+              <Btn variant="secondary" onClick={() => setModalRecuperar(false)}>Fechar</Btn>
+              <Btn onClick={enviarRecuperacao} disabled={enviandoRec}>{enviandoRec ? "Enviando..." : "Enviar link"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -2762,7 +2811,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.13.0" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.13.10" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -2782,7 +2831,7 @@ function PaginaAjuda() {
           ["Como tornar a temporada pública?", "Vá em Temporadas → edite a temporada → ative o toggle 🌐 Temporada Pública."],
           ["Como registrar um gol?", "Vá em Partidas → clique na partida → role até Gols → clique em + Gol."],
           ["Como controlar mensalidades?", "Vá em Financeiro → Mensalidades → selecione o mês → clique em ✅ Pago para cada jogador."],
-          ["Esqueci a senha. O que faço?", "Entre em contato com o administrador do sistema para redefinir sua senha."],
+          ["Esqueci a senha. O que faço?", "Na tela de login, clique em 'Esqueci minha senha', informe seu e-mail e siga o link que enviaremos para criar uma nova senha."],
         ].map(([p, r], i) => (
           <div key={i} style={{ borderBottom:`1px solid ${C.border}`, paddingBottom:12, marginBottom:12 }}>
             <div style={{ fontSize:13, fontWeight:700, color:C.cream, marginBottom:4 }}>❓ {p}</div>

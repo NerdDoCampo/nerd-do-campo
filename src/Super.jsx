@@ -1989,7 +1989,7 @@ function CrudTipoTime({ show }) {
 
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.8";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.11";
 
   if (!session) return <LoginSuper onLogin={setSession}/>;
 
