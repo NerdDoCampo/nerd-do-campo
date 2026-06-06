@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.5";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.8";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 // Distância em km entre dois pontos (lat/long) — fórmula de Haversine
 function distanciaKm(lat1, lon1, lat2, lon2) {
@@ -2054,19 +2054,19 @@ function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, re
 // ── APP ADMIN ─────────────────────────────────────────────────
 const MENU_BASE = [
   { id:"inicio",      label:"Início",      icon:"🏠", grupo:"" },
-  { id:"app",         label:"Visão App",   icon:"👁️", grupo:"" },
-  { id:"partidas",    label:"Partidas",    icon:"📅", grupo:"Jogos" },
-  { id:"jogadores",   label:"Jogadores",   icon:"👕", grupo:"Cadastros" },
-  { id:"adversarios", label:"Adversários", icon:"⚔️", grupo:"Cadastros" },
+  { id:"time",        label:"Meu Time",    icon:"⚙️", grupo:"Configurar" },
+  { id:"temporadas",  label:"Temporadas",  icon:"📆", grupo:"Configurar" },
   { id:"campos",      label:"Campos",      icon:"🏟️", grupo:"Cadastros" },
   { id:"posicoes",    label:"Posições",    icon:"🎯", grupo:"Cadastros" },
-  { id:"temporadas",  label:"Temporadas",  icon:"📆", grupo:"Configurações" },
-  { id:"time",        label:"Meu Time",    icon:"⚙️", grupo:"Configurações" },
+  { id:"adversarios", label:"Adversários", icon:"⚔️", grupo:"Cadastros" },
+  { id:"jogadores",   label:"Jogadores",   icon:"👕", grupo:"Cadastros" },
+  { id:"partidas",    label:"Partidas",    icon:"📅", grupo:"Jogos" },
+  { id:"tiposmov",    label:"Tipos de Mov.", icon:"🏷️", grupo:"Financeiro" },
   { id:"mensalidades",label:"Mensalidades", icon:"💰", grupo:"Financeiro" },
   { id:"caixa",       label:"Caixa",        icon:"💵", grupo:"Financeiro" },
   { id:"eventos",     label:"Eventos",      icon:"🎉", grupo:"Financeiro" },
-  { id:"tiposmov",    label:"Tipos de Mov.", icon:"🏷️", grupo:"Financeiro" },
-  { id:"ajuda",       label:"Ajuda",        icon:"❓", grupo:"" },
+  { id:"app",         label:"Visão App",   icon:"👁️", grupo:"Acompanhar" },
+  { id:"ajuda",       label:"Ajuda",        icon:"❓", grupo:"Acompanhar" },
 ];
 
 
@@ -3645,7 +3645,7 @@ export default function AdminAppCompleto() {
       <div className="admin-layout" style={{ display:"flex", flex:1 }}>
         {/* Sidebar */}
         <aside className="admin-sidebar" style={{ width:210, background:"#091F15", borderRight:`1px solid ${C.border}`, padding:"16px 0", flexShrink:0, position:"sticky", top:64, height:"calc(100vh - 64px)", overflowY:"auto" }}>
-          {/* Itens sem grupo: Início e Visão App */}
+          {/* Item sem grupo: Início */}
           {MENU.filter(m => m.grupo === "").map(m => (
             <button key={m.id} onClick={() => navMenu(m.id)} style={{
               display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 20px",
@@ -3659,7 +3659,7 @@ export default function AdminAppCompleto() {
             </button>
           ))}
           <div style={{ height:1, background:C.border, margin:"8px 0" }}/>
-          {["Jogos","Cadastros","Configurações","Financeiro"].map(grupo => {
+          {["Configurar","Cadastros","Jogos","Financeiro","Acompanhar"].map(grupo => {
             const itens = MENU.filter(m => m.grupo === grupo);
             if (!itens.length) return null;
             return (
@@ -3711,6 +3711,18 @@ export default function AdminAppCompleto() {
           )}
           {menu === "app" && (
             <VisaoAppPublico time={(times||[])[0]} temporadas={temporadas}/>
+          )}
+          {menu === "partidas" && !temporadaSel && (
+            <Card style={{ padding:32, textAlign:"center" }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>📆</div>
+              <div style={{ fontSize:18, fontWeight:800, color:C.cream, marginBottom:8 }}>Nenhuma temporada cadastrada</div>
+              <div style={{ fontSize:14, color:C.dim, marginBottom:20, maxWidth:420, margin:"0 auto 20px" }}>
+                As partidas pertencem a uma temporada. Crie a sua primeira temporada para começar a cadastrar jogos.
+              </div>
+              {canEdit("temporadas")
+                ? <Btn onClick={() => navMenu("temporadas")}>+ Criar primeira temporada</Btn>
+                : <div style={{ fontSize:12, color:C.dim }}>Peça a um administrador para cadastrar a temporada.</div>}
+            </Card>
           )}
           {menu === "partidas" && !partida && !novaPartida && temporadaSel && (<>
             {secTitle(`Partidas — ${temporadaSel.nome}`)}
