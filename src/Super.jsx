@@ -100,7 +100,7 @@ function Modal({ title, children, onClose }) {
   );
 }
 
-function useQuery(fetcher, deps=[]) {
+function useQuery(fetcher, deps=[], opts={}) {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -111,6 +111,11 @@ function useQuery(fetcher, deps=[]) {
     finally { setLoading(false); }
   }, deps);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!opts.refetchInterval) return;
+    const id = setInterval(() => { load(); }, opts.refetchInterval);
+    return () => clearInterval(id);
+  }, [load, opts.refetchInterval]);
   return { data, loading, error, reload: load };
 }
 
@@ -133,7 +138,7 @@ function useToast() {
 function BadgePendentes() {
   const { data: pendentes } = useQuery(() =>
     api.get(`solicitacao_time?select=id&status=eq.pendente`),
-    [], { refetchInterval: 60000 } // atualiza a cada 60s
+    [], { refetchInterval: 20000 } // atualiza a cada 20s
   );
   const total = (pendentes||[]).length;
   if (!total) return null;
@@ -196,7 +201,7 @@ function LoginSuper({ onLogin }) {
 function DashboardSuper() {
   const { data: times, loading, reload } = useQuery(() => api.get(`time?select=*,temporada(id_temporada,nome),usuario_time(user_id,role)&order=nome.asc`));
   const { data: usuarios } = useQuery(() => api.get(`usuario_time?select=*&order=criado_em.desc`));
-  const { data: solPendentes } = useQuery(() => api.get(`solicitacao_time?select=id&status=eq.pendente`));
+  const { data: solPendentes, reload: reloadPendentes } = useQuery(() => api.get(`solicitacao_time?select=id&status=eq.pendente`));
   const { toast, show } = useToast();
   const [modalNovoTime, setModalNovoTime]     = useState(false);
   const [modalNovoUser, setModalNovoUser]     = useState(false);
@@ -248,7 +253,7 @@ function DashboardSuper() {
       {aba === "config"       && <ConfigSistema show={show}/>}
       {aba === "ajuda"        && <AjudaSuper/>}
       {aba === "mensalidades" && <CrudMensalidadeTimes show={show}/>}
-      {aba === "solicitacoes" && <CrudSolicitacoes show={show}/>}
+      {aba === "solicitacoes" && <CrudSolicitacoes show={show} onMudou={reloadPendentes}/>}
       {aba === "times" && <>
 
       {/* Stats */}
@@ -739,7 +744,7 @@ function ModalPermissoes({ user_id, id_time, nomeUsuario, onClose, show }) {
 // ══════════════════════════════════════════════════════════════
 // APROVAÇÃO DE SOLICITAÇÕES DE TIMES
 // ══════════════════════════════════════════════════════════════
-function CrudSolicitacoes({ show }) {
+function CrudSolicitacoes({ show, onMudou }) {
   const { data: solicitacoes, reload } = useQuery(() =>
     api.get(`solicitacao_time?select=*,tipo_time(descricao)&order=criado_em.desc`)
   );
@@ -837,7 +842,7 @@ function CrudSolicitacoes({ show }) {
       });
 
       show(`✅ Time "${modalSol.nome_time}" aprovado! Admin criado para ${modalSol.email_responsavel}.`);
-      setModalSol(null); reload();
+      setModalSol(null); reload(); if (onMudou) onMudou();
     } catch(e) { show("Erro: " + e.message, "error"); }
     finally { setSaving(false); }
   }
@@ -849,7 +854,7 @@ function CrudSolicitacoes({ show }) {
       await api.patch(`solicitacao_time?id=eq.${modalSol.id}`, {
         status: "recusado", observacoes_admin: obs,
       });
-      show("Solicitação recusada."); setModalSol(null); reload();
+      show("Solicitação recusada."); setModalSol(null); reload(); if (onMudou) onMudou();
     } catch(e) { show("Erro: " + e.message, "error"); }
     finally { setSaving(false); }
   }
@@ -1984,7 +1989,7 @@ function CrudTipoTime({ show }) {
 
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.5";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.8";
 
   if (!session) return <LoginSuper onLogin={setSession}/>;
 
