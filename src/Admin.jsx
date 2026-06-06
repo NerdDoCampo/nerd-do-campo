@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.16";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.17";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 // Distância em km entre dois pontos (lat/long) — fórmula de Haversine
 function distanciaKm(lat1, lon1, lat2, lon2) {
@@ -1409,7 +1409,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
   const { toast, show } = useToast();
 
   const { data: jogadores }     = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=*,posicao(nome)&order=camisa.asc`) : Promise.resolve([]), [idTime]);
-  const { data: posicoes }      = useQuery(() => api.get(`posicao?select=*&order=ordem.asc`));
+  const { data: posicoes }      = useQuery(() => meuTipoTime ? api.get(`posicao?id_tipo_time=eq.${meuTipoTime}&select=*&order=ordem.asc`) : Promise.resolve([]), [meuTipoTime]);
   const { data: advsFicha } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
   // Meu time: tipo, raio padrão e coordenadas da cidade-sede — usado na busca por raio
   const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,id_tipo_time,raio_busca_km,numero_titulares,quantidade_periodos,minutos_padrao_periodo,permite_acrescimos,cidade:id_cidade_sede(nome,estado,latitude,longitude)&limit=1`) : Promise.resolve([]), [idTime]);
@@ -2006,7 +2006,14 @@ function FormEscalacao({ partida, jogadores, posicoes, participacoes, meuTime, o
         <Input label="Camisa" value={form.camisa} onChange={e => set("camisa", e.target.value)} />
         <Select label="Posição" value={form.id_posicao} onChange={e => set("id_posicao", e.target.value)}>
           <option value="">Selecione...</option>
-          {posicoes.filter(p => p.id_posicao_pai).map(p => <option key={p.id_posicao} value={p.id_posicao}>{p.nome}</option>)}
+          {(() => {
+            // IDs que são grupos-pai (têm filhas) — esses não são selecionáveis, só organizam.
+            const idsComFilhas = new Set(posicoes.filter(p => p.id_posicao_pai).map(p => p.id_posicao_pai));
+            // Selecionáveis: posições planas (sem pai e sem filhas) + posições filhas.
+            return posicoes
+              .filter(p => p.id_posicao_pai || !idsComFilhas.has(p.id_posicao))
+              .map(p => <option key={p.id_posicao} value={p.id_posicao}>{p.nome}</option>);
+          })()}
         </Select>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -3914,16 +3921,20 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
 
 function CrudJogadores({ idTime, show, readOnly }) {
   const _idTimeJ = idTime; // recebido por prop (filtrado pelo usuário logado)
+  // Tipo de time, para filtrar as posições disponíveis
+  const { data: _timeInfo } = useQuery(() => _idTimeJ ? api.get(`time?id_time=eq.${_idTimeJ}&select=id_tipo_time&limit=1`) : Promise.resolve([]), [_idTimeJ]);
+  const _tipoTimeJ = _timeInfo?.[0]?.id_tipo_time;
   const { data: jogadores, loading, reload } = useQuery(() => 
     _idTimeJ ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${_idTimeJ}&select=*,posicao(nome,ordem,id_posicao_pai)&order=camisa.asc`) : Promise.resolve([]),
     [_idTimeJ]
   );
-  // Todas as posições (para resolver nome do grupo pai no front) e só as filhas (para o select)
+  // Todas as posições (para resolver nome do grupo pai no front) e só as do tipo (para o select)
   const { data: todasPosicoes } = useQuery(() => api.get(`posicao?select=id_posicao,nome&order=nome.asc`));
   const mapaPosJog = React.useMemo(() => {
     const m = {}; (todasPosicoes||[]).forEach(p => { m[p.id_posicao] = p.nome; }); return m;
   }, [todasPosicoes]);
-  const { data: posicoes } = useQuery(() => api.get(`posicao?id_posicao_pai=not.is.null&select=*&order=nome.asc`));
+  // Posições do tipo de time (inclui planas e filhas; exclui apenas grupos-pai que tenham filhos)
+  const { data: posicoes } = useQuery(() => _tipoTimeJ ? api.get(`posicao?id_tipo_time=eq.${_tipoTimeJ}&select=*&order=ordem.asc,nome.asc`) : Promise.resolve([]), [_tipoTimeJ]);
   const posicoesLista = posicoes || [];
   const [modal, setModal] = useState(null);
   const [form, setForm]   = useState({});
@@ -4067,7 +4078,12 @@ function CrudJogadores({ idTime, show, readOnly }) {
               <Input label="Camisa" value={form.camisa||""} onChange={e => set("camisa", e.target.value)} />
               <Select label="Posição" value={form.id_posicao||""} onChange={e => set("id_posicao", e.target.value)}>
                 <option value="">Selecione...</option>
-                {(posicoes||[]).map(p => <option key={p.id_posicao} value={p.id_posicao}>{p.nome}</option>)}
+                {(() => {
+                  const idsComFilhas = new Set((posicoes||[]).filter(p => p.id_posicao_pai).map(p => p.id_posicao_pai));
+                  return (posicoes||[])
+                    .filter(p => p.id_posicao_pai || !idsComFilhas.has(p.id_posicao))
+                    .map(p => <option key={p.id_posicao} value={p.id_posicao}>{p.nome}</option>);
+                })()}
               </Select>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
@@ -4376,8 +4392,13 @@ function CrudCampos({ idTime, show, readOnly }) {
 
 // ── CRUD POSIÇÕES ─────────────────────────────────────────────
 function CrudPosicoes({ idTime, show, readOnly }) {
+  // Tela de CONSULTA: o admin apenas visualiza as posições do tipo do seu time.
+  // A gestão de posições é feita pelo super admin (no cadastro do Tipo de Time).
+  const { data: _timeInfoP } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_tipo_time,tipo_time(descricao)&limit=1`) : Promise.resolve([]), [idTime]);
+  const _tipoTimeP = _timeInfoP?.[0]?.id_tipo_time;
+  const _tipoNomeP = _timeInfoP?.[0]?.tipo_time?.descricao;
   const { data: posicoes, loading, reload } = useQuery(() =>
-    api.get(`posicao?select=*&order=ordem.asc,nome.asc`)
+    _tipoTimeP ? api.get(`posicao?id_tipo_time=eq.${_tipoTimeP}&select=*&order=ordem.asc,nome.asc`) : Promise.resolve([]), [_tipoTimeP]
   );
   // Mapa id_posicao → nome, para resolver o grupo pai no front (evita self-join frágil do PostgREST)
   const mapaPosicoes = React.useMemo(() => {
@@ -4433,37 +4454,8 @@ function CrudPosicoes({ idTime, show, readOnly }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
-        <BotoesImportExport
-          onExportar={() => exportarExcel(
-            posicoes||[],
-            [
-              { key:"id_posicao",     label:"id",        width:8,  descricao:"NÃO altere. Vazio = novo." },
-              { key:"nome",           label:"nome",      width:25, descricao:"Nome da posição. OBRIGATÓRIO." },
-              { key:"id_posicao_pai", label:"id_grupo",  width:8,  descricao:"ID do grupo pai. Deixe vazio se for grupo principal." },
-              { key:"ordem",          label:"ordem",     width:8,  descricao:"Ordem de exibição (número)." },
-              { key:"descricao",      label:"descricao", width:40, descricao:"Descrição da posição." },
-            ],
-            "posicoes",
-            ["- Grupos não têm id_grupo", "- Posições específicas devem ter id_grupo preenchido"]
-          )}
-          onImportar={async (file) => {
-            setLoadingImport("posicoes");
-            try {
-              const rows = await lerExcel(file);
-              const erros = []; const validos = [];
-              rows.forEach((row, i) => {
-                const linha = i + 2;
-                const nome = String(row["nome"]||"").trim();
-                if (!nome) erros.push({ linha, mensagem: "Campo 'nome' é obrigatório." });
-                else validos.push(row);
-              });
-              setResultadoImport({ erros, validos: validos.length, mensagem: `${validos.filter(r=>r.id_posicao).length} atualizações + ${validos.filter(r=>!r.id_posicao).length} novos.`, _dados: validos });
-            } catch(e) { show(e.message, "error"); } finally { setLoadingImport(null); }
-          }}
-          loadingImport={loadingImport==="posicoes"}
-        />
-        {!readOnly && <Btn onClick={abrirNovo}>+ Nova Posição</Btn>}
+      <div style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", fontSize:13, color:C.dim }}>
+        ℹ️ As posições são definidas pelo tipo de time{_tipoNomeP ? <> (<b style={{color:C.cream}}>{_tipoNomeP}</b>)</> : ""} e são iguais para todos os times desse tipo. Esta tela é apenas para consulta. Para alterações, fale com o suporte.
       </div>
       {["Grupos (pai)","Posições detalhadas"].map((titulo, gi) => {
         const lista = gi === 0 ? grupos : filhas;
@@ -4490,8 +4482,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
                       <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{mapaPosicoes[p.id_posicao_pai] || "—"}</td>
                       <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{p.data_fim ? new Date(p.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
                       <td style={{ padding:"11px 14px", display:"flex", gap:8 }}>
-                        {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(p)}>Editar</Btn>}
-                        {!p.data_fim && !readOnly && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => inativar(p)}>Inativar</Btn>}
+                        {/* Tela de consulta: edição é feita pelo super admin no tipo de time */}
                       </td>
                     </tr>
                   ))}
@@ -4792,12 +4783,16 @@ function ConfigTime({ idTime, show, readOnly }) {
   const { data: tipos   } = useQuery(() => api.get(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
   const [form, setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
+  const [tipoOriginal, setTipoOriginal] = useState("");
+  const [confirmaTroca, setConfirmaTroca] = useState(null); // {qtdJogadores} quando precisa confirmar troca de tipo
+  const [textoConfirma, setTextoConfirma] = useState("");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
     if (times?.[0] && !form) {
       const t = times[0];
       setForm({ ...t, id_campo: t.id_campo ? String(t.id_campo) : "", id_cidade_sede: t.id_cidade_sede ? String(t.id_cidade_sede) : "", id_tipo_time: t.id_tipo_time ? String(t.id_tipo_time) : "", data_fundacao: t.data_fundacao ? t.data_fundacao.split("T")[0] : "" });
+      setTipoOriginal(t.id_tipo_time ? String(t.id_tipo_time) : "");
       // Descobre a UF da cidade-sede atual para pré-selecionar o dropdown de estado
       if (t.id_cidade_sede) {
         api.get(`cidade?id_cidade=eq.${t.id_cidade_sede}&select=estado&limit=1`)
@@ -4821,6 +4816,22 @@ function ConfigTime({ idTime, show, readOnly }) {
 
   async function salvar() {
     if (!form?.nome) { show("Nome obrigatório.", "error"); return; }
+    // Detecta troca de tipo de time — operação sensível (zera posições dos jogadores)
+    const tipoMudou = tipoOriginal && form.id_tipo_time && String(form.id_tipo_time) !== String(tipoOriginal);
+    if (tipoMudou && !confirmaTroca) {
+      try {
+        const jogs = await api.get(`jogador?id_jogador=gt.0&id_time=eq.${form.id_time}&id_posicao=not.is.null&select=id_jogador`);
+        setTextoConfirma("");
+        setConfirmaTroca({ qtd: (jogs||[]).length });
+      } catch {
+        setConfirmaTroca({ qtd: 0 });
+      }
+      return; // espera a confirmação; o salvar real acontece em salvarDefinitivo()
+    }
+    await salvarDefinitivo(false);
+  }
+
+  async function salvarDefinitivo(zerarPosicoes) {
     setSaving(true);
     try {
       const body = {
@@ -4844,7 +4855,21 @@ function ConfigTime({ idTime, show, readOnly }) {
         observacoes: form.observacoes||null, publico: form.publico !== false
       };
       await api.patch(`time?id_time=eq.${form.id_time}`, body);
-      show("Configurações salvas!"); reload();
+      // Se trocou o tipo de time: zera a posição dos jogadores (cadastro atual),
+      // preservando o histórico das partidas (participacao não é tocada).
+      if (zerarPosicoes) {
+        try {
+          await api.patch(`jogador?id_time=eq.${form.id_time}&id_jogador=gt.0`, { id_posicao: null });
+          show("Tipo alterado. As posições dos jogadores foram removidas — recadastre-as.");
+        } catch(e) {
+          show("Time salvo, mas houve erro ao limpar posições: " + e.message, "error");
+        }
+      } else {
+        show("Configurações salvas!");
+      }
+      setTipoOriginal(form.id_tipo_time ? String(form.id_tipo_time) : "");
+      setConfirmaTroca(null); setTextoConfirma("");
+      reload();
     } catch (e) { show(e.message, "error"); }
     finally { setSaving(false); }
   }
@@ -4939,6 +4964,32 @@ function ConfigTime({ idTime, show, readOnly }) {
           <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar Configurações"}</Btn>
         </div>
       </div>
+
+      {confirmaTroca && (
+        <Modal title="⚠️ Trocar o tipo de time" onClose={() => { setConfirmaTroca(null); setTextoConfirma(""); }}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ background:`${C.loss}1A`, border:`1px solid ${C.loss}55`, borderRadius:8, padding:"12px 14px", fontSize:14, color:C.cream, lineHeight:1.5 }}>
+              Cada tipo de time tem suas próprias posições. Ao trocar o tipo, <b>a posição de todos os jogadores será removida</b>
+              {confirmaTroca.qtd > 0 ? <> — isso afeta <b>{confirmaTroca.qtd} jogador(es)</b> que têm posição definida.</> : "."}
+              <br/><br/>
+              Você precisará <b>recadastrar a posição de cada jogador</b> com as posições do novo tipo. O histórico das partidas já jogadas é preservado.
+              <br/><br/>
+              <b>Esta ação não pode ser desfeita.</b>
+            </div>
+            <div>
+              <div style={{ fontSize:13, color:C.dim, marginBottom:6 }}>Para confirmar, digite <b style={{color:C.gold}}>TROCAR</b> abaixo:</div>
+              <Input value={textoConfirma} onChange={e => setTextoConfirma(e.target.value)} placeholder="Digite TROCAR"/>
+            </div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
+              <Btn variant="secondary" onClick={() => { setConfirmaTroca(null); setTextoConfirma(""); }}>Cancelar</Btn>
+              <Btn variant="danger" disabled={textoConfirma.trim().toUpperCase() !== "TROCAR" || saving}
+                onClick={() => salvarDefinitivo(true)}>
+                {saving ? "Salvando..." : "Confirmar troca e remover posições"}
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
     </Card>
   );
 }

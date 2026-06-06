@@ -1866,12 +1866,97 @@ function GestaoCidades({ show }) {
 // ══════════════════════════════════════════════════════════════
 // CRUD TIPOS DE TIME
 // ══════════════════════════════════════════════════════════════
+function GestaoPosicoesTipo({ tipo, show, onClose }) {
+  const { data: posicoes, loading, reload } = useQuery(() => api.get(`posicao?id_tipo_time=eq.${tipo.id_tipo_time}&select=*&order=ordem.asc,nome.asc`), [tipo]);
+  const [form, setForm] = useState(null); // {nome, ordem, id_posicao_pai, descricao} ou null
+  const [saving, setSaving] = useState(false);
+  const lista = posicoes || [];
+  const grupos = lista.filter(p => !p.id_posicao_pai);
+
+  function abrirNovo() { setForm({ nome:"", ordem:"", id_posicao_pai:"", descricao:"" }); }
+  function abrirEditar(p) { setForm({ ...p, id_posicao_pai: p.id_posicao_pai ? String(p.id_posicao_pai) : "", ordem: p.ordem ?? "" }); }
+
+  async function salvar() {
+    if (!form.nome?.trim()) { show("Informe o nome da posição."); return; }
+    setSaving(true);
+    try {
+      const body = {
+        nome: form.nome.trim(),
+        descricao: form.descricao || null,
+        ordem: form.ordem !== "" ? Number(form.ordem) : null,
+        id_posicao_pai: form.id_posicao_pai ? Number(form.id_posicao_pai) : null,
+        id_tipo_time: tipo.id_tipo_time,
+      };
+      if (form.id_posicao) await api.patch(`posicao?id_posicao=eq.${form.id_posicao}`, body);
+      else await api.post(`posicao`, body);
+      show("Posição salva!"); setForm(null); reload();
+    } catch(e) { show("Erro: " + e.message); }
+    finally { setSaving(false); }
+  }
+
+  async function excluir(p) {
+    if (!confirm(`Excluir a posição "${p.nome}"? Jogadores que a usam ficarão sem posição.`)) return;
+    try { await api.delete(`posicao?id_posicao=eq.${p.id_posicao}`); show("Posição excluída."); reload(); }
+    catch(e) { show("Erro ao excluir: " + e.message); }
+  }
+
+  return (
+    <Modal title={`Posições — ${tipo.descricao}`} onClose={onClose}>
+      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        <div style={{ fontSize:13, color:C.dim }}>
+          Defina as posições disponíveis para times do tipo <b style={{color:C.cream}}>{tipo.descricao}</b>.
+          Você pode criar posições simples (planas) ou agrupá-las indicando um grupo (posição-pai).
+        </div>
+        {loading ? <Spinner/> : (
+          <div style={{ border:`1px solid ${C.border}`, borderRadius:8, overflow:"hidden" }}>
+            {lista.length === 0 && <div style={{ padding:16, textAlign:"center", color:C.dim, fontSize:13 }}>Nenhuma posição cadastrada para este tipo.</div>}
+            {lista.map(p => (
+              <div key={p.id_posicao} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", borderBottom:`1px solid ${C.border}` }}>
+                <div style={{ fontSize:13, color:C.cream }}>
+                  {p.id_posicao_pai && <span style={{ color:C.dim }}>↳ </span>}
+                  {p.nome}
+                  {p.ordem != null && <span style={{ color:C.dim, fontSize:11 }}> (ordem {p.ordem})</span>}
+                </div>
+                <div style={{ display:"flex", gap:6 }}>
+                  <Btn variant="secondary" style={{ fontSize:11, padding:"3px 8px" }} onClick={() => abrirEditar(p)}>Editar</Btn>
+                  <Btn variant="secondary" style={{ fontSize:11, padding:"3px 8px", color:C.loss }} onClick={() => excluir(p)}>Excluir</Btn>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {form ? (
+          <div style={{ border:`1px solid ${C.gold}`, borderRadius:8, padding:12, display:"flex", flexDirection:"column", gap:10 }}>
+            <div style={{ fontSize:12, fontWeight:700, color:C.gold, textTransform:"uppercase" }}>{form.id_posicao ? "Editar posição" : "Nova posição"}</div>
+            <Input label="Nome *" value={form.nome} onChange={e => setForm(f => ({...f, nome:e.target.value}))} placeholder="Ex: Goleiro, Fixo, Ala, Pivô"/>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              <Input label="Ordem" type="number" value={form.ordem} onChange={e => setForm(f => ({...f, ordem:e.target.value}))} placeholder="Ex: 1"/>
+              <Select label="Grupo (opcional)" value={form.id_posicao_pai} onChange={e => setForm(f => ({...f, id_posicao_pai:e.target.value}))}>
+                <option value="">Sem grupo (plana)</option>
+                {grupos.filter(g => g.id_posicao !== form.id_posicao).map(g => <option key={g.id_posicao} value={g.id_posicao}>{g.nome}</option>)}
+              </Select>
+            </div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
+              <Btn variant="secondary" onClick={() => setForm(null)}>Cancelar</Btn>
+              <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar posição"}</Btn>
+            </div>
+          </div>
+        ) : (
+          <Btn onClick={abrirNovo}>+ Nova posição</Btn>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 function CrudTipoTime({ show }) {
   const { data: tipos, loading, reload } = useQuery(() => api.get(`tipo_time?select=*&order=id_tipo_time.asc`));
   const { toast } = useToast();
   const [modal, setModal] = useState(null);
   const [form, setForm]   = useState({});
   const [saving, setSaving] = useState(false);
+  const [gerenciarPos, setGerenciarPos] = useState(null); // tipo cujo gerenciador de posições está aberto
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
@@ -1945,6 +2030,7 @@ function CrudTipoTime({ show }) {
                 <td style={{ padding:"13px 16px", color:C.dim }}>{t.permite_acrescimos==="S" ? "Sim" : "Não"}</td>
                 <td style={{ padding:"13px 16px", display:"flex", gap:8 }}>
                   <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(t)}>Editar</Btn>
+                  <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px", color:C.gold }} onClick={() => setGerenciarPos(t)}>⚽ Posições</Btn>
                   <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px", color: t.status==="Ativo" ? C.loss : C.win }} onClick={() => alterarStatus(t)}>
                     {t.status==="Ativo" ? "Inativar" : "Ativar"}
                   </Btn>
@@ -1989,13 +2075,17 @@ function CrudTipoTime({ show }) {
           </div>
         </Modal>
       )}
+
+      {gerenciarPos && (
+        <GestaoPosicoesTipo tipo={gerenciarPos} show={show} onClose={() => setGerenciarPos(null)} />
+      )}
     </div>
   );
 }
 
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.16";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.17";
 
   if (!session) return <LoginSuper onLogin={setSession}/>;
 
