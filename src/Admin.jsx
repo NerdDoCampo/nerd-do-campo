@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.18";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.20";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 // Distância em km entre dois pontos (lat/long) — fórmula de Haversine
 function distanciaKm(lat1, lon1, lat2, lon2) {
@@ -2490,7 +2490,12 @@ function CrudMensalidades({ idTime, show, readOnly }) {
         // status virou nao_pago/isento → remove o movimento
         await api.delete(`movimento_caixa?id_mensalidade=eq.${id_mensalidade}`);
       }
-    } catch(e) { /* não bloqueia o fluxo principal de mensalidade */ }
+    } catch(e) {
+      // Não bloqueia o fluxo principal da mensalidade (que já foi salva),
+      // mas avisa que o lançamento no caixa não foi sincronizado.
+      console.warn("Falha ao sincronizar movimento da mensalidade:", e?.message);
+      show("Mensalidade salva, mas o lançamento no caixa não pôde ser atualizado. Verifique o financeiro.", "error");
+    }
   }
 
   async function salvarPagamento() {
@@ -2618,7 +2623,7 @@ function CrudMensalidades({ idTime, show, readOnly }) {
                   {j.apelido ? <>{j.apelido} <span style={{ color:C.dim, fontWeight:400, fontSize:11 }}>({j.nome})</span></> : j.nome}
                 </td>
                 <td style={{ padding:"11px 14px" }}>
-                  <span style={{ background:cfg.cor+"22", color:cfg.cor, border:`1px solid ${cfg.cor}44`, borderRadius:6, padding:"2px 10px", fontSize:11, fontWeight:700 }}>
+                  <span style={{ background:cfg.cor+"22", color:cfg.cor, border:`1px solid ${cfg.cor}44`, borderRadius:6, padding:"2px 10px", fontSize:11, fontWeight:700, whiteSpace:"nowrap", display:"inline-block" }}>
                     {cfg.icon} {cfg.label}
                   </span>
                 </td>
@@ -3859,7 +3864,7 @@ export default function AdminAppCompleto() {
       </div>
       <footer style={{ position:"sticky", bottom:0, zIndex:90, background:"#091F15", borderTop:`1px solid ${C.border}`,
         padding:"8px 20px", textAlign:"center", fontSize:12, color:C.dim, lineHeight:1.4 }}>
-        👥 Seu time pode ter <b style={{color:C.cream}}>vários administradores</b>, cada um com acesso aos módulos que você definir.
+        👥 Seu time pode ter <b style={{color:C.cream}}>vários administradores</b>, cada um com acesso aos módulos que você definir — e, em cada módulo, é possível liberar <b style={{color:C.cream}}>só visualização</b> ou também <b style={{color:C.cream}}>edição</b>.
         <span style={{color:C.gold}}> A quantidade de usuários não altera o valor da mensalidade do time.</span>
         {canEdit("time") && <> Fale com o suporte para adicionar novos acessos.</>}
       </footer>
@@ -4086,6 +4091,11 @@ function CrudJogadores({ idTime, show, readOnly }) {
                 })()}
               </Select>
             </div>
+            {(posicoes||[]).length === 0 && (
+              <div style={{ fontSize:12, color:C.gold, marginTop:-4 }}>
+                ⚠️ Nenhuma posição cadastrada para o tipo deste time. Fale com o suporte para configurar as posições.
+              </div>
+            )}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <Input label="Telefone" value={form.telefone||""} onChange={e => set("telefone", e.target.value)} />
               <Input label="E-mail" type="email" value={form.email||""} onChange={e => set("email", e.target.value)} />
@@ -4883,13 +4893,25 @@ function ConfigTime({ idTime, show, readOnly }) {
 
   return (
     <Card style={{ padding:24 }}>
+      <style>{`
+        .identidade-row{display:flex;align-items:flex-start;gap:20px}
+        .cfg-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .cfg-grid-auto{display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:12px}
+        .identidade-row .cfg-grid-2{flex:1}
+        @media(max-width:480px){
+          .identidade-row{flex-direction:column;align-items:center}
+          .identidade-row .cfg-grid-2{width:100%}
+          .cfg-grid-2{grid-template-columns:1fr}
+          .cfg-grid-auto{grid-template-columns:1fr}
+        }
+      `}</style>
       <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
         {/* Identidade do Time */}
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Identidade</div>
-        <div style={{ display:"flex", alignItems:"flex-start", gap:20 }}>
+        <div className="identidade-row">
           <ImageUpload label="Escudo" value={form.escudo_url||""} onUpload={url => set("escudo_url", url)} bucket="escudos" nomeArquivo={`time_${form.id_time}`}/>
-          <div className="form-grid-2" style={{ flex:1, display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <div className="cfg-grid-2">
             <Input label="Nome do Time *" value={form.nome||""} onChange={e => set("nome", e.target.value)}/>
             <Input label="Telefone" value={form.telefone||""} onChange={e => set("telefone", e.target.value)}/>
             <Input label="Data de Fundação" type="date" value={form.data_fundacao||""} onChange={e => set("data_fundacao", e.target.value)}/>
@@ -4912,7 +4934,7 @@ function ConfigTime({ idTime, show, readOnly }) {
 
         {/* Tipo de Time */}
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Tipo de Time</div>
-        <div className="form-grid-2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, alignItems:"end" }}>
+        <div className="cfg-grid-2" style={{ alignItems:"end" }}>
           <Select label="Tipo de Time" value={form.id_tipo_time||""} onChange={e => aplicarTipo(e.target.value)}>
             <option value="">Selecione...</option>
             {(tipos||[]).map(t => <option key={t.id_tipo_time} value={t.id_tipo_time}>{t.descricao}</option>)}
@@ -4924,7 +4946,7 @@ function ConfigTime({ idTime, show, readOnly }) {
 
         {/* Regras do Jogo */}
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Regras do Jogo</div>
-        <div className="form-grid-auto" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))", gap:12 }}>
+        <div className="cfg-grid-auto">
           <Input label="Nº Titulares"    type="number" min="1" value={form.numero_titulares||""} onChange={e => set("numero_titulares", e.target.value)} />
           <Input label="Qtd. Períodos"   type="number" min="1" value={form.quantidade_periodos||""} onChange={e => set("quantidade_periodos", e.target.value)} />
           <Input label="Min. por Período" type="number" min="1" value={form.minutos_padrao_periodo||""} onChange={e => set("minutos_padrao_periodo", e.target.value)} />
@@ -4935,7 +4957,7 @@ function ConfigTime({ idTime, show, readOnly }) {
         </div>
 
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginTop:4, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Comissão Atual</div>
-        <div className="form-grid-2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div className="cfg-grid-2">
           <Input label="Técnico"         value={form.tecnico||""}         onChange={e => set("tecnico",          e.target.value)} />
           <Input label="Presidente"      value={form.presidente||""}      onChange={e => set("presidente",       e.target.value)} />
           <Input label="Vice-Presidente" value={form.vice_presidente||""} onChange={e => set("vice_presidente",  e.target.value)} />
