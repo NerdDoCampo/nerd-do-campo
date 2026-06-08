@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.23";
+const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
+// Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
 const C = {
   bg:      "#0B3D2E", surface: "#103D2A", surf2: "#174D36",
   border:  "#1F5C3E", gold: "#E8A020",    cream: "#F0E8D0",
   dim:     "#8FAF9A", win: "#4CAF50",     loss: "#E53935",
   draw:    "#E8A020",
 };
-
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.21";
-const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 // Distância em km entre dois pontos (lat/long) — fórmula de Haversine
 function distanciaKm(lat1, lon1, lat2, lon2) {
   if ([lat1, lon1, lat2, lon2].some(v => v == null || isNaN(Number(v)))) return null;
@@ -943,8 +943,6 @@ function ThSortable({ colKey, sortKey, asc, onSort, children }) {
 
 
 
-
-
 // ── Atoms ─────────────────────────────────────────────────────
 const f = (tag, base) => ({ children, style: s = {}, ...p }) =>
   { const T = tag; return <T style={{ ...base, ...s }} {...p}>{children}</T>; };
@@ -1412,13 +1410,13 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
   const { toast, show } = useToast();
 
   const { data: jogadores }     = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=*,posicao(nome)&order=camisa.asc`) : Promise.resolve([]), [idTime]);
-  const { data: advsFicha } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
-  // Meu time: tipo, raio padrão e coordenadas da cidade-sede — usado na busca por raio
+  // Meu time: tipo, raio padrão e coordenadas da cidade-sede — declarado ANTES das queries que usam meuTipoTime (evita TDZ no bundle de produção)
   const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,id_tipo_time,raio_busca_km,numero_titulares,quantidade_periodos,minutos_padrao_periodo,permite_acrescimos,cidade:id_cidade_sede(nome,estado,latitude,longitude)&limit=1`) : Promise.resolve([]), [idTime]);
   const meuTime = meuTimeData?.[0];
   const meuTipoTime = meuTime?.id_tipo_time;
-  const { data: posicoes }      = useQuery(() => meuTipoTime ? api.get(`posicao?id_tipo_time=eq.${meuTipoTime}&select=*&order=ordem.asc`) : Promise.resolve([]), [meuTipoTime]);
   const minhaCidade = meuTime?.cidade; // {nome, estado, latitude, longitude}
+  const { data: posicoes }      = useQuery(() => meuTipoTime ? api.get(`posicao?id_tipo_time=eq.${meuTipoTime}&select=*&order=ordem.asc`) : Promise.resolve([]), [meuTipoTime]);
+  const { data: advsFicha } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
   // Raio ajustável na tela (inicia com o padrão do time; ajuste é temporário, não salva)
   const [raioKm, setRaioKm] = useState(null);
   useEffect(() => { if (meuTime?.raio_busca_km != null && raioKm === null) setRaioKm(meuTime.raio_busca_km); }, [meuTime]);
