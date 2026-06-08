@@ -1416,8 +1416,8 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
   const { data: advsFicha } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
   // Meu time: tipo, raio padrão e coordenadas da cidade-sede — usado na busca por raio
   const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,id_tipo_time,raio_busca_km,numero_titulares,quantidade_periodos,minutos_padrao_periodo,permite_acrescimos,cidade:id_cidade_sede(nome,estado,latitude,longitude)&limit=1`) : Promise.resolve([]), [idTime]);
+  const meuTipoTime = meuTimeData?.[0]?.id_tipo_time;
   const meuTime = meuTimeData?.[0];
-  const meuTipoTime = meuTime?.id_tipo_time;
   const minhaCidade = meuTime?.cidade; // {nome, estado, latitude, longitude}
   // Raio ajustável na tela (inicia com o padrão do time; ajuste é temporário, não salva)
   const [raioKm, setRaioKm] = useState(null);
