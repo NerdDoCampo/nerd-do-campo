@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.23";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.24";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -9,6 +9,29 @@ const C = {
   dim:     "#8FAF9A", win: "#4CAF50",     loss: "#E53935",
   draw:    "#E8A020",
 };
+
+// Calcula o esquema tático (ex: "4-4-2") a partir das participações de uma partida.
+// Usa a posição cadastrada NA PARTIDA. Considera só titulares com posição.
+// Resolve o grupo (posição-pai; se plana, a própria); descarta o grupo de menor
+// ordem (goleiro); ordena pela ordem do grupo. Retorna null se não der p/ calcular.
+function calcularEsquema(participacoes) {
+  const titulares = (participacoes || []).filter(p => p.titular && p.posicao);
+  if (titulares.length === 0) return null;
+  const grupos = {}; // idGrupo -> { ordem, count }
+  titulares.forEach(p => {
+    const pos = p.posicao;
+    const temPai = !!pos.id_posicao_pai;
+    const idGrupo = temPai ? pos.id_posicao_pai : pos.id_posicao;
+    const ordem = temPai ? (pos.pai?.ordem != null ? pos.pai.ordem : 999)
+                         : (pos.ordem != null ? pos.ordem : 999);
+    if (!grupos[idGrupo]) grupos[idGrupo] = { ordem, count: 0 };
+    grupos[idGrupo].count++;
+  });
+  const ordenados = Object.values(grupos).sort((a, b) => a.ordem - b.ordem);
+  const semGoleiro = ordenados.slice(1); // descarta o 1º grupo (menor ordem = goleiro)
+  if (semGoleiro.length === 0) return null;
+  return semGoleiro.map(g => g.count).join("-");
+}
 // Distância em km entre dois pontos (lat/long) — fórmula de Haversine
 function distanciaKm(lat1, lon1, lat2, lon2) {
   if ([lat1, lon1, lat2, lon2].some(v => v == null || isNaN(Number(v)))) return null;
@@ -1156,7 +1179,7 @@ function Login({ onLogin }) {
 // ── LISTA DE PARTIDAS ─────────────────────────────────────────
 function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show: onShow }) {
   const { data: partidas, loading, reload } = useQuery(
-    () => api.get(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo:id_campo(nome)&order=data.asc`),
+    () => api.get(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo:id_campo(nome),participacao(titular,id_jogador,posicao(id_posicao,id_posicao_pai,ordem,pai:id_posicao_pai(id_posicao,ordem)))&order=data.asc`),
     [temporada.id_temporada]
   );
 
@@ -1275,6 +1298,7 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {lista.map(p => {
           const res = resultado(p);
+          const esq = calcularEsquema(p.participacao);
           const pendente = p.gols_marcados === null && p.cancelada !== "S";
           const procurando = !p.id_adversario && p.cancelada !== "S";
           return (
@@ -1296,6 +1320,7 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
                   ? <span style={{ fontSize: 20, fontWeight: 800, color: C.gold }}>{p.gols_marcados} × {p.gols_sofridos}</span>
                   : <span style={{ fontSize: 13, color: C.gold }}>⏰ Aguardando</span>}
                 <Badge label={res.label} cor={res.cor} />
+                {esq && <span title="Esquema tático" style={{ fontSize: 11, fontWeight: 800, color: C.gold, letterSpacing: "1px", border: `1px solid ${C.border}`, borderRadius: 5, padding: "1px 7px" }}>{esq}</span>}
               </div>
               <div style={{ color: C.dim, fontSize: 18 }}>›</div>
             </div>
@@ -1420,23 +1445,26 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
   // Raio ajustável na tela (inicia com o padrão do time; ajuste é temporário, não salva)
   const [raioKm, setRaioKm] = useState(null);
   useEffect(() => { if (meuTime?.raio_busca_km != null && raioKm === null) setRaioKm(meuTime.raio_busca_km); }, [meuTime]);
-  // A partida está "procurando" se não tem adversário definido (usa estado atual, não o inicial)
-  const semAdversario = !(partida.id_adversario);
   // Buscar times disponíveis na mesma data (partida em branco, público, mesmo tipo)
   const dataPartida = partida.data ? partida.data.split("T")[0] : null;
+  const semAdversario = !(partida.id_adversario); // partida "procurando" se não tem adversário
+  const [verProcurando, setVerProcurando] = useState(false); // botão: ver times procurando jogo mesmo com adversário definido
+  const mostrarDisponiveis = (semAdversario || verProcurando) && !!dataPartida;
   const { data: disponiveis, loading: loadingDisp } = useQuery(
-    () => (semAdversario && dataPartida)
+    () => mostrarDisponiveis
       ? api.get(`partida?id_adversario=is.null&cancelada=eq.N&data=gte.${dataPartida}T00:00:00&data=lte.${dataPartida}T23:59:59&select=id_partida,data,temporada(id_time,time(id_time,nome,escudo_url,telefone,resp_redes_sociais,marca_jogos,data_fundacao,publico,destaque,id_tipo_time,cidade:id_cidade_sede(nome,estado,latitude,longitude),campo:id_campo(nome)))`)
       : Promise.resolve([]),
-    [semAdversario, dataPartida]
+    [mostrarDisponiveis, dataPartida]
   );
   const [modalAdv, setModalAdv] = useState(false);
   const [advSel, setAdvSel] = useState("");
   const [savingAdv, setSavingAdv] = useState(false);
   const { data: participacoes, reload: reloadPart } = useQuery(
-    () => api.get(`participacao?id_partida=eq.${partida.id_partida}&id_jogador=gt.0&select=*,jogador(nome,apelido,camisa),posicao(nome)&order=camisa.asc`),
+    () => api.get(`participacao?id_partida=eq.${partida.id_partida}&id_jogador=gt.0&select=*,jogador(nome,apelido,camisa),posicao(nome,id_posicao,id_posicao_pai,ordem,pai:id_posicao_pai(id_posicao,ordem))&order=camisa.asc`),
     [partida.id_partida]
   );
+  // Esquema tático dos titulares (ex: 4-4-2), pela posição cadastrada nesta partida.
+  const esquemaTatico = calcularEsquema(participacoes);
   const { data: gols, reload: reloadGols } = useQuery(
     () => api.get(`gol?select=*,participacao!inner(id_partida,id_jogador,jogador(nome,apelido)),jogador(nome,apelido)&participacao.id_partida=eq.${partida.id_partida}&order=periodo.asc,minuto.asc`),
     [partida.id_partida]
@@ -1595,12 +1623,25 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
             <Badge label={res.label} cor={res.cor} />
+            {esquemaTatico && (
+              <div title="Esquema tático dos titulares (sem o goleiro)" style={{ background: C.surf2, border: `1px solid ${C.gold}`, color: C.gold, borderRadius: 8, padding: "4px 12px", fontSize: 14, fontWeight: 800, letterSpacing: "2px" }}>
+                {esquemaTatico}
+              </div>
+            )}
             {!cancelada && (
               <Btn variant="danger" style={{ fontSize: 11, padding: "6px 12px" }} onClick={cancelarPartida}>Cancelar Partida</Btn>
             )}
           </div>
         </div>
       </Card>
+
+      {/* Botão: ver times procurando jogo nesta data (quando a partida JÁ tem adversário) */}
+      {!cancelada && !semAdversario && dataPartida && (
+        <button onClick={() => setVerProcurando(v => !v)}
+          style={{ alignSelf: "flex-start", background: verProcurando ? C.surf2 : "none", border: `1px solid ${C.gold}`, color: C.gold, borderRadius: 8, padding: "8px 14px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+          🔍 {verProcurando ? "Ocultar" : "Ver"} times procurando jogo nesta data
+        </button>
+      )}
 
       {/* Placar */}
       {!cancelada && (
@@ -1703,8 +1744,8 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
         </Card>
       )}
 
-      {/* Times disponíveis nesta data (só quando a partida está procurando adversário) */}
-      {semAdversario && partida.cancelada !== "S" && (() => {
+      {/* Times disponíveis nesta data (quando procurando adversário OU quando o admin clica em "ver times procurando") */}
+      {mostrarDisponiveis && partida.cancelada !== "S" && (() => {
         // Sei calcular distância? (meu time precisa ter cidade-sede com coordenadas)
         const temCoordenadas = !!(minhaCidade?.latitude != null && minhaCidade?.longitude != null);
         const raioAtual = raioKm ?? 50;
