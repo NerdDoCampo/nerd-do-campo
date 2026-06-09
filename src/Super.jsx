@@ -756,7 +756,7 @@ function ModalPermissoes({ user_id, id_time, nomeUsuario, onClose, show }) {
 // ══════════════════════════════════════════════════════════════
 function CrudSolicitacoes({ show, onMudou }) {
   const { data: solicitacoes, reload } = useQuery(() =>
-    api.get(`solicitacao_time?select=*,tipo_time!id_tipo_time(descricao)&order=criado_em.desc`)
+    api.get(`solicitacao_time?select=*,tipo_time!id_tipo_time(descricao),subtipo:id_subtipo(descricao)&order=criado_em.desc`)
   );
   const { data: tipos } = useQuery(() => api.get(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
   const [modalSol, setModalSol] = useState(null);
@@ -800,10 +800,12 @@ function CrudSolicitacoes({ show, onMudou }) {
       let id_time = modalSol.id_time_criado || null;
       if (!id_time) {
         // Buscar os parâmetros padrão do tipo de time escolhido (períodos, titulares etc.)
+        // Se for turma fechada, os parâmetros vêm do SUBTIPO escolhido na solicitação.
         let paramsTipo = {};
-        if (modalSol.id_tipo_time) {
+        const idTipoParaParams = modalSol.id_subtipo || modalSol.id_tipo_time;
+        if (idTipoParaParams) {
           try {
-            const tt = await api.get(`tipo_time?id_tipo_time=eq.${modalSol.id_tipo_time}&select=numero_titulares,quantidade_periodos,minutos_padrao_periodo,permite_acrescimos&limit=1`);
+            const tt = await api.get(`tipo_time?id_tipo_time=eq.${idTipoParaParams}&select=numero_titulares,quantidade_periodos,minutos_padrao_periodo,permite_acrescimos&limit=1`);
             if (tt?.[0]) paramsTipo = {
               numero_titulares: tt[0].numero_titulares ?? 11,
               quantidade_periodos: tt[0].quantidade_periodos ?? 2,
@@ -815,6 +817,7 @@ function CrudSolicitacoes({ show, onMudou }) {
         const timeRes = await api.post(`time`, {
           nome: modalSol.nome_time,
           id_tipo_time: modalSol.id_tipo_time || null,
+          id_subtipo: modalSol.id_subtipo || null,
           data_fundacao: modalSol.data_fundacao || null,
           telefone: modalSol.telefone || null,
           id_cidade_sede: modalSol.id_cidade || null,
@@ -964,6 +967,7 @@ function CrudSolicitacoes({ show, onMudou }) {
                 {[
                   ["Time",          modalSol.nome_time],
                   ["Tipo",          modalSol.tipo_time?.descricao || "—"],
+                  ...(modalSol.subtipo?.descricao ? [["Modalidade (subtipo)", modalSol.subtipo.descricao]] : []),
                   ["Cidade",        modalSol.cidade || "—"],
                   ["Fundação",      modalSol.data_fundacao ? new Date(modalSol.data_fundacao+"T12:00:00").toLocaleDateString("pt-BR") : "—"],
                   ["Responsável",   modalSol.nome_responsavel],
@@ -1997,6 +2001,7 @@ function CrudTipoTime({ show }) {
         quantidade_periodos: Number(form.quantidade_periodos) || 2,
         minutos_padrao_periodo: Number(form.minutos_padrao_periodo) || 45,
         permite_acrescimos: form.permite_acrescimos || "S",
+        eh_turma_fechada: !!form.eh_turma_fechada,
       };
       if (modal === "novo") {
         await api.post(`tipo_time`, body);
@@ -2079,6 +2084,10 @@ function CrudTipoTime({ show }) {
                 </select>
               </div>
             </div>
+            <label style={{ display:"flex", alignItems:"center", gap:10, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", cursor:"pointer", fontSize:13 }}>
+              <input type="checkbox" checked={!!form.eh_turma_fechada} onChange={e => set("eh_turma_fechada", e.target.checked)} style={{ width:18, height:18, accentColor:C.gold }} />
+              <span><strong style={{ color:C.cream }}>É turma fechada</strong> <span style={{ color:C.dim }}>— grupo que joga entre si (racha/pelada). Times do tipo turma fechada escolhem um subtipo e usam encontros em vez de partidas.</span></span>
+            </label>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(130px, 1fr))", gap:12 }}>
               <Input label="Nº Titulares"    type="number" value={form.numero_titulares||""} onChange={e => set("numero_titulares", e.target.value)}/>
               <Input label="Qtd Períodos"    type="number" value={form.quantidade_periodos||""} onChange={e => set("quantidade_periodos", e.target.value)}/>
@@ -2101,7 +2110,7 @@ function CrudTipoTime({ show }) {
 
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.30";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.31";
 
   if (!session) return <LoginSuper onLogin={setSession}/>;
 
