@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.24";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.25";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -11,19 +11,27 @@ const C = {
 };
 
 // Calcula o esquema tático (ex: "4-4-2") a partir das participações de uma partida.
-// Usa a posição cadastrada NA PARTIDA. Considera só titulares com posição.
-// Resolve o grupo (posição-pai; se plana, a própria); descarta o grupo de menor
-// ordem (goleiro); ordena pela ordem do grupo. Retorna null se não der p/ calcular.
-function calcularEsquema(participacoes) {
-  const titulares = (participacoes || []).filter(p => p.titular && p.posicao);
+// Usa a posição cadastrada NA PARTIDA. Considera só titulares (titular = 'S') com posição.
+// Resolve o grupo (posição-pai; se plana, a própria); descarta o grupo de menor ordem
+// (goleiro); ordena pela ordem do grupo. mapaPos: { id_posicao: {ordem, id_posicao_pai} }
+// vindo das posições do tipo do time (para resolver a ordem do pai sem self-join).
+function calcularEsquema(participacoes, mapaPos) {
+  const titulares = (participacoes || []).filter(p => p.titular === "S" && p.posicao);
   if (titulares.length === 0) return null;
+  const mp = mapaPos || {};
   const grupos = {}; // idGrupo -> { ordem, count }
   titulares.forEach(p => {
     const pos = p.posicao;
     const temPai = !!pos.id_posicao_pai;
     const idGrupo = temPai ? pos.id_posicao_pai : pos.id_posicao;
-    const ordem = temPai ? (pos.pai?.ordem != null ? pos.pai.ordem : 999)
-                         : (pos.ordem != null ? pos.ordem : 999);
+    // ordem do grupo: se tem pai, a ordem do pai (via mapa); senão, a ordem da própria
+    let ordem;
+    if (temPai) {
+      ordem = (mp[pos.id_posicao_pai]?.ordem != null) ? mp[pos.id_posicao_pai].ordem
+            : (pos.pai?.ordem != null ? pos.pai.ordem : 999);
+    } else {
+      ordem = (pos.ordem != null) ? pos.ordem : 999;
+    }
     if (!grupos[idGrupo]) grupos[idGrupo] = { ordem, count: 0 };
     grupos[idGrupo].count++;
   });
@@ -1179,9 +1187,15 @@ function Login({ onLogin }) {
 // ── LISTA DE PARTIDAS ─────────────────────────────────────────
 function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show: onShow }) {
   const { data: partidas, loading, reload } = useQuery(
-    () => api.get(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo:id_campo(nome),participacao(titular,id_jogador,posicao(id_posicao,id_posicao_pai,ordem,pai:id_posicao_pai(id_posicao,ordem)))&order=data.asc`),
+    () => api.get(`partida?id_temporada=eq.${temporada.id_temporada}&select=*,adversario(nome),campo:id_campo(nome),participacao(titular,id_jogador,posicao(id_posicao,id_posicao_pai,ordem))&order=data.asc`),
     [temporada.id_temporada]
   );
+  // Tipo do time e posições do tipo — para resolver a ordem do pai no esquema tático
+  const { data: _timeLista } = useQuery(() => temporada?.id_time ? api.get(`time?id_time=eq.${temporada.id_time}&select=id_tipo_time&limit=1`) : Promise.resolve([]), [temporada]);
+  const _tipoLista = _timeLista?.[0]?.id_tipo_time;
+  const { data: _posLista } = useQuery(() => _tipoLista ? api.get(`posicao?id_tipo_time=eq.${_tipoLista}&select=id_posicao,id_posicao_pai,ordem`) : Promise.resolve([]), [_tipoLista]);
+  const mapaPosLista = {};
+  (_posLista || []).forEach(p => { mapaPosLista[p.id_posicao] = p; });
 
   const [filtro, setFiltro] = useState("pendentes");
   const [loadingImportPartida, setLoadingImportPartida] = useState(false);
@@ -1298,7 +1312,7 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {lista.map(p => {
           const res = resultado(p);
-          const esq = calcularEsquema(p.participacao);
+          const esq = calcularEsquema(p.participacao, mapaPosLista);
           const pendente = p.gols_marcados === null && p.cancelada !== "S";
           const procurando = !p.id_adversario && p.cancelada !== "S";
           return (
@@ -1460,11 +1474,13 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
   const [advSel, setAdvSel] = useState("");
   const [savingAdv, setSavingAdv] = useState(false);
   const { data: participacoes, reload: reloadPart } = useQuery(
-    () => api.get(`participacao?id_partida=eq.${partida.id_partida}&id_jogador=gt.0&select=*,jogador(nome,apelido,camisa),posicao(nome,id_posicao,id_posicao_pai,ordem,pai:id_posicao_pai(id_posicao,ordem))&order=camisa.asc`),
+    () => api.get(`participacao?id_partida=eq.${partida.id_partida}&id_jogador=gt.0&select=*,jogador(nome,apelido,camisa),posicao(nome,id_posicao,id_posicao_pai,ordem)&order=camisa.asc`),
     [partida.id_partida]
   );
   // Esquema tático dos titulares (ex: 4-4-2), pela posição cadastrada nesta partida.
-  const esquemaTatico = calcularEsquema(participacoes);
+  const mapaPosicoes = {};
+  (posicoes || []).forEach(p => { mapaPosicoes[p.id_posicao] = p; });
+  const esquemaTatico = calcularEsquema(participacoes, mapaPosicoes);
   const { data: gols, reload: reloadGols } = useQuery(
     () => api.get(`gol?select=*,participacao!inner(id_partida,id_jogador,jogador(nome,apelido)),jogador(nome,apelido)&participacao.id_partida=eq.${partida.id_partida}&order=periodo.asc,minuto.asc`),
     [partida.id_partida]
@@ -2902,7 +2918,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.13.18" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.13.25" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
