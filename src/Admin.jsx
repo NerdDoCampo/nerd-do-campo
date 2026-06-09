@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.25";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.27";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -3650,7 +3650,7 @@ export default function AdminAppCompleto() {
   }, [session]);
 
   const { data: times }      = useQuery(() => 
-    idTime ? api.get(`time?id_time=eq.${idTime}&select=*&limit=1`) : Promise.resolve([]),
+    idTime ? api.get(`time?id_time=eq.${idTime}&select=*,tipo_time(eh_turma_fechada)&limit=1`) : Promise.resolve([]),
     [session, idTime]
   );
 
@@ -3747,9 +3747,20 @@ export default function AdminAppCompleto() {
   }
 
   const time = times?.[0];
+  const ehTurmaFechada = !!time?.tipo_time?.eh_turma_fechada;
 
   function navMenu(id) { setMenu(id); setPartida(null); setNovaPartida(false); }
-  const MENU = MENU_BASE.filter(m => canVer(m.id));
+  // Menu base + item de Times Internos (só para turma fechada). Aditivo: times tradicionais não veem.
+  const MENU_COM_TURMA = ehTurmaFechada
+    ? (() => {
+        const base = MENU_BASE.map(m => m.id === "partidas" ? { ...m, label:"Encontros", icon:"📋" } : m);
+        const idx = base.findIndex(m => m.id === "jogadores");
+        const item = { id:"times_internos", label:"Times Internos", icon:"🧡", grupo:"Cadastros" };
+        if (idx >= 0) base.splice(idx + 1, 0, item); else base.push(item);
+        return base;
+      })()
+    : MENU_BASE;
+  const MENU = MENU_COM_TURMA.filter(m => canVer(m.id));
 
   const secTitle = (label) => (
     <div style={{ fontSize:18, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:20, display:"flex", alignItems:"center", gap:10 }}>
@@ -3871,7 +3882,11 @@ export default function AdminAppCompleto() {
           {menu === "app" && (
             <VisaoAppPublico time={(times||[])[0]} temporadas={temporadas}/>
           )}
-          {menu === "partidas" && !temporadaSel && (
+          {/* Turma fechada: "Partidas" vira "Encontros" */}
+          {menu === "partidas" && ehTurmaFechada && (<>{secTitle("Encontros")}
+            <ListaEncontros idTime={idTime} temporada={temporadaSel} show={show} readOnly={!canEdit("partidas")} />
+          </>)}
+          {menu === "partidas" && !ehTurmaFechada && !temporadaSel && (
             <Card style={{ padding:32, textAlign:"center" }}>
               <div style={{ fontSize:40, marginBottom:12 }}>📆</div>
               <div style={{ fontSize:18, fontWeight:800, color:C.cream, marginBottom:8 }}>Nenhuma temporada cadastrada</div>
@@ -3883,12 +3898,12 @@ export default function AdminAppCompleto() {
                 : <div style={{ fontSize:12, color:C.dim }}>Peça a um administrador para cadastrar a temporada.</div>}
             </Card>
           )}
-          {menu === "partidas" && !partida && !novaPartida && temporadaSel && (<>
+          {menu === "partidas" && !ehTurmaFechada && !partida && !novaPartida && temporadaSel && (<>
             {secTitle(`Partidas — ${temporadaSel.nome}`)}
             <ListaPartidasWrapper temporada={temporadaSel} onSelect={p=>{setPartida(p);}} onNova={()=>setNovaPartida(true)} show={show} />
           </>)}
 
-          {menu === "partidas" && novaPartida && temporadaSel && (<>
+          {menu === "partidas" && !ehTurmaFechada && novaPartida && temporadaSel && (<>
             <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
               {secTitle("Nova Partida")}
               <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", marginTop:-20 }} onClick={()=>setNovaPartida(false)}>← Voltar</Btn>
@@ -3898,7 +3913,7 @@ export default function AdminAppCompleto() {
             </Card>
           </>)}
 
-          {menu === "partidas" && partida && !novaPartida && (<>
+          {menu === "partidas" && !ehTurmaFechada && partida && !novaPartida && (<>
             <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
               {secTitle("Ficha da Partida")}
               <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", marginTop:-20 }} onClick={()=>setPartida(null)}>← Voltar</Btn>
@@ -3910,6 +3925,7 @@ export default function AdminAppCompleto() {
           {menu === "adversarios" && (<>{secTitle("Adversários")}<CrudAdversarios idTime={idTime} show={show} readOnly={!canEdit("adversarios")} /></>)}
           {menu === "campos"      && (<>{secTitle("Campos")}<CrudCampos idTime={idTime} show={show} readOnly={!canEdit("campos")} /></>)}
           {menu === "posicoes"    && (<>{secTitle("Posições")}<CrudPosicoes idTime={idTime} show={show} readOnly={!canEdit("posicoes")} /></>)}
+          {menu === "times_internos" && (<>{secTitle("Times Internos")}<CrudTimesInternos idTime={idTime} show={show} readOnly={!canEdit("times_internos")} /></>)}
           {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas idTime={idTime} show={show} readOnly={!canEdit("temporadas")} /></>)}
           {menu === "mensalidades" && (<CrudMensalidades idTime={idTime} show={show} readOnly={!canEdit("mensalidades")}/>)}
           {menu === "caixa"         && (<CrudCaixa idTime={idTime} show={show} readOnly={!canEdit("caixa")}/>)}
@@ -4455,6 +4471,391 @@ function CrudCampos({ idTime, show, readOnly }) {
         </Modal>
       )}
     </div>
+  );
+}
+
+// ── CRUD TIMES INTERNOS (turma fechada) ──────────────────────
+// Times internos pertencem ao TIME (histórico plurianual). Só os
+// sem data_fim aparecem ao montar um jogo do encontro. Tela isolada,
+// usada apenas quando o time é do tipo turma fechada.
+function CrudTimesInternos({ idTime, show, readOnly }) {
+  const { data: times, loading, reload } = useQuery(() => idTime ? api.get(`time_interno?id_time=eq.${idTime}&select=*&order=data_fim.asc.nullsfirst,nome.asc`) : Promise.resolve([]), [idTime]);
+  const [modal, setModal]   = useState(null);
+  const [form, setForm]     = useState({});
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  function abrirNovo() { setForm({ nome:"", cor:"#E8A020", data_inicio:"", data_fim:"", observacao:"" }); setModal("novo"); }
+  function abrirEditar(t) {
+    setForm({
+      ...t,
+      data_inicio: t.data_inicio ? String(t.data_inicio).split("T")[0] : "",
+      data_fim:    t.data_fim ? String(t.data_fim).split("T")[0] : "",
+      cor: t.cor || "#E8A020",
+      observacao: t.observacao || "",
+    });
+    setModal(t);
+  }
+
+  async function salvar() {
+    if (!form.nome || !form.nome.trim()) { show("Nome obrigatório.", "error"); return; }
+    setSaving(true);
+    try {
+      const body = {
+        nome: form.nome.trim(),
+        cor: form.cor || null,
+        data_inicio: form.data_inicio || null,
+        data_fim: form.data_fim || null,
+        observacao: form.observacao || null,
+        id_time: idTime || null,
+      };
+      if (modal === "novo") await api.post("time_interno", body);
+      else await api.patch(`time_interno?id_time_interno=eq.${form.id_time_interno}`, body);
+      show("Salvo!"); setModal(null); reload();
+    } catch (e) { show(e.message, "error"); } finally { setSaving(false); }
+  }
+
+  if (loading) return <Spinner />;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+        <div style={{ fontSize:12, color:C.dim }}>Times internos da turma. Só os ativos (sem data de encerramento) aparecem ao montar um jogo.</div>
+        {!readOnly && <Btn onClick={abrirNovo}>+ Novo Time Interno</Btn>}
+      </div>
+      <Card style={{ padding:0, overflow:"hidden" }}>
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+          <thead><tr style={{ background:C.surf2 }}>
+            {["Time","Início","Encerrado em","Situação",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {(times||[]).map((t,i) => (
+              <tr key={t.id_time_interno} style={{ background: i%2===0?C.surface:C.bg }}>
+                <td style={{ padding:"11px 14px", fontWeight:700 }}>
+                  <span style={{ display:"inline-block", width:13, height:13, borderRadius:"50%", background:t.cor||C.dim, marginRight:8, verticalAlign:"middle", border:`1px solid ${C.border}` }} />
+                  {t.nome}
+                </td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_inicio ? new Date(t.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_fim ? new Date(t.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
+                <td style={{ padding:"11px 14px", fontSize:12 }}>{t.data_fim ? <span style={{ color:C.dim }}>Encerrado</span> : <span style={{ color:C.win, fontWeight:700 }}>Ativo</span>}</td>
+                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(t)}>Editar</Btn>}</td>
+              </tr>
+            ))}
+            {(times||[]).length === 0 && (
+              <tr><td colSpan={5} style={{ padding:"20px 14px", textAlign:"center", color:C.dim, fontSize:13 }}>Nenhum time interno cadastrado ainda.</td></tr>
+            )}
+          </tbody>
+        </table></div>
+      </Card>
+      {modal && (
+        <Modal title={modal === "novo" ? "Novo Time Interno" : "Editar Time Interno"} onClose={() => setModal(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} placeholder="Ex: Laranja" />
+            <div>
+              <label style={{ display:"block", fontSize:12, color:C.dim, marginBottom:6 }}>Cor</label>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <input type="color" value={form.cor||"#E8A020"} onChange={e => set("cor", e.target.value)} style={{ width:48, height:38, border:`1px solid ${C.border}`, borderRadius:8, background:C.surf2, cursor:"pointer" }} />
+                <Input value={form.cor||""} onChange={e => set("cor", e.target.value)} placeholder="#E8A020" style={{ flex:1 }} />
+              </div>
+            </div>
+            <Input label="Data de início" type="date" value={form.data_inicio||""} onChange={e => set("data_inicio", e.target.value)} />
+            <Input label="Encerrado em (deixe vazio se ativo)" type="date" value={form.data_fim||""} onChange={e => set("data_fim", e.target.value)} />
+            <Input label="Observação" value={form.observacao||""} onChange={e => set("observacao", e.target.value)} />
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:8 }}>
+              <Btn variant="secondary" onClick={() => setModal(null)}>Cancelar</Btn>
+              <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── ENCONTROS (turma fechada) ────────────────────────────────
+// Lista de encontros (como a lista de partidas) → abre a ficha do dia.
+// A ficha tem: jogos do rodízio (placar entre times internos) +
+// estatísticas agregadas por jogador no dia + validações.
+function ListaEncontros({ idTime, temporada, show, readOnly }) {
+  const [encontroSel, setEncontroSel] = useState(null);
+  const [novo, setNovo] = useState(false);
+  const { data: encontros, loading, reload } = useQuery(
+    () => temporada?.id_temporada
+      ? api.get(`encontro?id_temporada=eq.${temporada.id_temporada}&select=*,campo:id_campo(nome)&order=data.desc`)
+      : Promise.resolve([]),
+    [temporada]
+  );
+
+  if (!temporada) return <Card><div style={{ padding:20, color:C.dim }}>Crie uma temporada primeiro para registrar encontros.</div></Card>;
+  if (encontroSel || novo) {
+    return <FichaEncontro idTime={idTime} temporada={temporada} encontro={encontroSel} show={show} readOnly={readOnly}
+             onVoltar={() => { setEncontroSel(null); setNovo(false); reload(); }} />;
+  }
+  if (loading) return <Spinner />;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+        <div style={{ fontSize:12, color:C.dim }}>Encontros da temporada {temporada.nome || ""}. Clique para abrir o dia.</div>
+        {!readOnly && <Btn onClick={() => setNovo(true)}>+ Novo Encontro</Btn>}
+      </div>
+      <Card style={{ padding:0, overflow:"hidden" }}>
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+          <thead><tr style={{ background:C.surf2 }}>
+            {["Data","Local","Jogos","Situação",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {(encontros||[]).map((e,i) => (
+              <tr key={e.id_encontro} style={{ background: i%2===0?C.surface:C.bg, cursor:"pointer" }} onClick={() => setEncontroSel(e)}>
+                <td style={{ padding:"11px 14px", fontWeight:700, whiteSpace:"nowrap" }}>{fmtData(e.data)} {fmtHora(e.data)}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{e.campo?.nome || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{e._njogos != null ? e._njogos : ""}</td>
+                <td style={{ padding:"11px 14px", fontSize:12 }}>
+                  {e.status === "pendente_conferencia"
+                    ? <span style={{ background:C.gold+"22", color:C.gold, fontWeight:700, padding:"2px 8px", borderRadius:5, fontSize:11 }}>Pendente conferência</span>
+                    : <span style={{ color:C.win }}>OK</span>}
+                </td>
+                <td style={{ padding:"11px 14px" }}><Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={(ev) => { ev.stopPropagation(); setEncontroSel(e); }}>Abrir</Btn></td>
+              </tr>
+            ))}
+            {(encontros||[]).length === 0 && (
+              <tr><td colSpan={5} style={{ padding:"20px 14px", textAlign:"center", color:C.dim, fontSize:13 }}>Nenhum encontro registrado nesta temporada.</td></tr>
+            )}
+          </tbody>
+        </table></div>
+      </Card>
+    </div>
+  );
+}
+
+function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }) {
+  const ehNovo = !encontro;
+  const [idEncontro, setIdEncontro] = useState(encontro?.id_encontro || null);
+  const [cabecalho, setCabecalho] = useState({
+    data: encontro?.data ? String(encontro.data).slice(0,16) : "",
+    id_campo: encontro?.id_campo ? String(encontro.id_campo) : "",
+    observacao: encontro?.observacao || "",
+  });
+  const [savingCab, setSavingCab] = useState(false);
+
+  // Times internos ativos (sem data_fim) + campos + jogadores ativos
+  const { data: timesInternos } = useQuery(() => idTime ? api.get(`time_interno?id_time=eq.${idTime}&data_fim=is.null&select=id_time_interno,nome,cor&order=nome.asc`) : Promise.resolve([]), [idTime]);
+  const { data: campos } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=id_campo,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
+  const { data: jogadores } = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=id_jogador,nome,apelido,camisa&order=camisa.asc`) : Promise.resolve([]), [idTime]);
+
+  // Jogos e participações do encontro (quando já existe)
+  const { data: jogos, reload: reloadJogos } = useQuery(() => idEncontro ? api.get(`encontro_jogo?id_encontro=eq.${idEncontro}&select=*&order=ordem.asc.nullslast,id_encontro_jogo.asc`) : Promise.resolve([]), [idEncontro]);
+  const { data: parts, reload: reloadParts } = useQuery(() => idEncontro ? api.get(`encontro_participacao?id_encontro=eq.${idEncontro}&select=*,jogador(nome,apelido,camisa)&order=id_encontro_part.asc`) : Promise.resolve([]), [idEncontro]);
+
+  const mapaTI = {}; (timesInternos||[]).forEach(t => { mapaTI[t.id_time_interno] = t; });
+
+  // ── Salvar cabeçalho (cria o encontro) ──
+  async function salvarCabecalho() {
+    if (!cabecalho.data) { show("Informe a data e hora do encontro.", "error"); return; }
+    setSavingCab(true);
+    try {
+      const body = { id_temporada: temporada.id_temporada, data: new Date(cabecalho.data).toISOString(), id_campo: cabecalho.id_campo ? Number(cabecalho.id_campo) : null, observacao: cabecalho.observacao || null };
+      if (idEncontro) { await api.patch(`encontro?id_encontro=eq.${idEncontro}`, body); show("Encontro atualizado."); }
+      else {
+        const r = await api.post("encontro", body);
+        const novoId = Array.isArray(r) ? r[0]?.id_encontro : r?.id_encontro;
+        setIdEncontro(novoId); show("Encontro criado. Agora adicione os jogos e a presença.");
+      }
+    } catch (e) { show(e.message, "error"); } finally { setSavingCab(false); }
+  }
+
+  // ── Totais e validações ──
+  const totalPlacares = (jogos||[]).reduce((s,j) => s + (j.placar_a||0) + (j.placar_b||0), 0);
+  const totalGolsJog  = (parts||[]).reduce((s,p) => s + (p.gols||0), 0);
+  const totalAssist   = (parts||[]).reduce((s,p) => s + (p.assistencias||0), 0);
+  const totalGolsContra = (parts||[]).reduce((s,p) => s + (p.gols_contra||0), 0);
+  const somaConfere = totalPlacares === (totalGolsJog + totalGolsContra);
+  const assistExcede = totalAssist > totalGolsJog;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <Btn variant="secondary" onClick={onVoltar} style={{ alignSelf:"flex-start" }}>← Voltar</Btn>
+
+      {/* Cabeçalho do encontro */}
+      <Card>
+        <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginBottom:14 }}>Dados do encontro</div>
+        <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+          <Input label="Data e hora *" type="datetime-local" value={cabecalho.data} onChange={e => setCabecalho(c => ({ ...c, data: e.target.value }))} style={{ minWidth:200 }} />
+          <Select label="Local" value={cabecalho.id_campo} onChange={e => setCabecalho(c => ({ ...c, id_campo: e.target.value }))} style={{ minWidth:160 }}>
+            <option value="">—</option>
+            {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
+          </Select>
+          <Input label="Observação" value={cabecalho.observacao} onChange={e => setCabecalho(c => ({ ...c, observacao: e.target.value }))} style={{ flex:1, minWidth:200 }} />
+        </div>
+        {!readOnly && <div style={{ marginTop:12 }}><Btn onClick={salvarCabecalho} disabled={savingCab}>{savingCab ? "Salvando..." : idEncontro ? "Atualizar dados" : "Criar encontro"}</Btn></div>}
+      </Card>
+
+      {!idEncontro && <Card><div style={{ padding:16, color:C.dim, fontSize:13 }}>Salve os dados do encontro para liberar o cadastro de jogos e presença.</div></Card>}
+
+      {idEncontro && (
+        <>
+          <JogosEncontro idEncontro={idEncontro} jogos={jogos||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadJogos} show={show} readOnly={readOnly} totalPlacares={totalPlacares} />
+          <PresencaEncontro idEncontro={idEncontro} parts={parts||[]} jogadores={jogadores||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadParts} show={show} readOnly={readOnly}
+            totais={{ totalPlacares, totalGolsJog, totalAssist, totalGolsContra, somaConfere, assistExcede }} statusAtual={encontro?.status} />
+        </>
+      )}
+    </div>
+  );
+}
+
+// Jogos do rodízio (placar entre times internos)
+function JogosEncontro({ idEncontro, jogos, timesInternos, mapaTI, reload, show, readOnly, totalPlacares }) {
+  const [form, setForm] = useState({ a:"", b:"", pa:"0", pb:"0" });
+  const [saving, setSaving] = useState(false);
+
+  async function addJogo() {
+    if (!form.a || !form.b) { show("Selecione os dois times internos.", "error"); return; }
+    if (form.a === form.b) { show("Os dois times devem ser diferentes.", "error"); return; }
+    setSaving(true);
+    try {
+      await api.post("encontro_jogo", { id_encontro: idEncontro, id_time_interno_a: Number(form.a), id_time_interno_b: Number(form.b), placar_a: Number(form.pa)||0, placar_b: Number(form.pb)||0, ordem: (jogos.length+1) });
+      setForm({ a:"", b:"", pa:"0", pb:"0" }); show("Jogo adicionado."); reload();
+    } catch (e) { show(e.message, "error"); } finally { setSaving(false); }
+  }
+  async function removerJogo(id) {
+    if (!confirm("Remover este jogo?")) return;
+    try { await api.delete(`encontro_jogo?id_encontro_jogo=eq.${id}`); show("Jogo removido."); reload(); }
+    catch (e) { show(e.message, "error"); }
+  }
+
+  return (
+    <Card>
+      <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginBottom:14 }}>Jogos do dia (rodízio)</div>
+      {jogos.map(j => (
+        <div key={j.id_encontro_jogo} style={{ display:"flex", alignItems:"center", gap:8, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", marginBottom:6 }}>
+          <span style={{ display:"inline-block", width:12, height:12, borderRadius:"50%", background:mapaTI[j.id_time_interno_a]?.cor||C.dim }} />
+          <span style={{ fontSize:13 }}>{mapaTI[j.id_time_interno_a]?.nome || "?"}</span>
+          <span style={{ fontWeight:800, color:C.gold, fontSize:15 }}>{j.placar_a}</span>
+          <span style={{ color:C.dim, fontSize:11 }}>x</span>
+          <span style={{ fontWeight:800, color:C.gold, fontSize:15 }}>{j.placar_b}</span>
+          <span style={{ fontSize:13 }}>{mapaTI[j.id_time_interno_b]?.nome || "?"}</span>
+          <span style={{ display:"inline-block", width:12, height:12, borderRadius:"50%", background:mapaTI[j.id_time_interno_b]?.cor||C.dim }} />
+          {!readOnly && <Btn variant="secondary" style={{ marginLeft:"auto", fontSize:11, padding:"4px 8px" }} onClick={() => removerJogo(j.id_encontro_jogo)}>✕</Btn>}
+        </div>
+      ))}
+      {jogos.length === 0 && <div style={{ color:C.dim, fontSize:13, marginBottom:8 }}>Nenhum jogo ainda.</div>}
+      {!readOnly && (
+        <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginTop:8, flexWrap:"wrap" }}>
+          <Select label="Time A" value={form.a} onChange={e => setForm(f => ({ ...f, a:e.target.value }))} style={{ minWidth:120 }}>
+            <option value="">—</option>{timesInternos.map(t => <option key={t.id_time_interno} value={t.id_time_interno}>{t.nome}</option>)}
+          </Select>
+          <Input label="Placar" type="number" min="0" value={form.pa} onChange={e => setForm(f => ({ ...f, pa:e.target.value }))} style={{ width:70 }} />
+          <Input label="Placar" type="number" min="0" value={form.pb} onChange={e => setForm(f => ({ ...f, pb:e.target.value }))} style={{ width:70 }} />
+          <Select label="Time B" value={form.b} onChange={e => setForm(f => ({ ...f, b:e.target.value }))} style={{ minWidth:120 }}>
+            <option value="">—</option>{timesInternos.map(t => <option key={t.id_time_interno} value={t.id_time_interno}>{t.nome}</option>)}
+          </Select>
+          <Btn onClick={addJogo} disabled={saving}>+ Jogo</Btn>
+        </div>
+      )}
+      <div style={{ fontSize:12, color:C.dim, marginTop:10 }}>Total de gols nos placares do dia: <b style={{ color:C.gold }}>{totalPlacares}</b></div>
+    </Card>
+  );
+}
+
+// Presença + estatísticas agregadas do jogador no dia
+function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI, reload, show, readOnly, totais, statusAtual }) {
+  const [addJog, setAddJog] = useState("");
+  const [saving, setSaving] = useState(false);
+  const jaPresentes = new Set((parts||[]).map(p => p.id_jogador));
+  const disponiveis = (jogadores||[]).filter(j => !jaPresentes.has(j.id_jogador));
+
+  async function adicionarPresenca() {
+    if (!addJog) return;
+    setSaving(true);
+    try {
+      await api.post("encontro_participacao", { id_encontro: idEncontro, id_jogador: Number(addJog), id_time_interno: null, gols:0, assistencias:0, gols_contra:0, cartao_amarelo:0, cartao_vermelho:0 });
+      setAddJog(""); show("Presença registrada."); reload();
+    } catch (e) { show(e.message, "error"); } finally { setSaving(false); }
+  }
+  async function atualizarCampo(p, campo, valor) {
+    try { await api.patch(`encontro_participacao?id_encontro_part=eq.${p.id_encontro_part}`, { [campo]: campo==="id_time_interno" ? (valor?Number(valor):null) : (Number(valor)||0) }); reload(); }
+    catch (e) { show(e.message, "error"); }
+  }
+  async function removerPresenca(id) {
+    if (!confirm("Remover este jogador do encontro?")) return;
+    try { await api.delete(`encontro_participacao?id_encontro_part=eq.${id}`); show("Removido."); reload(); }
+    catch (e) { show(e.message, "error"); }
+  }
+
+  // Salvar status (conferência): aplica regra de bloqueio e marca pendência
+  const [salvandoStatus, setSalvandoStatus] = useState(false);
+  async function salvarConferencia() {
+    if (totais.assistExcede) { show("Assistências do dia não podem passar os gols do dia. Ajuste antes de salvar.", "error"); return; }
+    setSalvandoStatus(true);
+    try {
+      const novoStatus = totais.somaConfere ? "ok" : "pendente_conferencia";
+      await api.patch(`encontro?id_encontro=eq.${idEncontro}`, { status: novoStatus });
+      show(totais.somaConfere ? "Encontro conferido e salvo (OK)." : "Salvo como pendente de conferência (a soma não fechou).");
+    } catch (e) { show(e.message, "error"); } finally { setSalvandoStatus(false); }
+  }
+
+  return (
+    <Card>
+      <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginBottom:14 }}>Presença e estatísticas do dia</div>
+      <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+        <thead><tr style={{ background:C.surf2 }}>
+          {["Jogador","Time interno","Gols","Assist.","G.Contra","🟨","🟥",""].map(h => <th key={h} style={{ padding:"7px 8px", textAlign:"left", fontSize:10, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>)}
+        </tr></thead>
+        <tbody>
+          {(parts||[]).map(p => (
+            <tr key={p.id_encontro_part} style={{ borderBottom:`1px solid ${C.border}` }}>
+              <td style={{ padding:"6px 8px", fontWeight:700, whiteSpace:"nowrap" }}>{p.jogador?.apelido || p.jogador?.nome || "?"}</td>
+              <td style={{ padding:"6px 8px" }}>
+                <select disabled={readOnly} value={p.id_time_interno||""} onChange={e => atualizarCampo(p, "id_time_interno", e.target.value)} style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:5, color:C.cream, padding:"4px", fontSize:12 }}>
+                  <option value="">—</option>{timesInternos.map(t => <option key={t.id_time_interno} value={t.id_time_interno}>{t.nome}</option>)}
+                </select>
+              </td>
+              {["gols","assistencias","gols_contra","cartao_amarelo","cartao_vermelho"].map(campo => (
+                <td key={campo} style={{ padding:"6px 8px" }}>
+                  <input disabled={readOnly} type="number" min="0" defaultValue={p[campo]||0} onBlur={e => atualizarCampo(p, campo, e.target.value)} style={{ width:46, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:5, color:C.cream, padding:"4px", fontSize:12 }} />
+                </td>
+              ))}
+              <td style={{ padding:"6px 8px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"3px 7px" }} onClick={() => removerPresenca(p.id_encontro_part)}>✕</Btn>}</td>
+            </tr>
+          ))}
+          {(parts||[]).length === 0 && <tr><td colSpan={8} style={{ padding:"14px 8px", textAlign:"center", color:C.dim, fontSize:13 }}>Ninguém registrado ainda. Adicione os presentes abaixo.</td></tr>}
+        </tbody>
+      </table></div>
+
+      {!readOnly && (
+        <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginTop:10 }}>
+          <Select label="Adicionar presente" value={addJog} onChange={e => setAddJog(e.target.value)} style={{ minWidth:200 }}>
+            <option value="">Selecione um jogador...</option>
+            {disponiveis.map(j => <option key={j.id_jogador} value={j.id_jogador}>#{j.camisa} — {j.apelido || j.nome}</option>)}
+          </Select>
+          <Btn onClick={adicionarPresenca} disabled={saving || !addJog}>+ Presença</Btn>
+        </div>
+      )}
+      <div style={{ fontSize:12, color:C.dim, marginTop:6 }}>Para marcar presença, basta adicionar o jogador (mesmo com tudo zero).</div>
+
+      {/* Validações */}
+      <div style={{ marginTop:16, display:"flex", flexDirection:"column", gap:8 }}>
+        <div style={{ fontSize:12, color:C.dim }}>
+          Placares: <b style={{ color:C.gold }}>{totais.totalPlacares}</b> · Jogadores: <b style={{ color:C.gold }}>{totais.totalGolsJog}</b> gols + <b style={{ color:C.gold }}>{totais.totalGolsContra}</b> gol(s) contra = <b style={{ color:C.gold }}>{totais.totalGolsJog + totais.totalGolsContra}</b> · Assistências: <b style={{ color:C.gold }}>{totais.totalAssist}</b>
+        </div>
+        {totais.assistExcede && (
+          <div style={{ background:C.loss+"18", border:`1px solid ${C.loss}`, borderRadius:7, padding:"10px 12px", fontSize:12, color:"#ff8a87" }}>
+            🚫 Assistências ({totais.totalAssist}) não podem passar os gols dos jogadores ({totais.totalGolsJog}). Ajuste antes de salvar.
+          </div>
+        )}
+        {!totais.somaConfere && !totais.assistExcede && (
+          <div style={{ background:C.gold+"18", border:`1px solid ${C.gold}`, borderRadius:7, padding:"10px 12px", fontSize:12, color:C.gold }}>
+            ⚠️ A soma dos placares ({totais.totalPlacares}) não fecha com gols + gols contra ({totais.totalGolsJog + totais.totalGolsContra}). Você pode salvar mesmo assim — o encontro ficará pendente de conferência.
+          </div>
+        )}
+        {totais.somaConfere && !totais.assistExcede && (
+          <div style={{ background:C.win+"18", border:`1px solid ${C.win}`, borderRadius:7, padding:"10px 12px", fontSize:12, color:C.win }}>✅ A conta fecha: placares = gols + gols contra.</div>
+        )}
+        {!readOnly && (
+          <div><Btn onClick={salvarConferencia} disabled={salvandoStatus || totais.assistExcede}>{salvandoStatus ? "Salvando..." : "Salvar conferência"}</Btn></div>
+        )}
+      </div>
+    </Card>
   );
 }
 
