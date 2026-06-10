@@ -124,8 +124,24 @@ function SeletorTimes({ onSelect }) {
   const cadastroAtivo = ["true","1"].includes(String(configSistema?.[0]?.valor ?? "").trim().toLowerCase());
   const tipoFutebolCampo = (tiposAtivos||[]).find(t => t.descricao.toLowerCase().includes("campo"))?.id_tipo_time || null;
   const [tipoFiltro, setTipoFiltro] = useState(null);
-  // Inicializar com Futebol de Campo quando tipos carregarem
-  useEffect(() => { if (tiposAtivos?.length && tipoFiltro === null) { const fc = (tiposAtivos||[]).find(t => t.descricao.toLowerCase().includes("campo")); setTipoFiltro(fc?.id_tipo_time || "todos"); } }, [tiposAtivos]);
+  // Mapa id_tipo_time -> descrição, para filtrar por NOME (robusto a tipos duplicados)
+  const descricaoDoTipo = useMemo(() => {
+    const m = new Map();
+    (tiposAtivos||[]).forEach(t => m.set(t.id_tipo_time, t.descricao));
+    return m;
+  }, [tiposAtivos]);
+  // Tipos únicos POR NOME (evita botões duplicados, ex: dois "Futebol de Campo")
+  const tiposUnicos = useMemo(() => {
+    const vistos = new Set(); const out = [];
+    (tiposAtivos||[]).forEach(t => { if (!vistos.has(t.descricao)) { vistos.add(t.descricao); out.push(t); } });
+    return out;
+  }, [tiposAtivos]);
+  // Abre em "Futebol de Campo" se existir; senão, "todos". Compara por NOME (robusto a duplicados).
+  useEffect(() => { if (tiposAtivos?.length && tipoFiltro === null) {
+    const temCampo = (tiposAtivos||[]).some(t => t.descricao.toLowerCase().includes("campo"));
+    const fc = (tiposAtivos||[]).find(t => t.descricao.toLowerCase().includes("campo"));
+    setTipoFiltro(temCampo ? fc.descricao : "todos");
+  } }, [tiposAtivos]);
 
   // Filtrar times (e enriquecer com cidade/campo resolvidos das listas separadas)
   const times = useMemo(() => {
@@ -135,7 +151,7 @@ function SeletorTimes({ onSelect }) {
     return allTimes.filter(t => {
       const tempsPublicas = (t.temporada||[]).filter(temp => temp.publico === true);
       if (!tempsPublicas.length) return false;
-      if (tipoFiltro && tipoFiltro !== "todos" && t.id_tipo_time !== tipoFiltro) return false;
+      if (tipoFiltro && tipoFiltro !== "todos" && descricaoDoTipo.get(t.id_tipo_time) !== tipoFiltro) return false;
       if (!dataRef) return true;
       return tempsPublicas.some(temp => {
         const inicio = temp.data_inicio ? new Date(temp.data_inicio) : null;
@@ -148,7 +164,7 @@ function SeletorTimes({ onSelect }) {
       cidade: t.id_cidade_sede ? mapaCidade.get(t.id_cidade_sede) : null,
       campo: t.id_campo ? mapaCampo.get(t.id_campo) : null,
     }));
-  }, [allTimes, dataRef, tipoFiltro, _cidades, _campos]);
+  }, [allTimes, dataRef, tipoFiltro, _cidades, _campos, descricaoDoTipo]);
 
   const timesDestaque = useMemo(() => (times||[]).filter(t => t.destaque === true), [times]);
   const timesNormais  = useMemo(() => (times||[]).filter(t => !t.destaque), [times]);
@@ -197,9 +213,9 @@ function SeletorTimes({ onSelect }) {
               style={{ background: tipoFiltro==="todos" ? C.gold : C.surface, color: tipoFiltro==="todos" ? "#0B3D2E" : C.dim, border:`1px solid ${tipoFiltro==="todos" ? C.gold : C.border}`, borderRadius:8, padding:"7px 16px", fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>
               Todos
             </button>
-            {(tiposAtivos||[]).map(t => (
-              <button key={t.id_tipo_time} onClick={() => setTipoFiltro(t.id_tipo_time)}
-                style={{ background: tipoFiltro===t.id_tipo_time ? C.gold : C.surface, color: tipoFiltro===t.id_tipo_time ? "#0B3D2E" : C.dim, border:`1px solid ${tipoFiltro===t.id_tipo_time ? C.gold : C.border}`, borderRadius:8, padding:"7px 16px", fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>
+            {tiposUnicos.map(t => (
+              <button key={t.id_tipo_time} onClick={() => setTipoFiltro(t.descricao)}
+                style={{ background: tipoFiltro===t.descricao ? C.gold : C.surface, color: tipoFiltro===t.descricao ? "#0B3D2E" : C.dim, border:`1px solid ${tipoFiltro===t.descricao ? C.gold : C.border}`, borderRadius:8, padding:"7px 16px", fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>
                 {t.descricao}
               </button>
             ))}
