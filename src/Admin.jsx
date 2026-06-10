@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.45";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.46";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -3965,6 +3965,11 @@ export default function AdminAppCompleto() {
           /* Campos em flex-wrap ocupam a largura toda */
           .campo-flex{min-width:100% !important; flex:1 1 100% !important;}
           .campos-encontro > div{min-width:100% !important; flex:1 1 100% !important;}
+          /* Inputs nativos (datetime-local etc.) não podem exceder o container */
+          input, select, textarea{max-width:100% !important; box-sizing:border-box !important;}
+          /* Container de presença: botões ocupam a linha inteira e não vazam */
+          .presenca-acoes{flex-direction:column !important; align-items:stretch !important;}
+          .presenca-acoes > *{width:100% !important; min-width:0 !important;}
         }
         /* Grids reutilizáveis (desktop) */
         .form-grid-2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
@@ -4161,6 +4166,7 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
             <ThSortable colKey="camisa"      sortKey={sk} asc={asc} onSort={onSort}>#</ThSortable>
             <ThSortable colKey="nome"        sortKey={sk} asc={asc} onSort={onSort}>Nome</ThSortable>
             <ThSortable colKey="apelido"     sortKey={sk} asc={asc} onSort={onSort}>Apelido</ThSortable>
+            <ThSortable colKey="data_nascimento" sortKey={sk} asc={asc} onSort={onSort}>Nascimento</ThSortable>
             <ThSortable colKey="posicao.nome" sortKey={sk} asc={asc} onSort={onSort}>Posição</ThSortable>
             <ThSortable colKey="telefone"    sortKey={sk} asc={asc} onSort={onSort}>Telefone</ThSortable>
             <ThSortable colKey="email"       sortKey={sk} asc={asc} onSort={onSort}>E-mail</ThSortable>
@@ -4175,6 +4181,7 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
                 <td style={{ padding:"11px 14px", fontWeight:800, color:C.gold, whiteSpace:"nowrap" }}>{j.camisa}</td>
                 <td style={{ padding:"11px 14px", fontWeight:700, whiteSpace:"nowrap" }}>{j.nome}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.apelido || "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_nascimento ? new Date(j.data_nascimento + "T00:00:00").toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric" }) : "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.posicao?.nome ? (j.posicao.id_posicao_pai && mapaPosJog[j.posicao.id_posicao_pai] ? `${mapaPosJog[j.posicao.id_posicao_pai]} › ${j.posicao.nome}` : j.posicao.nome) : "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.telefone || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.email || "—"}</td>
@@ -5342,8 +5349,8 @@ function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI,
       </table></div>
 
       {!readOnly && (
-        <div style={{ display:"flex", gap:8, alignItems:"flex-end", marginTop:10 }}>
-          <Select label="Adicionar presente" value={addJog} onChange={e => setAddJog(e.target.value)} style={{ minWidth:200 }}>
+        <div className="presenca-acoes" style={{ display:"flex", gap:8, alignItems:"flex-end", marginTop:10, flexWrap:"wrap" }}>
+          <Select label="Adicionar presente" value={addJog} onChange={e => setAddJog(e.target.value)} style={{ minWidth:200, flex:1 }}>
             <option value="">Selecione um jogador...</option>
             {disponiveis.map(j => <option key={j.id_jogador} value={j.id_jogador}>#{j.camisa} — {j.apelido || j.nome}</option>)}
           </Select>
