@@ -116,7 +116,9 @@ function SeletorTimes({ onSelect }) {
   const [dataRef, setDataRef] = useState(""); // vazio = sem filtro de data
   const [modalCadastro, setModalCadastro] = useState(false);
 
-  const { data: allTimes, loading } = useQuery(() => sb(`time?select=*,temporada(id_temporada,nome,data_inicio,data_fim,publico),tipo_time!id_tipo_time(id_tipo_time,descricao),cidade:id_cidade_sede(nome,estado),campo:id_campo(nome)&publico=eq.true&order=nome.asc`));
+  const { data: allTimes, loading } = useQuery(() => sb(`time?select=*,temporada(id_temporada,nome,data_inicio,data_fim,publico)&publico=eq.true&order=nome.asc`));
+  const { data: _cidades } = useQuery(() => sb(`cidade?select=id_cidade,nome,estado`));
+  const { data: _campos } = useQuery(() => sb(`campo?select=id_campo,nome`));
   const { data: tiposAtivos } = useQuery(() => sb(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
   const { data: configSistema } = useQuery(() => sb(`config_sistema?chave=eq.cadastro_time_ativo&select=valor&limit=1`));
   const cadastroAtivo = ["true","1"].includes(String(configSistema?.[0]?.valor ?? "").trim().toLowerCase());
@@ -125,9 +127,11 @@ function SeletorTimes({ onSelect }) {
   // Inicializar com Futebol de Campo quando tipos carregarem
   useEffect(() => { if (tiposAtivos?.length && tipoFiltro === null) { const fc = (tiposAtivos||[]).find(t => t.descricao.toLowerCase().includes("campo")); setTipoFiltro(fc?.id_tipo_time || "todos"); } }, [tiposAtivos]);
 
-  // Filtrar times
+  // Filtrar times (e enriquecer com cidade/campo resolvidos das listas separadas)
   const times = useMemo(() => {
     if (!allTimes) return [];
+    const mapaCidade = new Map((_cidades||[]).map(c => [c.id_cidade, c]));
+    const mapaCampo = new Map((_campos||[]).map(c => [c.id_campo, c]));
     return allTimes.filter(t => {
       const tempsPublicas = (t.temporada||[]).filter(temp => temp.publico === true);
       if (!tempsPublicas.length) return false;
@@ -139,8 +143,12 @@ function SeletorTimes({ onSelect }) {
         const ref    = new Date(dataRef);
         return (!inicio || ref >= inicio) && (!fim || ref <= fim);
       });
-    });
-  }, [allTimes, dataRef, tipoFiltro]);
+    }).map(t => ({
+      ...t,
+      cidade: t.id_cidade_sede ? mapaCidade.get(t.id_cidade_sede) : null,
+      campo: t.id_campo ? mapaCampo.get(t.id_campo) : null,
+    }));
+  }, [allTimes, dataRef, tipoFiltro, _cidades, _campos]);
 
   const timesDestaque = useMemo(() => (times||[]).filter(t => t.destaque === true), [times]);
   const timesNormais  = useMemo(() => (times||[]).filter(t => !t.destaque), [times]);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "0.13.51";
+const APP_VERSION = process.env.REACT_APP_VERSION || "0.13.52";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -956,6 +956,18 @@ function ModalImportacao({ resultado, onClose, onConfirmar, salvando }) {
 // ══════════════════════════════════════════════════════════════
 
 // ── Ordenação — função utilitária pura (sem hooks) ───────────
+// Calcula a idade (anos completos) a partir da data de nascimento até hoje.
+function calcularIdade(dataNasc) {
+  if (!dataNasc) return null;
+  const nasc = new Date(String(dataNasc).slice(0,10) + "T00:00:00");
+  if (isNaN(nasc.getTime())) return null;
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - nasc.getFullYear();
+  const m = hoje.getMonth() - nasc.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+  return idade >= 0 && idade < 130 ? idade : null;
+}
+
 function sortData(dados, sortKey, asc) {
   if (!sortKey) return [...(dados||[])];
   return [...(dados||[])].sort((a, b) => {
@@ -3967,12 +3979,20 @@ export default function AdminAppCompleto() {
         @media(max-width:560px){
           .form-grid-2, .form-grid-3, .form-grid-auto{grid-template-columns:1fr !important;}
           .campo-flex{min-width:100% !important; flex:1 1 100% !important;}
-          .campos-encontro > div{min-width:100% !important; flex:1 1 100% !important;}
           .presenca-acoes{flex-direction:column !important; align-items:stretch !important;}
           .presenca-acoes > *{width:100% !important; min-width:0 !important;}
         }
         /* Grids reutilizáveis (desktop) */
         .form-grid-2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+        /* Campos do encontro: grid que se adapta — nunca estoura nem sobrepõe.
+           auto-fit + minmax garante colunas que encolhem até caber. */
+        .campos-encontro{display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px; align-items:end;}
+        @media(max-width:560px){
+          .campos-encontro{grid-template-columns:1fr 1fr;}
+        }
+        @media(max-width:380px){
+          .campos-encontro{grid-template-columns:1fr;}
+        }
         .form-grid-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
         .form-grid-auto{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px;}
       `}</style>
@@ -4167,6 +4187,7 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
             <ThSortable colKey="nome"        sortKey={sk} asc={asc} onSort={onSort}>Nome</ThSortable>
             <ThSortable colKey="apelido"     sortKey={sk} asc={asc} onSort={onSort}>Apelido</ThSortable>
             <ThSortable colKey="data_nascimento" sortKey={sk} asc={asc} onSort={onSort}>Nascimento</ThSortable>
+            <ThSortable colKey="idade_sort" sortKey={sk} asc={asc} onSort={onSort}>Idade</ThSortable>
             <ThSortable colKey="posicao.nome" sortKey={sk} asc={asc} onSort={onSort}>Posição</ThSortable>
             <ThSortable colKey="telefone"    sortKey={sk} asc={asc} onSort={onSort}>Telefone</ThSortable>
             <ThSortable colKey="email"       sortKey={sk} asc={asc} onSort={onSort}>E-mail</ThSortable>
@@ -4182,6 +4203,7 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
                 <td style={{ padding:"11px 14px", fontWeight:700, whiteSpace:"nowrap" }}>{j.nome}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.apelido || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_nascimento ? new Date(j.data_nascimento + "T00:00:00").toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric" }) : "—"}</td>
+                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{calcularIdade(j.data_nascimento) != null ? `${calcularIdade(j.data_nascimento)} anos` : "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.posicao?.nome ? (j.posicao.id_posicao_pai && mapaPosJog[j.posicao.id_posicao_pai] ? `${mapaPosJog[j.posicao.id_posicao_pai]} › ${j.posicao.nome}` : j.posicao.nome) : "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.telefone || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.email || "—"}</td>
@@ -4285,8 +4307,9 @@ function CrudJogadores({ idTime, show, readOnly }) {
   }
 
   if (loading) return <Spinner />;
-  const ativos   = (jogadores||[]).filter(j => !j.data_fim);
-  const inativos = (jogadores||[]).filter(j =>  j.data_fim);
+  const _comIdade = (jogadores||[]).map(j => ({ ...j, idade_sort: calcularIdade(j.data_nascimento) ?? -1 }));
+  const ativos   = _comIdade.filter(j => !j.data_fim);
+  const inativos = _comIdade.filter(j =>  j.data_fim);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
@@ -5031,15 +5054,15 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
       {/* Cabeçalho do encontro */}
       <Card>
         <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginBottom:14 }}>Dados do encontro</div>
-        <div className="campos-encontro" style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-          <Input label="Data *" type="date" value={cabecalho.data} onChange={e => setCabecalho(c => ({ ...c, data: e.target.value }))} style={{ flex:"1 1 130px" }} />
-          <Input label="Hora" type="time" value={cabecalho.hora} onChange={e => setCabecalho(c => ({ ...c, hora: e.target.value }))} style={{ flex:"1 1 90px" }} />
-          <Select label="Local" value={cabecalho.id_campo} onChange={e => setCabecalho(c => ({ ...c, id_campo: e.target.value }))} style={{ flex:"1 1 150px" }}>
+        <div className="campos-encontro">
+          <Input label="Data *" type="date" value={cabecalho.data} onChange={e => setCabecalho(c => ({ ...c, data: e.target.value }))} />
+          <Input label="Hora" type="time" value={cabecalho.hora} onChange={e => setCabecalho(c => ({ ...c, hora: e.target.value }))} />
+          <Select label="Local" value={cabecalho.id_campo} onChange={e => setCabecalho(c => ({ ...c, id_campo: e.target.value }))}>
             <option value="">—</option>
             {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
           </Select>
-          <Input label="Observação" value={cabecalho.observacao} onChange={e => setCabecalho(c => ({ ...c, observacao: e.target.value }))} style={{ flex:"1 1 180px" }} />
-          <Select label="🧺 Responsável pela lavagem" value={cabecalho.id_responsavel_lavagem} onChange={e => setCabecalho(c => ({ ...c, id_responsavel_lavagem: e.target.value }))} style={{ flex:"1 1 170px" }}>
+          <Input label="Observação" value={cabecalho.observacao} onChange={e => setCabecalho(c => ({ ...c, observacao: e.target.value }))} />
+          <Select label="🧺 Responsável pela lavagem" value={cabecalho.id_responsavel_lavagem} onChange={e => setCabecalho(c => ({ ...c, id_responsavel_lavagem: e.target.value }))}>
             <option value="">—</option>
             {(jogadores||[]).map(j => <option key={j.id_jogador} value={j.id_jogador}>{j.apelido || j.nome}</option>)}
           </Select>
