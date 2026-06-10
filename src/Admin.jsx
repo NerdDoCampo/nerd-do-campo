@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "0.13.55";
+const APP_VERSION = process.env.REACT_APP_VERSION || "0.13.56";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -3986,13 +3986,8 @@ export default function AdminAppCompleto() {
         .form-grid-2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
         /* Campos do encontro: grid que se adapta — nunca estoura nem sobrepõe.
            auto-fit + minmax garante colunas que encolhem até caber. */
-        .campos-encontro{display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px; align-items:end;}
-        @media(max-width:560px){
-          .campos-encontro{grid-template-columns:1fr 1fr;}
-        }
-        @media(max-width:380px){
-          .campos-encontro{grid-template-columns:1fr;}
-        }
+        .campos-encontro{display:flex; flex-direction:column; gap:14px; max-width:420px;}
+        .campos-encontro > *{width:100%;}
         .form-grid-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
         .form-grid-auto{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px;}
       `}</style>
