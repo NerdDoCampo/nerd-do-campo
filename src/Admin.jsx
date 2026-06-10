@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.33";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.39";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1191,8 +1191,8 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
     [temporada.id_temporada]
   );
   // Tipo do time e posições do tipo — para resolver a ordem do pai no esquema tático
-  const { data: _timeLista } = useQuery(() => temporada?.id_time ? api.get(`time?id_time=eq.${temporada.id_time}&select=id_tipo_time&limit=1`) : Promise.resolve([]), [temporada]);
-  const _tipoLista = _timeLista?.[0]?.id_tipo_time;
+  const { data: _timeLista } = useQuery(() => temporada?.id_time ? api.get(`time?id_time=eq.${temporada.id_time}&select=id_tipo_time,id_subtipo&limit=1`) : Promise.resolve([]), [temporada]);
+  const _tipoLista = _timeLista?.[0]?.id_subtipo || _timeLista?.[0]?.id_tipo_time;
   const { data: _posLista } = useQuery(() => _tipoLista ? api.get(`posicao?id_tipo_time=eq.${_tipoLista}&select=id_posicao,id_posicao_pai,ordem`) : Promise.resolve([]), [_tipoLista]);
   const mapaPosLista = {};
   (_posLista || []).forEach(p => { mapaPosLista[p.id_posicao] = p; });
@@ -1450,11 +1450,12 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
 
   const { data: jogadores }     = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=*,posicao(nome)&order=camisa.asc`) : Promise.resolve([]), [idTime]);
   // Meu time: tipo, raio padrão e coordenadas da cidade-sede — declarado ANTES das queries que usam meuTipoTime (evita TDZ no bundle de produção)
-  const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,id_tipo_time,raio_busca_km,numero_titulares,quantidade_periodos,minutos_padrao_periodo,permite_acrescimos,cidade:id_cidade_sede(nome,estado,latitude,longitude)&limit=1`) : Promise.resolve([]), [idTime]);
+  const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,id_tipo_time,id_subtipo,raio_busca_km,numero_titulares,quantidade_periodos,minutos_padrao_periodo,permite_acrescimos,cidade:id_cidade_sede(nome,estado,latitude,longitude)&limit=1`) : Promise.resolve([]), [idTime]);
   const meuTime = meuTimeData?.[0];
   const meuTipoTime = meuTime?.id_tipo_time;
+  const meuTipoPosicoes = meuTime?.id_subtipo || meuTime?.id_tipo_time; // posições vêm do subtipo na turma
   const minhaCidade = meuTime?.cidade; // {nome, estado, latitude, longitude}
-  const { data: posicoes }      = useQuery(() => meuTipoTime ? api.get(`posicao?id_tipo_time=eq.${meuTipoTime}&select=*&order=ordem.asc`) : Promise.resolve([]), [meuTipoTime]);
+  const { data: posicoes }      = useQuery(() => meuTipoPosicoes ? api.get(`posicao?id_tipo_time=eq.${meuTipoPosicoes}&select=*&order=ordem.asc`) : Promise.resolve([]), [meuTipoPosicoes]);
   const { data: advsFicha } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
   // Raio ajustável na tela (inicia com o padrão do time; ajuste é temporário, não salva)
   const [raioKm, setRaioKm] = useState(null);
@@ -1658,6 +1659,9 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
           🔍 {verProcurando ? "Ocultar" : "Ver"} times procurando jogo nesta data
         </button>
       )}
+
+      {/* Link de confirmação de presença */}
+      {!readOnly && !cancelada && <LinkConfirmacao tipo="partida" idRef={partida.id_partida} idTime={idTime} dataRef={partida.data} show={show} />}
 
       {/* Placar */}
       {!cancelada && (
@@ -2005,6 +2009,34 @@ function FormEscalacao({ partida, jogadores, posicoes, participacoes, meuTime, o
   const numeroTitulares = meuTime?.numero_titulares || null;
   const titularesAtuais = (participacoes || []).filter(p => p.titular === "S" && p.id_jogador > 0).length;
 
+  // Traz confirmados "Vou" (jogadores cadastrados) como reservas. Convidados ignorados.
+  // Entram como reserva (titular "N") para não estourar o limite de titulares; o admin promove.
+  async function trazerConfirmados() {
+    setSaving(true);
+    try {
+      const links = await api.get(`link_confirmacao?tipo=eq.partida&id_ref=eq.${partida.id_partida}&select=id_link&limit=1`);
+      if (!links?.[0]) { show("Nenhum link de confirmação foi gerado para esta partida.", "error"); setSaving(false); return; }
+      const confs = await api.get(`confirmacao_presenca?id_link=eq.${links[0].id_link}&status=eq.vou&id_jogador=not.is.null&select=id_jogador`);
+      const aAdicionar = (confs||[]).filter(c => !jaEscalados.has(c.id_jogador));
+      const convidados = await api.get(`confirmacao_presenca?id_link=eq.${links[0].id_link}&status=eq.vou&id_jogador=is.null&select=id_confirmacao`);
+      if (aAdicionar.length === 0) {
+        show((convidados||[]).length > 0 ? `Todos os jogadores confirmados já estão escalados. ${convidados.length} convidado(s) ignorados.` : "Nenhum jogador novo confirmado para trazer.");
+        setSaving(false); return;
+      }
+      for (const c of aAdicionar) {
+        const jog = jogadores.find(j => j.id_jogador === c.id_jogador);
+        await api.post("participacao", {
+          id_partida: partida.id_partida, id_jogador: c.id_jogador,
+          camisa: jog?.camisa || "", id_posicao: jog?.id_posicao || null,
+          titular: "N", capitao: "N", cartao_amarelo: 0, cartao_vermelho: 0, gols_contra: 0,
+        });
+      }
+      const aviso = (convidados||[]).length > 0 ? ` (${convidados.length} convidado(s) ignorado(s))` : "";
+      show(`${aAdicionar.length} confirmado(s) adicionado(s) como reserva — promova a titular conforme necessário.${aviso}`);
+      onSalvo();
+    } catch (e) { show(e.message, "error"); } finally { setSaving(false); }
+  }
+
   useEffect(() => {
     if (form.id_jogador) {
       const j = jogadores.find(j => j.id_jogador === Number(form.id_jogador));
@@ -2084,6 +2116,7 @@ function FormEscalacao({ partida, jogadores, posicoes, participacoes, meuTime, o
       </div>
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
         <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Adicionar"}</Btn>
+        {!readOnly && <Btn variant="secondary" onClick={trazerConfirmados} disabled={saving}>📲 Trazer confirmados</Btn>}
       </div>
     </div>
   );
@@ -2918,7 +2951,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.13.33" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.13.39" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -3389,6 +3422,7 @@ function CrudEventos({ idTime, show, readOnly }) {
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [detalhe, setDetalhe] = useState(null); // evento aberto para ver/lançar movimentos
+  const [linkEvento, setLinkEvento] = useState(null); // evento cujo link de confirmação está aberto
   const [formMov, setFormMov] = useState({});
 
   function abrirNovo() {
@@ -3536,6 +3570,7 @@ function CrudEventos({ idTime, show, readOnly }) {
               <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
                 {ev.status!=="encerrado" && ev.modo==="detalhado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>abrirLancar(ev)}>+ Lançar receita/despesa</Btn>}
                 {ev.status!=="encerrado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>abrirEditar(ev)}>Editar</Btn>}
+                {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>setLinkEvento(ev)}>📲 Confirmação</Btn>}
                 {ev.status!=="encerrado" && <Btn style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>encerrar(ev)}>Encerrar</Btn>}
                 {ev.status==="encerrado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>reabrir(ev)}>🔓 Reabrir</Btn>}
                 {!movs.length && <Btn variant="danger" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>excluir(ev)}>Excluir</Btn>}
@@ -3576,6 +3611,11 @@ function CrudEventos({ idTime, show, readOnly }) {
       )}
 
       {/* Modal lançar movimento no evento */}
+      {linkEvento && (
+        <Modal title={`Confirmação de presença — ${linkEvento.nome}`} onClose={()=>setLinkEvento(null)}>
+          <LinkConfirmacao tipo="evento" idRef={linkEvento.id_evento} idTime={idTime} dataRef={linkEvento.data_evento} show={show} />
+        </Modal>
+      )}
       {detalhe && (
         <Modal title={`Lançar em — ${detalhe.nome}`} onClose={()=>setDetalhe(null)}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -4013,8 +4053,8 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
 function CrudJogadores({ idTime, show, readOnly }) {
   const _idTimeJ = idTime; // recebido por prop (filtrado pelo usuário logado)
   // Tipo de time, para filtrar as posições disponíveis
-  const { data: _timeInfo } = useQuery(() => _idTimeJ ? api.get(`time?id_time=eq.${_idTimeJ}&select=id_tipo_time&limit=1`) : Promise.resolve([]), [_idTimeJ]);
-  const _tipoTimeJ = _timeInfo?.[0]?.id_tipo_time;
+  const { data: _timeInfo } = useQuery(() => _idTimeJ ? api.get(`time?id_time=eq.${_idTimeJ}&select=id_tipo_time,id_subtipo&limit=1`) : Promise.resolve([]), [_idTimeJ]);
+  const _tipoTimeJ = _timeInfo?.[0]?.id_subtipo || _timeInfo?.[0]?.id_tipo_time;
   const { data: jogadores, loading, reload } = useQuery(() => 
     _idTimeJ ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${_idTimeJ}&select=*,posicao(nome,ordem,id_posicao_pai)&order=camisa.asc`) : Promise.resolve([]),
     [_idTimeJ]
@@ -4652,6 +4692,12 @@ function ListaEncontros({ idTime, temporada, show, readOnly }) {
       : Promise.resolve([]),
     [temporada]
   );
+  const { data: lavagens } = useQuery(
+    () => temporada?.id_temporada
+      ? api.get(`vw_turma_lavagens?id_temporada=eq.${temporada.id_temporada}&select=*&order=lavagens.desc`)
+      : Promise.resolve([]),
+    [temporada]
+  );
 
   if (!temporada) return <Card><div style={{ padding:20, color:C.dim }}>Crie uma temporada primeiro para registrar encontros.</div></Card>;
   if (encontroSel || novo) {
@@ -4691,7 +4737,76 @@ function ListaEncontros({ idTime, temporada, show, readOnly }) {
           </tbody>
         </table></div>
       </Card>
+
+      {(lavagens||[]).length > 0 && (
+        <Card style={{ padding:0, overflow:"hidden" }}>
+          <div style={{ padding:"12px 16px", borderBottom:`1px solid ${C.border}`, fontSize:13, fontWeight:800, color:C.gold, textTransform:"uppercase", letterSpacing:"0.06em" }}>🧺 Ranking de lavagens do fardamento</div>
+          <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <thead><tr style={{ background:C.surf2 }}>
+              {["#","Jogador","Lavagens"].map((h,i) => <th key={i} style={{ padding:"8px 12px", textAlign:i===0?"center":"left", fontSize:10, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {(lavagens||[]).map((j,i) => (
+                <tr key={j.id_jogador} style={{ borderBottom:`1px solid ${C.border}` }}>
+                  <td style={{ padding:"8px 12px", textAlign:"center", fontWeight:800, color:C.gold }}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</td>
+                  <td style={{ padding:"8px 12px", fontWeight:700 }}>{j.apelido || j.nome}</td>
+                  <td style={{ padding:"8px 12px" }}>{j.lavagens}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        </Card>
+      )}
     </div>
+  );
+}
+
+// Gera/exibe o link público de confirmação de presença (encontro/evento/partida).
+// Reutilizável: recebe tipo, idRef, idTime e a data (para definir expiração).
+function LinkConfirmacao({ tipo, idRef, idTime, dataRef, show }) {
+  const { data: links, reload } = useQuery(
+    () => (tipo && idRef) ? api.get(`link_confirmacao?tipo=eq.${tipo}&id_ref=eq.${idRef}&select=*&limit=1`) : Promise.resolve([]),
+    [tipo, idRef]
+  );
+  const [gerando, setGerando] = useState(false);
+  const link = links?.[0];
+  const urlBase = (typeof window !== "undefined") ? `${window.location.origin}/confirmar?t=` : "/confirmar?t=";
+
+  async function gerar() {
+    setGerando(true);
+    try {
+      const token = (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g,"") : (Math.random().toString(36).slice(2)+Date.now().toString(36)+Math.random().toString(36).slice(2)));
+      const expira = dataRef ? new Date(new Date(dataRef).getTime() + 24*60*60*1000).toISOString() : null; // expira 1 dia após a data
+      await api.post("link_confirmacao", { token, tipo, id_ref: idRef, id_time: idTime, expira_em: expira });
+      show("Link de confirmação gerado!"); reload();
+    } catch (e) { show(e.message, "error"); } finally { setGerando(false); }
+  }
+  function copiar() {
+    const url = urlBase + link.token;
+    if (navigator?.clipboard) navigator.clipboard.writeText(url).then(() => show("Link copiado!")).catch(() => {});
+  }
+
+  return (
+    <Card style={{ background:C.surf2 }}>
+      <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginBottom:10 }}>📲 Link de confirmação de presença</div>
+      {!link ? (
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+          <div style={{ fontSize:13, color:C.dim, flex:1, minWidth:180 }}>Gere um link para os jogadores confirmarem presença sem precisar de login. Compartilhe no WhatsApp.</div>
+          <Btn onClick={gerar} disabled={gerando}>{gerando ? "Gerando..." : "Gerar link"}</Btn>
+        </div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+            <input readOnly value={urlBase + link.token} onFocus={e => e.target.select()}
+              style={{ flex:1, minWidth:200, background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontSize:12, padding:"8px 10px", fontFamily:"monospace" }} />
+            <Btn onClick={copiar}>Copiar</Btn>
+          </div>
+          <div style={{ fontSize:11, color:C.dim }}>
+            {link.expira_em ? `Expira em ${new Date(link.expira_em).toLocaleDateString("pt-BR")} ${new Date(link.expira_em).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}.` : "Sem data de expiração."} Qualquer pessoa com o link pode responder pelos nomes da lista.
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -4702,6 +4817,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
     data: encontro?.data ? String(encontro.data).slice(0,16) : "",
     id_campo: encontro?.id_campo ? String(encontro.id_campo) : "",
     observacao: encontro?.observacao || "",
+    id_responsavel_lavagem: encontro?.id_responsavel_lavagem ? String(encontro.id_responsavel_lavagem) : "",
   });
   const [savingCab, setSavingCab] = useState(false);
 
@@ -4721,7 +4837,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
     if (!cabecalho.data) { show("Informe a data e hora do encontro.", "error"); return; }
     setSavingCab(true);
     try {
-      const body = { id_temporada: temporada.id_temporada, data: new Date(cabecalho.data).toISOString(), id_campo: cabecalho.id_campo ? Number(cabecalho.id_campo) : null, observacao: cabecalho.observacao || null };
+      const body = { id_temporada: temporada.id_temporada, data: new Date(cabecalho.data).toISOString(), id_campo: cabecalho.id_campo ? Number(cabecalho.id_campo) : null, observacao: cabecalho.observacao || null, id_responsavel_lavagem: cabecalho.id_responsavel_lavagem ? Number(cabecalho.id_responsavel_lavagem) : null };
       if (idEncontro) { await api.patch(`encontro?id_encontro=eq.${idEncontro}`, body); show("Encontro atualizado."); }
       else {
         const r = await api.post("encontro", body);
@@ -4753,6 +4869,10 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
             {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
           </Select>
           <Input label="Observação" value={cabecalho.observacao} onChange={e => setCabecalho(c => ({ ...c, observacao: e.target.value }))} style={{ flex:1, minWidth:200 }} />
+          <Select label="🧺 Responsável pela lavagem" value={cabecalho.id_responsavel_lavagem} onChange={e => setCabecalho(c => ({ ...c, id_responsavel_lavagem: e.target.value }))} style={{ minWidth:180 }}>
+            <option value="">—</option>
+            {(jogadores||[]).map(j => <option key={j.id_jogador} value={j.id_jogador}>{j.apelido || j.nome}</option>)}
+          </Select>
         </div>
         {!readOnly && <div style={{ marginTop:12 }}><Btn onClick={salvarCabecalho} disabled={savingCab}>{savingCab ? "Salvando..." : idEncontro ? "Atualizar dados" : "Criar encontro"}</Btn></div>}
       </Card>
@@ -4761,6 +4881,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
 
       {idEncontro && (
         <>
+          {!readOnly && <LinkConfirmacao tipo="encontro" idRef={idEncontro} idTime={idTime} dataRef={cabecalho.data} show={show} />}
           <JogosEncontro idEncontro={idEncontro} jogos={jogos||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadJogos} show={show} readOnly={readOnly} totalPlacares={totalPlacares} />
           <PresencaEncontro idEncontro={idEncontro} parts={parts||[]} jogadores={jogadores||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadParts} show={show} readOnly={readOnly}
             totais={{ totalPlacares, totalGolsJog, totalAssist, totalGolsContra, somaConfere, assistExcede }} statusAtual={encontro?.status} />
@@ -4964,6 +5085,27 @@ function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI,
       setAddJog(""); show("Presença registrada."); reload();
     } catch (e) { show(e.message, "error"); } finally { setSaving(false); }
   }
+  // Traz os confirmados "Vou" (jogadores cadastrados) como presença. Convidados são ignorados.
+  async function trazerConfirmados() {
+    setSaving(true);
+    try {
+      const links = await api.get(`link_confirmacao?tipo=eq.encontro&id_ref=eq.${idEncontro}&select=id_link&limit=1`);
+      if (!links?.[0]) { show("Nenhum link de confirmação foi gerado para este encontro.", "error"); setSaving(false); return; }
+      const confs = await api.get(`confirmacao_presenca?id_link=eq.${links[0].id_link}&status=eq.vou&id_jogador=not.is.null&select=id_jogador`);
+      const jaPresentesSet = new Set((parts||[]).map(p => p.id_jogador));
+      const aAdicionar = (confs||[]).filter(c => !jaPresentesSet.has(c.id_jogador));
+      const convidados = await api.get(`confirmacao_presenca?id_link=eq.${links[0].id_link}&status=eq.vou&id_jogador=is.null&select=id_confirmacao`);
+      if (aAdicionar.length === 0) {
+        show((convidados||[]).length > 0 ? `Todos os jogadores confirmados já estão na lista. ${convidados.length} convidado(s) foram ignorados.` : "Nenhum jogador novo confirmado para trazer.");
+        setSaving(false); return;
+      }
+      for (const c of aAdicionar) {
+        await api.post("encontro_participacao", { id_encontro: idEncontro, id_jogador: c.id_jogador, id_time_interno: null, gols:0, assistencias:0, gols_contra:0, cartao_amarelo:0, cartao_vermelho:0 });
+      }
+      const aviso = (convidados||[]).length > 0 ? ` (${convidados.length} convidado(s) ignorado(s) — cadastre-os como jogador se quiser incluí-los)` : "";
+      show(`${aAdicionar.length} jogador(es) confirmado(s) adicionado(s)!${aviso}`); reload();
+    } catch (e) { show(e.message, "error"); } finally { setSaving(false); }
+  }
   async function atualizarCampo(p, campo, valor) {
     try { await api.patch(`encontro_participacao?id_encontro_part=eq.${p.id_encontro_part}`, { [campo]: campo==="id_time_interno" ? (valor?Number(valor):null) : (Number(valor)||0) }); reload(); }
     catch (e) { show(e.message, "error"); }
@@ -5046,6 +5188,7 @@ function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI,
             {disponiveis.map(j => <option key={j.id_jogador} value={j.id_jogador}>#{j.camisa} — {j.apelido || j.nome}</option>)}
           </Select>
           <Btn onClick={adicionarPresenca} disabled={saving || !addJog}>+ Presença</Btn>
+          <Btn variant="secondary" onClick={trazerConfirmados} disabled={saving}>📲 Trazer confirmados</Btn>
         </div>
       )}
       <div style={{ fontSize:12, color:C.dim, marginTop:6 }}>Para marcar presença, basta adicionar o jogador (mesmo com tudo zero).</div>
@@ -5080,8 +5223,8 @@ function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI,
 function CrudPosicoes({ idTime, show, readOnly }) {
   // Tela de CONSULTA: o admin apenas visualiza as posições do tipo do seu time.
   // A gestão de posições é feita pelo super admin (no cadastro do Tipo de Time).
-  const { data: _timeInfoP } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_tipo_time,tipo_time!id_tipo_time(descricao)&limit=1`) : Promise.resolve([]), [idTime]);
-  const _tipoTimeP = _timeInfoP?.[0]?.id_tipo_time;
+  const { data: _timeInfoP } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_tipo_time,id_subtipo,tipo_time!id_tipo_time(descricao),subtipo:id_subtipo(descricao)&limit=1`) : Promise.resolve([]), [idTime]);
+  const _tipoTimeP = _timeInfoP?.[0]?.id_subtipo || _timeInfoP?.[0]?.id_tipo_time;
   const _tipoNomeP = _timeInfoP?.[0]?.tipo_time?.descricao;
   const { data: posicoes, loading, reload } = useQuery(() =>
     _tipoTimeP ? api.get(`posicao?id_tipo_time=eq.${_tipoTimeP}&select=*&order=ordem.asc,nome.asc`) : Promise.resolve([]), [_tipoTimeP]
@@ -5470,15 +5613,21 @@ function ConfigTime({ idTime, show, readOnly }) {
   const [form, setForm]   = useState(null);
   const [saving, setSaving] = useState(false);
   const [tipoOriginal, setTipoOriginal] = useState("");
-  const [confirmaTroca, setConfirmaTroca] = useState(null); // {qtdJogadores} quando precisa confirmar troca de tipo
+  const [subtipoOriginal, setSubtipoOriginal] = useState("");
+  const [confirmaTroca, setConfirmaTroca] = useState(null); // {qtd, motivo:'tipo'|'subtipo'} quando precisa confirmar
   const [textoConfirma, setTextoConfirma] = useState("");
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  // É turma fechada? (pelo tipo selecionado no form)
+  const tipoSelecionado = (tipos||[]).find(t => String(t.id_tipo_time) === String(form?.id_tipo_time));
+  const ehTurmaFechada = !!tipoSelecionado?.eh_turma_fechada;
+  const subtiposDisponiveis = (tipos||[]).filter(t => !t.eh_turma_fechada);
 
   useEffect(() => {
     if (times?.[0] && !form) {
       const t = times[0];
-      setForm({ ...t, id_campo: t.id_campo ? String(t.id_campo) : "", id_cidade_sede: t.id_cidade_sede ? String(t.id_cidade_sede) : "", id_tipo_time: t.id_tipo_time ? String(t.id_tipo_time) : "", data_fundacao: t.data_fundacao ? t.data_fundacao.split("T")[0] : "" });
+      setForm({ ...t, id_campo: t.id_campo ? String(t.id_campo) : "", id_cidade_sede: t.id_cidade_sede ? String(t.id_cidade_sede) : "", id_tipo_time: t.id_tipo_time ? String(t.id_tipo_time) : "", id_subtipo: t.id_subtipo ? String(t.id_subtipo) : "", data_fundacao: t.data_fundacao ? t.data_fundacao.split("T")[0] : "" });
       setTipoOriginal(t.id_tipo_time ? String(t.id_tipo_time) : "");
+      setSubtipoOriginal(t.id_subtipo ? String(t.id_subtipo) : "");
       // Descobre a UF da cidade-sede atual para pré-selecionar o dropdown de estado
       if (t.id_cidade_sede) {
         api.get(`cidade?id_cidade=eq.${t.id_cidade_sede}&select=estado&limit=1`)
@@ -5502,19 +5651,33 @@ function ConfigTime({ idTime, show, readOnly }) {
 
   async function salvar() {
     if (!form?.nome) { show("Nome obrigatório.", "error"); return; }
-    // Detecta troca de tipo de time — operação sensível (zera posições dos jogadores)
+    // Detecta troca de tipo OU de subtipo — ambas zeram posições dos jogadores
     const tipoMudou = tipoOriginal && form.id_tipo_time && String(form.id_tipo_time) !== String(tipoOriginal);
-    if (tipoMudou && !confirmaTroca) {
+    const subtipoMudou = ehTurmaFechada && form.id_subtipo && String(form.id_subtipo) !== String(subtipoOriginal);
+    if ((tipoMudou || subtipoMudou) && !confirmaTroca) {
       try {
         const jogs = await api.get(`jogador?id_jogador=gt.0&id_time=eq.${form.id_time}&id_posicao=not.is.null&select=id_jogador`);
         setTextoConfirma("");
-        setConfirmaTroca({ qtd: (jogs||[]).length });
+        setConfirmaTroca({ qtd: (jogs||[]).length, motivo: tipoMudou ? "tipo" : "subtipo" });
       } catch {
-        setConfirmaTroca({ qtd: 0 });
+        setConfirmaTroca({ qtd: 0, motivo: tipoMudou ? "tipo" : "subtipo" });
       }
-      return; // espera a confirmação; o salvar real acontece em salvarDefinitivo()
+      return;
     }
     await salvarDefinitivo(false);
+  }
+
+  function aplicarSubtipo(id_sub) {
+    const sub = (tipos||[]).find(t => String(t.id_tipo_time) === String(id_sub));
+    setForm(f => ({ ...f,
+      id_subtipo: String(id_sub),
+      ...(sub ? {
+        numero_titulares: sub.numero_titulares,
+        quantidade_periodos: sub.quantidade_periodos,
+        minutos_padrao_periodo: sub.minutos_padrao_periodo,
+        permite_acrescimos: sub.permite_acrescimos,
+      } : {}),
+    }));
   }
 
   async function salvarDefinitivo(zerarPosicoes) {
@@ -5526,6 +5689,7 @@ function ConfigTime({ idTime, show, readOnly }) {
         id_campo: form.id_campo ? Number(form.id_campo) : null,
         id_cidade_sede: form.id_cidade_sede ? Number(form.id_cidade_sede) : null,
         id_tipo_time: form.id_tipo_time ? Number(form.id_tipo_time) : null,
+        id_subtipo: (ehTurmaFechada && form.id_subtipo) ? Number(form.id_subtipo) : null,
         valor_mensalidade: form.valor_mensalidade ? Number(form.valor_mensalidade) : null,
         saldo_inicial: form.saldo_inicial ? Number(form.saldo_inicial) : 0,
         data_fundacao: form.data_fundacao||null,
@@ -5554,6 +5718,7 @@ function ConfigTime({ idTime, show, readOnly }) {
         show("Configurações salvas!");
       }
       setTipoOriginal(form.id_tipo_time ? String(form.id_tipo_time) : "");
+      setSubtipoOriginal(form.id_subtipo ? String(form.id_subtipo) : "");
       setConfirmaTroca(null); setTextoConfirma("");
       reload();
     } catch (e) { show(e.message, "error"); }
@@ -5620,6 +5785,18 @@ function ConfigTime({ idTime, show, readOnly }) {
           </div>
         </div>
 
+        {ehTurmaFechada && (
+          <div className="cfg-grid-2" style={{ alignItems:"end" }}>
+            <Select label="Modalidade (subtipo)" value={form.id_subtipo||""} onChange={e => aplicarSubtipo(e.target.value)}>
+              <option value="">Selecione a modalidade...</option>
+              {subtiposDisponiveis.map(t => <option key={t.id_tipo_time} value={t.id_tipo_time}>{t.descricao}</option>)}
+            </Select>
+            <div style={{ fontSize:11, color:C.dim, fontStyle:"italic", paddingBottom:4 }}>
+              A turma usa as posições e regras da modalidade. Trocar a modalidade remove as posições dos jogadores.
+            </div>
+          </div>
+        )}
+
         {/* Regras do Jogo */}
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Regras do Jogo</div>
         <div className="cfg-grid-auto">
@@ -5669,13 +5846,15 @@ function ConfigTime({ idTime, show, readOnly }) {
       </div>
 
       {confirmaTroca && (
-        <Modal title="⚠️ Trocar o tipo de time" onClose={() => { setConfirmaTroca(null); setTextoConfirma(""); }}>
+        <Modal title={confirmaTroca.motivo === "subtipo" ? "⚠️ Trocar a modalidade da turma" : "⚠️ Trocar o tipo de time"} onClose={() => { setConfirmaTroca(null); setTextoConfirma(""); }}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div style={{ background:`${C.loss}1A`, border:`1px solid ${C.loss}55`, borderRadius:8, padding:"12px 14px", fontSize:14, color:C.cream, lineHeight:1.5 }}>
-              Cada tipo de time tem suas próprias posições. Ao trocar o tipo, <b>a posição de todos os jogadores será removida</b>
+              {confirmaTroca.motivo === "subtipo"
+                ? <>Cada modalidade tem suas próprias posições. Ao trocar a modalidade, <b>a posição de todos os jogadores será removida</b></>
+                : <>Cada tipo de time tem suas próprias posições. Ao trocar o tipo, <b>a posição de todos os jogadores será removida</b></>}
               {confirmaTroca.qtd > 0 ? <> — isso afeta <b>{confirmaTroca.qtd} jogador(es)</b> que têm posição definida.</> : "."}
               <br/><br/>
-              Você precisará <b>recadastrar a posição de cada jogador</b> com as posições do novo tipo. O histórico das partidas já jogadas é preservado.
+              Você precisará <b>recadastrar a posição de cada jogador</b> com as posições da {confirmaTroca.motivo === "subtipo" ? "nova modalidade" : "novo tipo"}. O histórico das partidas já jogadas é preservado.
               <br/><br/>
               <b>Esta ação não pode ser desfeita.</b>
             </div>
