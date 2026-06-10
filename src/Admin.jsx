@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.13.48";
+const APP_VERSION = process.env.REACT_APP_VERSION || "0.13.51";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -3054,7 +3054,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.13.39" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=0.13.50" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -3941,16 +3941,16 @@ export default function AdminAppCompleto() {
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream, display:"flex", flexDirection:"column" }}>
       <style>{`
-        /* ── Responsividade mobile (retrato) ── */
-        @media(max-width:768px){
+        /* ── Navegação mobile: retrato (largura) OU paisagem de celular (altura baixa) ── */
+        @media (max-width:768px), (max-height:600px) and (orientation:landscape){
           .admin-header{padding:0 12px !important; gap:8px !important;}
           .header-time-nome{display:none;}
           .admin-layout{flex-direction:column !important;}
           /* Sidebar vira barra horizontal rolável no topo do conteúdo */
           .admin-sidebar{
-            width:100% !important; height:auto !important; position:sticky; top:64px;
+            width:100% !important; height:auto !important; max-height:none !important; position:sticky; top:64px;
             display:flex !important; flex-direction:row !important; overflow-x:auto; overflow-y:hidden;
-            border-right:none !important; border-bottom:1px solid var(--ndc-border,#1F5C3E);
+            border-right:none !important; border-bottom:1px solid #1F5C3E;
             padding:6px 8px !important; gap:4px; -webkit-overflow-scrolling:touch; z-index:90;
           }
           .admin-sidebar .menu-grupo{display:flex; flex-direction:row; align-items:center; flex-shrink:0;}
@@ -3960,14 +3960,14 @@ export default function AdminAppCompleto() {
             border-bottom:3px solid transparent; padding:8px 12px !important; font-size:11px !important;
           }
           .admin-main{padding:16px 12px !important;}
-          /* Grids de formulário viram 1 coluna */
+          /* Inputs nativos não excedem o container */
+          input, select, textarea{max-width:100% !important; box-sizing:border-box !important;}
+        }
+        /* ── Empilhamento de campos: só telas realmente estreitas (retrato/celular pequeno) ── */
+        @media(max-width:560px){
           .form-grid-2, .form-grid-3, .form-grid-auto{grid-template-columns:1fr !important;}
-          /* Campos em flex-wrap ocupam a largura toda */
           .campo-flex{min-width:100% !important; flex:1 1 100% !important;}
           .campos-encontro > div{min-width:100% !important; flex:1 1 100% !important;}
-          /* Inputs nativos (datetime-local etc.) não podem exceder o container */
-          input, select, textarea{max-width:100% !important; box-sizing:border-box !important;}
-          /* Container de presença: botões ocupam a linha inteira e não vazam */
           .presenca-acoes{flex-direction:column !important; align-items:stretch !important;}
           .presenca-acoes > *{width:100% !important; min-width:0 !important;}
         }
@@ -4981,7 +4981,8 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
   const ehNovo = !encontro;
   const [idEncontro, setIdEncontro] = useState(encontro?.id_encontro || null);
   const [cabecalho, setCabecalho] = useState({
-    data: encontro?.data ? String(encontro.data).slice(0,16) : "",
+    data: encontro?.data ? String(encontro.data).slice(0,10) : "",
+    hora: encontro?.data ? String(encontro.data).slice(11,16) : "",
     id_campo: encontro?.id_campo ? String(encontro.id_campo) : "",
     observacao: encontro?.observacao || "",
     id_responsavel_lavagem: encontro?.id_responsavel_lavagem ? String(encontro.id_responsavel_lavagem) : "",
@@ -5001,10 +5002,11 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
 
   // ── Salvar cabeçalho (cria o encontro) ──
   async function salvarCabecalho() {
-    if (!cabecalho.data) { show("Informe a data e hora do encontro.", "error"); return; }
+    if (!cabecalho.data) { show("Informe a data do encontro.", "error"); return; }
     setSavingCab(true);
     try {
-      const body = { id_temporada: temporada.id_temporada, data: new Date(cabecalho.data).toISOString(), id_campo: cabecalho.id_campo ? Number(cabecalho.id_campo) : null, observacao: cabecalho.observacao || null, id_responsavel_lavagem: cabecalho.id_responsavel_lavagem ? Number(cabecalho.id_responsavel_lavagem) : null };
+      const _dataHora = `${cabecalho.data}T${cabecalho.hora || "12:00"}`;
+      const body = { id_temporada: temporada.id_temporada, data: new Date(_dataHora).toISOString(), id_campo: cabecalho.id_campo ? Number(cabecalho.id_campo) : null, observacao: cabecalho.observacao || null, id_responsavel_lavagem: cabecalho.id_responsavel_lavagem ? Number(cabecalho.id_responsavel_lavagem) : null };
       if (idEncontro) { await api.patch(`encontro?id_encontro=eq.${idEncontro}`, body); show("Encontro atualizado."); }
       else {
         const r = await api.post("encontro", body);
@@ -5030,7 +5032,8 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
       <Card>
         <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginBottom:14 }}>Dados do encontro</div>
         <div className="campos-encontro" style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-          <Input label="Data e hora *" type="datetime-local" value={cabecalho.data} onChange={e => setCabecalho(c => ({ ...c, data: e.target.value }))} style={{ flex:"1 1 180px" }} />
+          <Input label="Data *" type="date" value={cabecalho.data} onChange={e => setCabecalho(c => ({ ...c, data: e.target.value }))} style={{ flex:"1 1 130px" }} />
+          <Input label="Hora" type="time" value={cabecalho.hora} onChange={e => setCabecalho(c => ({ ...c, hora: e.target.value }))} style={{ flex:"1 1 90px" }} />
           <Select label="Local" value={cabecalho.id_campo} onChange={e => setCabecalho(c => ({ ...c, id_campo: e.target.value }))} style={{ flex:"1 1 150px" }}>
             <option value="">—</option>
             {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
@@ -5048,7 +5051,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
 
       {idEncontro && (
         <>
-          {!readOnly && <LinkConfirmacao tipo="encontro" idRef={idEncontro} idTime={idTime} dataRef={cabecalho.data} show={show} />}
+          {!readOnly && <LinkConfirmacao tipo="encontro" idRef={idEncontro} idTime={idTime} dataRef={cabecalho.data ? `${cabecalho.data}T${cabecalho.hora || "12:00"}` : null} show={show} />}
           <JogosEncontro idEncontro={idEncontro} jogos={jogos||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadJogos} show={show} readOnly={readOnly} totalPlacares={totalPlacares} />
           <PresencaEncontro idEncontro={idEncontro} parts={parts||[]} jogadores={jogadores||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadParts} show={show} readOnly={readOnly}
             totais={{ totalPlacares, totalGolsJog, totalAssist, totalGolsContra, somaConfere, assistExcede }} statusAtual={encontro?.status} />
