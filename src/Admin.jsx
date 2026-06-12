@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.4.2";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.4.4";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -243,11 +243,20 @@ function BadgeP({ label, cor }) {
 // ══════════════════════════════════════════════════════════════
 
 function fmtDataA(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR", { timeZone:"UTC" }) : "—"; }
-// valida link de localização: aceita vazio, ou uma URL http(s) válida
+// valida link de localização: aceita vazio, ou uma URL (com ou sem http://)
 function linkLocalValido(v) {
   if (!v || !v.trim()) return true; // vazio é permitido (campo opcional)
-  try { const u = new URL(v.trim()); return u.protocol === "http:" || u.protocol === "https:"; }
+  const t = v.trim();
+  // aceita com protocolo, ou sem (completa com https na hora de salvar)
+  const comProtocolo = /^https?:\/\//i.test(t) ? t : `https://${t}`;
+  try { const u = new URL(comProtocolo); return (u.protocol === "http:" || u.protocol === "https:") && !!u.hostname && u.hostname.includes("."); }
   catch { return false; }
+}
+// normaliza o link para salvar: garante o https:// na frente
+function normalizarLink(v) {
+  if (!v || !v.trim()) return null;
+  const t = v.trim();
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`;
 }
 function fmtHoraA(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 function resultadoA(p) {
@@ -1471,7 +1480,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
         em_casa: form.em_casa,
         id_campo: Number(form.id_campo),
         observacoes: form.observacoes,
-        link_local: form.link_local?.trim() || null,
+        link_local: normalizarLink(form.link_local),
         cancelada: "N",
       });
       // REGRA 12: registrar automaticamente a participação do jogador 0 (adversário) na partida
@@ -2005,7 +2014,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
       const body = {
         data: novaData,
         id_campo: editDados.id_campo ? Number(editDados.id_campo) : null,
-        link_local: editDados.link_local?.trim() || null,
+        link_local: normalizarLink(editDados.link_local),
       };
       await api.patch(`partida?id_partida=eq.${partida.id_partida}`, body);
       setPartida(u => ({ ...u, ...body }));
@@ -3662,7 +3671,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.3.3" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.4.2" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -4157,7 +4166,7 @@ function CrudEventos({ idTime, show, readOnly }) {
     try {
       const body = {
         nome: form.nome.trim(), data_evento: form.data_evento||null,
-        link_local: form.link_local?.trim() || null,
+        link_local: normalizarLink(form.link_local),
         meta: Number(form.meta)||0, modo: form.modo,
         resultado_direto: form.modo==="direto" ? (Number(form.resultado_direto)||0) : null,
         id_temporada: form.id_temporada?Number(form.id_temporada):null,
@@ -5670,7 +5679,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
     setSavingCab(true);
     try {
       const _dataHora = montarDataHoraUTC(cabecalho.data, cabecalho.hora || "12:00");
-      const body = { id_temporada: temporada.id_temporada, data: _dataHora, id_campo: cabecalho.id_campo ? Number(cabecalho.id_campo) : null, observacao: cabecalho.observacao || null, id_responsavel_lavagem: cabecalho.id_responsavel_lavagem ? Number(cabecalho.id_responsavel_lavagem) : null, link_local: cabecalho.link_local?.trim() || null };
+      const body = { id_temporada: temporada.id_temporada, data: _dataHora, id_campo: cabecalho.id_campo ? Number(cabecalho.id_campo) : null, observacao: cabecalho.observacao || null, id_responsavel_lavagem: cabecalho.id_responsavel_lavagem ? Number(cabecalho.id_responsavel_lavagem) : null, link_local: normalizarLink(cabecalho.link_local) };
       if (idEncontro) { await api.patch(`encontro?id_encontro=eq.${idEncontro}`, body); show("Encontro atualizado."); }
       else {
         const r = await api.post("encontro", body);
