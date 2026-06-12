@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.2.5";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.4.5";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -202,7 +202,28 @@ function ImageUpload({ label, value, onUpload, bucket, nomeArquivo }) {
 
 // Funções auxiliares compartilhadas
 function fmtDataP(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
-function fmtHoraP(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }) : "—"; }
+// ── Tratamento de HORA — "hora da parede" (Caminho A) ──
+// Convenção: a hora é gravada e lida literalmente em UTC, sem conversão
+// de fuso. Assim "14h" digitado é "14h" em qualquer lugar do mundo.
+// Monta o timestamp para salvar: data (YYYY-MM-DD) + hora (HH:MM) -> ISO com Z
+function montarDataHoraUTC(dataYMD, horaHM) {
+  if (!dataYMD) return null;
+  const h = (horaHM && /^\d{1,2}:\d{2}$/.test(horaHM)) ? horaHM : "00:00";
+  const [hh, mm] = h.split(":");
+  return `${dataYMD}T${hh.padStart(2,"0")}:${mm}:00.000Z`;
+}
+// Lê a hora (HH:MM) de um timestamp, sem conversão de fuso
+function horaDeTS(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return `${String(d.getUTCHours()).padStart(2,"0")}:${String(d.getUTCMinutes()).padStart(2,"0")}`;
+}
+// Lê a data (YYYY-MM-DD) de um timestamp, sem conversão de fuso
+function dataDeTS(ts) {
+  if (!ts) return "";
+  return String(ts).slice(0,10);
+}
+function fmtHoraP(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 function resultadoP(p) {
   if (p.cancelada === "S") return { label:"Cancelado", cor:C.dim };
   if (p.gols_marcados === null) return { label:"Aguardando", cor:C.gold };
@@ -221,8 +242,29 @@ function BadgeP({ label, cor }) {
 // VISÃO DO APP PÚBLICO — espelhada no admin
 // ══════════════════════════════════════════════════════════════
 
-function fmtDataA(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
-function fmtHoraA(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }) : "—"; }
+function fmtDataA(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR", { timeZone:"UTC" }) : "—"; }
+// valida link de localização: aceita vazio, ou texto que CONTENHA uma URL
+function extrairURL(v) {
+  if (!v) return null;
+  const t = String(v).trim();
+  if (!t) return null;
+  // procura uma URL http(s) dentro do texto
+  const m = t.match(/https?:\/\/[^\s]+/i);
+  if (m) return m[0];
+  // sem protocolo: procura algo tipo dominio.xx/...
+  const m2 = t.match(/[a-z0-9.-]+\.[a-z]{2,}(\/[^\s]*)?/i);
+  if (m2) return `https://${m2[0]}`;
+  return null;
+}
+function linkLocalValido(v) {
+  if (!v || !String(v).trim()) return true; // vazio é permitido (campo opcional)
+  return extrairURL(v) !== null;
+}
+// normaliza o link para salvar: extrai a URL e garante o https://
+function normalizarLink(v) {
+  return extrairURL(v); // retorna a URL pronta, ou null se não achar
+}
+function fmtHoraA(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 function resultadoA(p) {
   if (p.cancelada === "S") return { label:"Cancelado", cor:C.dim };
   if (p.gols_marcados === null) return { label:"Aguardando", cor:C.gold };
@@ -1113,7 +1155,7 @@ function useQuery(fetcher, deps = []) {
 }
 
 function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
-function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"; }
+function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone:"UTC" }) : "—"; }
 function resultado(p) {
   if (p.cancelada === "S")      return { label: "Cancelado", cor: C.dim };
   if (p.gols_marcados === null) return { label: "Pendente",  cor: C.dim };
@@ -1298,7 +1340,7 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
                 id_partida: p.id_partida,
                 adversario: p.adversario?.nome||"",
                 data: p.data ? new Date(p.data).toLocaleDateString("pt-BR") : "",
-                hora: p.data ? new Date(p.data).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "",
+                hora: horaDeTS(p.data),
                 em_casa: p.em_casa==="S"?"SIM":"NAO",
                 cancelada: p.cancelada==="S"?"SIM":"NAO",
                 campo: p.campo?.nome||"",
@@ -1402,7 +1444,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
   const { data: campos }      = useQuery(() => temporada?.id_time ? api.get(`campo?id_time=eq.${temporada.id_time}&select=*&order=nome.asc`) : Promise.resolve([]), [temporada]);
   const { data: time }        = useQuery(() => temporada?.id_time ? api.get(`time?id_time=eq.${temporada.id_time}&select=*&limit=1`) : Promise.resolve([]), [temporada]);
 
-  const [form, setForm] = useState({ data: "", horario: "14:00", id_adversario: "", em_casa: "S", id_campo: "", observacoes: "" });
+  const [form, setForm] = useState({ data: "", horario: "14:00", id_adversario: "", em_casa: "S", id_campo: "", observacoes: "", link_local: "" });
   const [saving, setSaving] = useState(false);
   const { toast, show } = useToast();
 
@@ -1418,6 +1460,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
 
   async function salvar() {
     if (!form.data || !form.id_campo) { show("Preencha a data e o campo.", "error"); return; }
+    if (!linkLocalValido(form.link_local)) { show(`Link inválido. Recebido: "${String(form.link_local).slice(0,60)}". Cole um link do mapa.`, "error"); return; }
     // Validar que a data está dentro do intervalo da temporada
     if (temporada?.data_inicio && form.data < temporada.data_inicio.split("T")[0]) {
       show(`A data não pode ser anterior ao início da temporada (${temporada.data_inicio.split("T")[0].split("-").reverse().join("/")}).`, "error"); return;
@@ -1435,7 +1478,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
         setSaving(false); return;
       }
 
-      const dataTs = new Date(`${form.data}T${form.horario}:00`).toISOString();
+      const dataTs = montarDataHoraUTC(form.data, form.horario);
       const nova = await api.post("partida", {
         id_temporada: temporada.id_temporada,
         id_adversario: form.id_adversario ? Number(form.id_adversario) : null,
@@ -1443,6 +1486,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
         em_casa: form.em_casa,
         id_campo: Number(form.id_campo),
         observacoes: form.observacoes,
+        link_local: normalizarLink(form.link_local),
         cancelada: "N",
       });
       // REGRA 12: registrar automaticamente a participação do jogador 0 (adversário) na partida
@@ -1478,6 +1522,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
         {(campos || []).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
       </Select>
       <Input label="Observações" value={form.observacoes} onChange={e => set("observacoes", e.target.value)} placeholder="Amistoso, campeonato, etc..." />
+      <Input label="Link de localização (opcional)" value={form.link_local} onChange={e => set("link_local", e.target.value)} placeholder="https://maps.google.com/..." />
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
         <Btn variant="secondary" onClick={onCancelar}>Cancelar</Btn>
         <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Criar Partida"}</Btn>
@@ -1487,19 +1532,514 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
 }
 
 // ── FICHA DA PARTIDA ──────────────────────────────────────────
-function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
+// ── Compartilhar resultado: desenha um card no canvas e compartilha a imagem ──
+function CompartilharResultado({ partida, gols, jogadores, time, temporada, idTime, show }) {
+  const [gerando, setGerando] = useState(false);
+
+  // dados extras para o resumo da temporada
+  const { data: partidasTemp } = useQuery(
+    () => temporada?.id_temporada ? api.get(`partida?id_temporada=eq.${temporada.id_temporada}&select=gols_marcados,gols_sofridos,cancelada`) : Promise.resolve([]),
+    [temporada?.id_temporada]
+  );
+  const { data: artilheiros } = useQuery(
+    () => temporada?.id_temporada ? api.get(`vw_stats_temporada?id_temporada=eq.${temporada.id_temporada}&select=*&order=gols_marcados.desc&limit=3`) : Promise.resolve([]),
+    [temporada?.id_temporada]
+  );
+
+  function nomeCurto(j) { return (j?.apelido || j?.nome || "").trim(); }
+
+  // agrupa gols e assistências do jogo por jogador → "Fulano (2), Beltrano"
+  function listaGols() {
+    const cont = {};
+    (gols||[]).forEach(g => {
+      const n = nomeCurto(g.jogador || g.participacao?.jogador);
+      if (n) cont[n] = (cont[n]||0) + 1;
+    });
+    return Object.entries(cont).map(([n,q]) => q>1 ? `${n} (${q})` : n).join(", ");
+  }
+  function listaAssist() {
+    const mapaJog = {};
+    (jogadores||[]).forEach(j => { mapaJog[j.id_jogador] = j; });
+    const cont = {};
+    (gols||[]).forEach(g => {
+      const a = g.id_assistente;
+      if (!a) return;
+      const j = mapaJog[a];
+      const nome = j ? nomeCurto(j) : null;
+      if (nome) cont[nome] = (cont[nome]||0) + 1;
+    });
+    return Object.entries(cont).map(([n,q]) => q>1 ? `${n} (${q})` : n).join(", ");
+  }
+
+  function desenharCard() {
+    const W = 1080, H = 1350;
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+
+    // fundo gradiente
+    const grad = ctx.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, "#0B3D2E"); grad.addColorStop(0.6, "#08321F"); grad.addColorStop(1, "#05130D");
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+    const GOLD = "#E8A020", CREAM = "#F0E8D0", DIM = "#8FAF9A", SURF = "#103D2A", WIN = "#4CAF50", LOSS = "#E53935";
+    function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+    // estatísticas da temporada
+    const jogadas = (partidasTemp||[]).filter(p => p.cancelada !== "S" && p.gols_marcados !== null);
+    const V = jogadas.filter(p => p.gols_marcados > p.gols_sofridos).length;
+    const E = jogadas.filter(p => p.gols_marcados === p.gols_sofridos).length;
+    const D = jogadas.filter(p => p.gols_marcados < p.gols_sofridos).length;
+    const J = jogadas.length;
+    const aprov = J > 0 ? Math.round(((V*3 + E) / (J*3)) * 100) : 0;
+
+    const PAD = 56;
+    let y = 56;
+
+    // header: escudo + nome
+    ctx.fillStyle = SURF; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.stroke();
+    ctx.font = "54px Arial"; ctx.textAlign = "center"; ctx.fillStyle = CREAM; ctx.fillText("⚽", PAD+58, y+76);
+    ctx.textAlign = "left";
+    ctx.fillStyle = CREAM; ctx.font = "800 44px Arial";
+    ctx.fillText((time?.nome || "MEU TIME").toUpperCase().slice(0,22), PAD+140, y+50);
+    ctx.fillStyle = DIM; ctx.font = "22px Arial";
+    const cidade = time?.cidade?.nome ? `${time.cidade.nome} — ${time.cidade.estado||""}` : "";
+    ctx.fillText(`${cidade}${cidade?" · ":""}${temporada?.nome||""}`.slice(0,46), PAD+140, y+92);
+    y += 150;
+
+    // bloco resultado
+    const emCasa = partida.em_casa === "S";
+    const nomeTime = time?.nome || "Meu Time";
+    const nomeAdv = partida.adversario?.nome || "Adversário";
+    const mandante = emCasa ? nomeTime : nomeAdv;
+    const visitante = emCasa ? nomeAdv : nomeTime;
+    const golsCasa = emCasa ? partida.gols_marcados : partida.gols_sofridos;
+    const golsVis  = emCasa ? partida.gols_sofridos : partida.gols_marcados;
+
+    const blocoH = 320;
+    ctx.fillStyle = SURF; rr(PAD, y, W-PAD*2, blocoH, 24); ctx.fill();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 3; rr(PAD, y, W-PAD*2, blocoH, 24); ctx.stroke();
+
+    // tag
+    ctx.fillStyle = GOLD; rr(PAD+34, y+30, 330, 50, 25); ctx.fill();
+    ctx.fillStyle = "#0B3D2E"; ctx.font = "800 22px Arial"; ctx.textAlign = "center";
+    ctx.fillText("⚽ RESULTADO DA PARTIDA", PAD+34+165, y+63);
+
+    // placar
+    const cy = y + 150;
+    ctx.fillStyle = GOLD; ctx.font = "800 92px Arial"; ctx.textAlign = "center";
+    ctx.fillText(`${golsCasa} × ${golsVis}`, W/2, cy+20);
+    ctx.fillStyle = CREAM; ctx.font = "800 32px Arial";
+    ctx.fillText(mandante.slice(0,18), W*0.23, cy-10);
+    ctx.fillText(visitante.slice(0,18), W*0.77, cy-10);
+    ctx.fillStyle = DIM; ctx.font = "18px Arial";
+    ctx.fillText("mandante", W*0.23, cy+22);
+    ctx.fillText("visitante", W*0.77, cy+22);
+    const dataFmt = partida.data ? new Date(partida.data).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) : "";
+    ctx.fillText(`${dataFmt}${partida.campo?.nome ? " · "+partida.campo.nome : ""}`.slice(0,40), W/2, cy+62);
+
+    // gols e assistências
+    ctx.font = "22px Arial"; ctx.fillStyle = CREAM;
+    const g = listaGols(); const a = listaAssist();
+    if (g) ctx.fillText(`⚽ Gols: ${g}`.slice(0,52), W/2, y+blocoH-46);
+    if (a) ctx.fillText(`🅰️ Assist.: ${a}`.slice(0,52), W/2, y+blocoH-16);
+    y += blocoH + 28;
+
+    // título temporada
+    ctx.fillStyle = GOLD; ctx.font = "800 22px Arial"; ctx.textAlign = "center";
+    ctx.fillText("— COMO VAI A TEMPORADA —", W/2, y+8); y += 38;
+
+    // 4 contadores
+    const sw = (W-PAD*2-48)/4;
+    const stats = [["JOGOS",J,GOLD],["VITÓRIAS",V,WIN],["EMPATES",E,GOLD],["DERROTAS",D,LOSS]];
+    stats.forEach((s,i) => {
+      const sx = PAD + i*(sw+16);
+      ctx.fillStyle = SURF; rr(sx, y, sw, 130, 18); ctx.fill();
+      ctx.fillStyle = s[2]; ctx.font = "800 50px Arial"; ctx.textAlign = "center";
+      ctx.fillText(String(s[1]), sx+sw/2, y+62);
+      ctx.fillStyle = DIM; ctx.font = "18px Arial";
+      ctx.fillText(s[0], sx+sw/2, y+100);
+    });
+    y += 154;
+
+    // aproveitamento
+    ctx.fillStyle = SURF; rr(PAD, y, W-PAD*2, 130, 18); ctx.fill();
+    ctx.fillStyle = DIM; ctx.font = "18px Arial"; ctx.textAlign = "left";
+    ctx.fillText("APROVEITAMENTO NA TEMPORADA", PAD+28, y+34);
+    // barra
+    const barX = PAD+28, barY = y+52, barW = W-PAD*2-56, barH = 22;
+    ctx.fillStyle = "#0B3D2E"; rr(barX, barY, barW, barH, 11); ctx.fill();
+    const fillW = Math.max(barH, barW * aprov/100);
+    const bg = ctx.createLinearGradient(barX, 0, barX+fillW, 0);
+    bg.addColorStop(0, GOLD); bg.addColorStop(1, WIN);
+    ctx.fillStyle = bg; rr(barX, barY, fillW, barH, 11); ctx.fill();
+    ctx.fillStyle = GOLD; ctx.font = "800 40px Arial"; ctx.textAlign = "right";
+    ctx.fillText(`${aprov}%`, W-PAD-28, y+118);
+    y += 158;
+
+    // artilheiros
+    const artH = 60 + (artilheiros?.length||0)*54;
+    ctx.fillStyle = SURF; rr(PAD, y, W-PAD*2, artH, 18); ctx.fill();
+    ctx.fillStyle = DIM; ctx.font = "20px Arial"; ctx.textAlign = "left";
+    ctx.fillText("🏆 ARTILHEIROS DA TEMPORADA", PAD+32, y+38);
+    let ay = y + 78;
+    (artilheiros||[]).slice(0,3).forEach((art,i) => {
+      ctx.fillStyle = GOLD; ctx.beginPath(); ctx.arc(PAD+50, ay-8, 19, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = "#0B3D2E"; ctx.font = "800 20px Arial"; ctx.textAlign = "center";
+      ctx.fillText(String(i+1), PAD+50, ay-1);
+      ctx.fillStyle = CREAM; ctx.font = "700 28px Arial"; ctx.textAlign = "left";
+      ctx.fillText((art.apelido||art.nome||"").slice(0,22), PAD+85, ay);
+      ctx.fillStyle = GOLD; ctx.font = "800 24px Arial"; ctx.textAlign = "right";
+      ctx.fillText(`${art.gols_marcados||0} gols`, W-PAD-130, ay);
+      ctx.fillStyle = DIM; ctx.font = "18px Arial";
+      ctx.fillText(`· ${art.assistencias||0} assist.`, W-PAD-32, ay);
+      ay += 54;
+    });
+
+    // rodapé marca
+    ctx.fillStyle = CREAM; ctx.font = "800 30px Arial"; ctx.textAlign = "center";
+    ctx.fillText("⚽ NERD DO CAMPO", W/2, H-72);
+    ctx.fillStyle = GOLD; ctx.font = "22px Arial";
+    ctx.fillText("nerddocampo.com.br", W/2, H-38);
+
+    return canvas;
+  }
+
+  async function compartilhar() {
+    setGerando(true);
+    try {
+      const canvas = desenharCard();
+      const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+      if (!blob) throw new Error("Falha ao gerar imagem");
+      const arquivo = new File([blob], "resultado-nerd-do-campo.png", { type: "image/png" });
+
+      // tenta Web Share com arquivo (celular)
+      if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+        await navigator.share({ files: [arquivo] });
+      } else {
+        // fallback: baixar a imagem
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "resultado-nerd-do-campo.png";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        show && show("Imagem baixada! É só anexar no grupo.", "success");
+      }
+    } catch (e) {
+      if (e.name !== "AbortError") show && show("Não consegui compartilhar: " + e.message, "error");
+    } finally { setGerando(false); }
+  }
+
+  // só aparece se a partida tem placar
+  if (partida.gols_marcados === null || partida.gols_marcados === undefined) return null;
+
+  return (
+    <Btn onClick={compartilhar} disabled={gerando} style={{ fontSize:13, padding:"8px 16px" }}>
+      {gerando ? "Gerando..." : "📲 Compartilhar resultado"}
+    </Btn>
+  );
+}
+
+// ── Convocar para a próxima partida: card de convocação + link de presença ──
+function ConvocarPartida({ partida, time, idTime, show }) {
+  const [gerando, setGerando] = useState(false);
+
+  // busca o link de confirmação desta partida (se já existir)
+  const { data: links, reload } = useQuery(
+    () => partida?.id_partida ? api.get(`link_confirmacao?tipo=eq.partida&id_ref=eq.${partida.id_partida}&select=*&limit=1`) : Promise.resolve([]),
+    [partida?.id_partida]
+  );
+  const urlBase = (typeof window !== "undefined") ? `${window.location.origin}/confirmar?t=` : "/confirmar?t=";
+
+  // garante que existe um link; se não, cria e retorna o token
+  async function garantirLink() {
+    if (links?.[0]?.token) return links[0].token;
+    const token = (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g,"") : (Math.random().toString(36).slice(2)+Date.now().toString(36)));
+    const expira = partida.data ? new Date(new Date(partida.data).getTime() + 24*60*60*1000).toISOString() : null;
+    await api.post("link_confirmacao", { token, tipo:"partida", id_ref: partida.id_partida, id_time: idTime, expira_em: expira });
+    reload();
+    return token;
+  }
+
+  function desenharCard() {
+    const W = 1080, H = 1350;
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    const grad = ctx.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, "#0B3D2E"); grad.addColorStop(0.6, "#08321F"); grad.addColorStop(1, "#05130D");
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+    const GOLD = "#E8A020", CREAM = "#F0E8D0", DIM = "#8FAF9A", SURF = "#103D2A";
+    function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+    const PAD = 56; let y = 56;
+    // header
+    ctx.fillStyle = SURF; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.stroke();
+    ctx.font = "54px Arial"; ctx.textAlign = "center"; ctx.fillStyle = CREAM; ctx.fillText("⚽", PAD+58, y+76);
+    ctx.textAlign = "left"; ctx.fillStyle = CREAM; ctx.font = "800 44px Arial";
+    ctx.fillText((time?.nome||"MEU TIME").toUpperCase().slice(0,22), PAD+140, y+50);
+    ctx.fillStyle = DIM; ctx.font = "22px Arial";
+    const cidade = time?.cidade?.nome ? `${time.cidade.nome} — ${time.cidade.estado||""}` : "";
+    ctx.fillText(cidade.slice(0,46), PAD+140, y+92);
+    y += 165;
+
+    // chamada
+    ctx.textAlign = "center";
+    ctx.fillStyle = GOLD; rr(W/2-180, y, 360, 56, 28); ctx.fill();
+    ctx.fillStyle = "#0B3D2E"; ctx.font = "800 24px Arial"; ctx.fillText("📣 PRÓXIMO JOGO", W/2, y+37);
+    y += 100;
+    ctx.fillStyle = CREAM; ctx.font = "800 60px Arial"; ctx.fillText("É dia de BOLA!", W/2, y+20);
+    y += 90;
+
+    // confronto
+    const emCasa = partida.em_casa === "S";
+    const nomeTime = time?.nome || "Meu Time";
+    const nomeAdv = partida.adversario?.nome || "Adversário";
+    const mandante = emCasa ? nomeTime : nomeAdv;
+    const visitante = emCasa ? nomeAdv : nomeTime;
+    const blocoH = 230;
+    ctx.fillStyle = SURF; rr(PAD, y, W-PAD*2, blocoH, 28); ctx.fill();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 3; rr(PAD, y, W-PAD*2, blocoH, 28); ctx.stroke();
+    ctx.fillStyle = CREAM; ctx.font = "800 38px Arial";
+    ctx.fillText(mandante.slice(0,16), W*0.27, y+105);
+    ctx.fillText(visitante.slice(0,16), W*0.73, y+105);
+    ctx.fillStyle = GOLD; ctx.font = "800 54px Arial"; ctx.fillText("×", W/2, y+118);
+    ctx.fillStyle = DIM; ctx.font = "20px Arial";
+    ctx.fillText(emCasa?"🏠 mandante":"visitante", W*0.27, y+150);
+    ctx.fillText(emCasa?"visitante":"🏠 mandante", W*0.73, y+150);
+    y += blocoH + 34;
+
+    // infos: data, horário, local
+    const dt = partida.data ? new Date(partida.data) : null;
+    const dias = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+    const dataTxt = dt ? `${dias[dt.getUTCDay()]}, ${dt.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",timeZone:"UTC"})}` : "A definir";
+    const horaTxt = dt ? dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"}).replace(":","h") : "A definir";
+    const localTxt = partida.campo?.nome || (emCasa ? (cidade||"A definir") : "Fora");
+    const infos = [["📅","DATA",dataTxt],["⏰","HORÁRIO",horaTxt],["📍","LOCAL",localTxt]];
+    infos.forEach(([ic,lbl,val]) => {
+      ctx.fillStyle = SURF; rr(PAD, y, W-PAD*2, 96, 18); ctx.fill();
+      ctx.fillStyle = "#0B3D2E"; ctx.beginPath(); ctx.arc(PAD+58, y+48, 32, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(PAD+58, y+48, 32, 0, Math.PI*2); ctx.stroke();
+      ctx.fillStyle = CREAM; ctx.font = "30px Arial"; ctx.textAlign = "center"; ctx.fillText(ic, PAD+58, y+59);
+      ctx.textAlign = "left";
+      ctx.fillStyle = DIM; ctx.font = "19px Arial"; ctx.fillText(lbl, PAD+115, y+38);
+      ctx.fillStyle = CREAM; ctx.font = "800 32px Arial"; ctx.fillText(String(val).slice(0,30), PAD+115, y+72);
+      y += 112;
+    });
+    y += 8;
+
+    // chamada de presença
+    ctx.fillStyle = SURF; rr(PAD, y, W-PAD*2, 130, 18); ctx.fill();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 2; rr(PAD, y, W-PAD*2, 130, 18); ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.fillStyle = GOLD; ctx.font = "800 38px Arial"; ctx.fillText("✅ Você vai?", W/2, y+58);
+    ctx.fillStyle = CREAM; ctx.font = "22px Arial"; ctx.fillText("Confirme sua presença no link da mensagem 👇", W/2, y+96);
+
+    // rodapé
+    ctx.fillStyle = CREAM; ctx.font = "800 30px Arial"; ctx.fillText("⚽ NERD DO CAMPO", W/2, H-72);
+    ctx.fillStyle = GOLD; ctx.font = "22px Arial"; ctx.fillText("nerddocampo.com.br", W/2, H-38);
+    return canvas;
+  }
+
+  async function convocar() {
+    setGerando(true);
+    try {
+      const token = await garantirLink();
+      const url = urlBase + token;
+      const canvas = desenharCard();
+      const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+      if (!blob) throw new Error("Falha ao gerar imagem");
+      const arquivo = new File([blob], "convocacao-nerd-do-campo.png", { type: "image/png" });
+      const texto = `📣 Confirme sua presença no próximo jogo:\n${url}` + (partida.link_local && partida.link_local.trim() ? `\n\n📍 Local: ${partida.link_local.trim()}` : "");
+
+      // tenta compartilhar imagem + texto (com o link) juntos
+      if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+        await navigator.share({ files: [arquivo], text: texto });
+      } else {
+        // fallback: baixa a imagem e copia o link
+        const u = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = u; a.download = "convocacao-nerd-do-campo.png";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(u);
+        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); } catch(e){} }
+        show && show("Imagem baixada e link copiado! Cole no grupo junto da imagem.", "success");
+      }
+    } catch (e) {
+      if (e.name !== "AbortError") show && show("Não consegui convocar: " + e.message, "error");
+    } finally { setGerando(false); }
+  }
+
+  // só faz sentido para partida futura (sem placar) e com adversário definido
+  if (partida.gols_marcados !== null && partida.gols_marcados !== undefined) return null;
+  if (!partida.id_adversario) return null;
+
+  return (
+    <Btn onClick={convocar} disabled={gerando} style={{ fontSize:13, padding:"8px 16px" }}>
+      {gerando ? "Gerando..." : "📣 Convocar para o jogo"}
+    </Btn>
+  );
+}
+
+// ── Card de presença genérico (evento ou encontro): imagem + link ──
+function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLocal, time, show }) {
+  const [gerando, setGerando] = useState(false);
+  const { data: links, reload } = useQuery(
+    () => (tipo && idRef) ? api.get(`link_confirmacao?tipo=eq.${tipo}&id_ref=eq.${idRef}&select=*&limit=1`) : Promise.resolve([]),
+    [tipo, idRef]
+  );
+  const urlBase = (typeof window !== "undefined") ? `${window.location.origin}/confirmar?t=` : "/confirmar?t=";
+
+  async function garantirLink() {
+    if (links?.[0]?.token) return links[0].token;
+    const token = (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g,"") : (Math.random().toString(36).slice(2)+Date.now().toString(36)));
+    const expira = data ? new Date(new Date(data).getTime() + 24*60*60*1000).toISOString() : null;
+    await api.post("link_confirmacao", { token, tipo, id_ref: idRef, id_time: idTime, expira_em: expira });
+    reload();
+    return token;
+  }
+
+  function desenharCard() {
+    const W = 1080, H = 1350;
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    const grad = ctx.createLinearGradient(0, 0, W, H);
+    grad.addColorStop(0, "#0B3D2E"); grad.addColorStop(0.6, "#08321F"); grad.addColorStop(1, "#05130D");
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    const GOLD = "#E8A020", CREAM = "#F0E8D0", DIM = "#8FAF9A", SURF = "#103D2A";
+    function rr(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+    const ehEvento = tipo === "evento";
+    const PAD = 56; let y = 56;
+    // header
+    ctx.fillStyle = SURF; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.stroke();
+    ctx.font = "54px Arial"; ctx.textAlign = "center"; ctx.fillStyle = CREAM; ctx.fillText(ehEvento?"🎉":"⚽", PAD+58, y+76);
+    ctx.textAlign = "left"; ctx.fillStyle = CREAM; ctx.font = "800 44px Arial";
+    ctx.fillText((time?.nome||"MEU TIME").toUpperCase().slice(0,22), PAD+140, y+50);
+    ctx.fillStyle = DIM; ctx.font = "22px Arial";
+    const cidade = time?.cidade?.nome ? `${time.cidade.nome} — ${time.cidade.estado||""}` : "";
+    ctx.fillText(cidade.slice(0,46), PAD+140, y+92);
+    y += 175;
+
+    // tag + título
+    ctx.textAlign = "center";
+    ctx.fillStyle = GOLD; rr(W/2-200, y, 400, 56, 28); ctx.fill();
+    ctx.fillStyle = "#0B3D2E"; ctx.font = "800 24px Arial";
+    ctx.fillText(ehEvento ? "🎉 NOSSO EVENTO" : "⚽ NOSSO ENCONTRO", W/2, y+37);
+    y += 110;
+    // título (nome do evento, ou "Bora jogar!" para encontro)
+    ctx.fillStyle = CREAM; ctx.font = "800 58px Arial";
+    const tituloShow = (titulo && titulo.trim()) ? titulo.trim() : (ehEvento ? "Nosso evento" : "Bora jogar!");
+    // quebra título em até 2 linhas se longo
+    const palavras = tituloShow.split(" "); let linha = "", linhas = [];
+    palavras.forEach(p => { const teste = linha ? linha+" "+p : p; if (teste.length > 18 && linha) { linhas.push(linha); linha = p; } else linha = teste; });
+    if (linha) linhas.push(linha);
+    linhas.slice(0,2).forEach((l,i) => { ctx.fillText(l, W/2, y + i*64); });
+    y += linhas.slice(0,2).length*64 + 30;
+
+    // infos: data, (hora), (local)
+    const dt = data ? new Date(data) : null;
+    const dias = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+    const temHora = data && String(data).length > 10; // TIMESTAMPTZ tem hora; DATE não
+    const dataTxt = dt ? `${dias[dt.getUTCDay()]}, ${dt.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",timeZone:"UTC"})}` : "A definir";
+    const infos = [["📅","DATA",dataTxt]];
+    if (temHora && dt) infos.push(["⏰","HORÁRIO", dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"}).replace(":","h")]);
+    if (local && local.trim()) infos.push(["📍","LOCAL", local.trim()]);
+
+    infos.forEach(([ic,lbl,val]) => {
+      ctx.fillStyle = SURF; rr(PAD, y, W-PAD*2, 100, 18); ctx.fill();
+      ctx.fillStyle = "#0B3D2E"; ctx.beginPath(); ctx.arc(PAD+60, y+50, 34, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = GOLD; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(PAD+60, y+50, 34, 0, Math.PI*2); ctx.stroke();
+      ctx.fillStyle = CREAM; ctx.font = "32px Arial"; ctx.textAlign = "center"; ctx.fillText(ic, PAD+60, y+62);
+      ctx.textAlign = "left";
+      ctx.fillStyle = DIM; ctx.font = "20px Arial"; ctx.fillText(lbl, PAD+120, y+40);
+      ctx.fillStyle = CREAM; ctx.font = "800 34px Arial"; ctx.fillText(String(val).slice(0,28), PAD+120, y+76);
+      y += 120;
+    });
+    y += 20;
+
+    // chamada de presença
+    ctx.fillStyle = SURF; rr(PAD, y, W-PAD*2, 140, 18); ctx.fill();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 2; rr(PAD, y, W-PAD*2, 140, 18); ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.fillStyle = GOLD; ctx.font = "800 40px Arial"; ctx.fillText("✅ Você vai?", W/2, y+62);
+    ctx.fillStyle = CREAM; ctx.font = "24px Arial"; ctx.fillText("Confirme sua presença no link da mensagem 👇", W/2, y+104);
+
+    // rodapé
+    ctx.fillStyle = CREAM; ctx.font = "800 30px Arial"; ctx.fillText("⚽ NERD DO CAMPO", W/2, H-72);
+    ctx.fillStyle = GOLD; ctx.font = "22px Arial"; ctx.fillText("nerddocampo.com.br", W/2, H-38);
+    return canvas;
+  }
+
+  async function compartilhar() {
+    setGerando(true);
+    try {
+      const token = await garantirLink();
+      const url = urlBase + token;
+      const canvas = desenharCard();
+      const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+      if (!blob) throw new Error("Falha ao gerar imagem");
+      const arquivo = new File([blob], "convite-nerd-do-campo.png", { type: "image/png" });
+      const texto = `📣 Confirme sua presença:\n${url}` + (linkLocal && linkLocal.trim() ? `\n\n📍 Local: ${linkLocal.trim()}` : "");
+      if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+        await navigator.share({ files: [arquivo], text: texto });
+      } else {
+        const u = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = u; a.download = "convite-nerd-do-campo.png";
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(u);
+        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); } catch(e){} }
+        show && show("Imagem baixada e link copiado! Cole no grupo junto da imagem.", "success");
+      }
+    } catch (e) {
+      if (e.name !== "AbortError") show && show("Não consegui compartilhar: " + e.message, "error");
+    } finally { setGerando(false); }
+  }
+
+  return (
+    <Btn onClick={compartilhar} disabled={gerando} style={{ fontSize:13, padding:"8px 16px" }}>
+      {gerando ? "Gerando..." : "📣 Compartilhar convite"}
+    </Btn>
+  );
+}
+
+function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
   const [partida, setPartida] = useState(p0);
+  const [editDados, setEditDados] = useState(null); // {data, hora, id_campo, link_local} quando editando
+  async function salvarDadosPartida() {
+    if (!editDados.data) { show("Informe a data.", "error"); return; }
+    if (!linkLocalValido(editDados.link_local)) { show(`Link inválido. Recebido: "${String(editDados.link_local).slice(0,60)}". Cole um link do mapa.`, "error"); return; }
+    try {
+      const novaData = montarDataHoraUTC(editDados.data, editDados.hora || "12:00");
+      const body = {
+        data: novaData,
+        id_campo: editDados.id_campo ? Number(editDados.id_campo) : null,
+        link_local: normalizarLink(editDados.link_local),
+      };
+      await api.patch(`partida?id_partida=eq.${partida.id_partida}`, body);
+      setPartida(u => ({ ...u, ...body }));
+      setEditDados(null);
+      show("Dados do jogo atualizados!");
+    } catch (e) { show(e.message, "error"); }
+  }
   const { toast, show } = useToast();
 
   const { data: jogadores }     = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=*,posicao(nome)&order=camisa.asc`) : Promise.resolve([]), [idTime]);
   // Meu time: tipo, raio padrão e coordenadas da cidade-sede — declarado ANTES das queries que usam meuTipoTime (evita TDZ no bundle de produção)
-  const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,id_tipo_time,id_subtipo,raio_busca_km,numero_titulares,quantidade_periodos,minutos_padrao_periodo,permite_acrescimos,cidade:id_cidade_sede(nome,estado,latitude,longitude)&limit=1`) : Promise.resolve([]), [idTime]);
+  const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,id_tipo_time,id_subtipo,raio_busca_km,numero_titulares,quantidade_periodos,minutos_padrao_periodo,permite_acrescimos,cidade:id_cidade_sede(nome,estado,latitude,longitude)&limit=1`) : Promise.resolve([]), [idTime]);
   const meuTime = meuTimeData?.[0];
   const meuTipoTime = meuTime?.id_tipo_time;
   const meuTipoPosicoes = meuTime?.id_subtipo || meuTime?.id_tipo_time; // posições vêm do subtipo na turma
   const minhaCidade = meuTime?.cidade; // {nome, estado, latitude, longitude}
   const { data: posicoes }      = useQuery(() => meuTipoPosicoes ? api.get(`posicao?id_tipo_time=eq.${meuTipoPosicoes}&select=*&order=ordem.asc`) : Promise.resolve([]), [meuTipoPosicoes]);
   const { data: advsFicha } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
+  const { data: camposFicha } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=id_campo,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
   // Raio ajustável na tela (inicia com o padrão do time; ajuste é temporário, não salva)
   const [raioKm, setRaioKm] = useState(null);
   useEffect(() => { if (meuTime?.raio_busca_km != null && raioKm === null) setRaioKm(meuTime.raio_busca_km); }, [meuTime]);
@@ -1687,6 +2227,15 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
               <div title="Esquema tático dos titulares (sem o goleiro)" style={{ background: C.surf2, border: `1px solid ${C.gold}`, color: C.gold, borderRadius: 8, padding: "4px 12px", fontSize: 14, fontWeight: 800, letterSpacing: "2px" }}>
                 {esquemaTatico}
               </div>
+            )}
+            {!cancelada && (
+              <CompartilharResultado partida={partida} gols={gols} jogadores={jogadores} time={meuTimeData?.[0]} temporada={temporada} idTime={idTime} show={show}/>
+            )}
+            {!cancelada && (
+              <ConvocarPartida partida={partida} time={meuTimeData?.[0]} idTime={idTime} show={show}/>
+            )}
+            {!cancelada && !readOnly && (
+              <Btn variant="secondary" style={{ fontSize: 11, padding: "6px 12px" }} onClick={()=>setEditDados({ data: dataDeTS(partida.data), hora: horaDeTS(partida.data), id_campo: partida.id_campo ? String(partida.id_campo) : "", link_local: partida.link_local || "" })}>📅 Editar dados</Btn>
             )}
             {!cancelada && (
               <Btn variant="danger" style={{ fontSize: 11, padding: "6px 12px" }} onClick={cancelarPartida}>Cancelar Partida</Btn>
@@ -1930,6 +2479,25 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime }) {
       })()}
 
       {/* Modais */}
+      {editDados && (
+        <Modal title="Editar dados do jogo" onClose={() => setEditDados(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Input label="Data" type="date" value={editDados.data} onChange={e=>setEditDados(d=>({...d, data:e.target.value}))}/>
+              <Input label="Horário" type="time" value={editDados.hora} onChange={e=>setEditDados(d=>({...d, hora:e.target.value}))}/>
+            </div>
+            <Select label="Campo" value={editDados.id_campo} onChange={e=>setEditDados(d=>({...d, id_campo:e.target.value}))}>
+              <option value="">Sem campo definido</option>
+              {(camposFicha||[]).map(c=><option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
+            </Select>
+            <Input label="Link de localização (opcional)" placeholder="https://maps.google.com/..." value={editDados.link_local} onChange={e=>setEditDados(d=>({...d, link_local:e.target.value}))}/>
+            <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+              <Btn variant="secondary" onClick={()=>setEditDados(null)}>Cancelar</Btn>
+              <Btn onClick={salvarDadosPartida}>Salvar</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
       {modalAdv && (
         <Modal title={partida.id_adversario || p0.id_adversario ? "Trocar ou Remover Adversário" : "Definir Adversário"} onClose={() => setModalAdv(false)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -3058,6 +3626,7 @@ function CrudMensalidades({ idTime, show, readOnly }) {
 function PaginaDicas({ ehTurmaFechada }) {
   const DICAS = [
     { ic:"📅", t:"Use só o que precisar", d:"Você não é obrigado a usar tudo. Dá pra controlar só o calendário, só a presença, ou ir até o controle financeiro completo. Comece simples e ative o resto quando quiser." },
+    { ic:"📲", t:"Compartilhe imagens prontas no grupo", d:"Em vários momentos o sistema gera uma imagem bonita para você mandar direto no grupo do WhatsApp: o resultado de uma partida (com placar, gols e resumo da temporada), a convocação para o próximo jogo, o convite para um encontro da turma e o convite para um evento. É só tocar em 'Compartilhar' e escolher o grupo — a imagem (e o link de presença, quando faz sentido) vai junto, levando a marca do seu time." },
     { ic:"✅", t:"Confirmação de presença sem login", d:"Gere um link e mande no grupo. Cada jogador abre, toca no próprio nome e responde se vai — sem instalar nada e sem senha. Você vê quem confirmou em tempo real." },
     { ic:"⚽", t:"Escalação inteligente", d:"Na hora de escalar, o sistema não deixa repetir o número da camisa e respeita o limite de titulares da modalidade. Menos chance de errar a escalação." },
     { ic:"🎯", t:"Gols com assistência e minuto", d:"Ao registrar um gol, informe quem deu o passe e o minuto. A artilharia e o ranking de assistências se montam sozinhos, sem você fazer conta." },
@@ -3108,7 +3677,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.1.0" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.4.2" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -3564,6 +4133,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
 // ══════════════════════════════════════════════════════════════
 function CrudEventos({ idTime, show, readOnly }) {
   // idTime recebido por prop (filtrado pelo usuário logado no componente pai)
+  const { data: _timeEvento } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,cidade:id_cidade_sede(nome,estado)&limit=1`) : Promise.resolve([]), [idTime]);
   const { data: eventos, loading, reload } = useQuery(
     () => idTime ? api.get(`evento?id_time=eq.${idTime}&select=*,temporada(nome)&order=data_evento.desc,id_evento.desc`) : Promise.resolve([]),
     [idTime]
@@ -3583,7 +4153,7 @@ function CrudEventos({ idTime, show, readOnly }) {
   const [formMov, setFormMov] = useState({});
 
   function abrirNovo() {
-    setForm({ nome:"", data_evento:new Date().toISOString().split("T")[0], meta:"", modo:"detalhado", resultado_direto:"", id_temporada: temporadas?.[0]?.id_temporada || "", observacoes:"" });
+    setForm({ nome:"", data_evento:new Date().toISOString().split("T")[0], link_local:"", meta:"", modo:"detalhado", resultado_direto:"", id_temporada: temporadas?.[0]?.id_temporada || "", observacoes:"" });
     setModal("novo");
   }
   function set(k,v){ setForm(f=>({ ...f, [k]:v })); }
@@ -3597,10 +4167,12 @@ function CrudEventos({ idTime, show, readOnly }) {
 
   async function salvar() {
     if (!form.nome?.trim()) { show("Informe o nome do evento.", "error"); return; }
+    if (!linkLocalValido(form.link_local)) { show(`Link inválido. Recebido: "${String(form.link_local).slice(0,60)}". Cole um link do mapa.`, "error"); return; }
     setSaving(true);
     try {
       const body = {
         nome: form.nome.trim(), data_evento: form.data_evento||null,
+        link_local: normalizarLink(form.link_local),
         meta: Number(form.meta)||0, modo: form.modo,
         resultado_direto: form.modo==="direto" ? (Number(form.resultado_direto)||0) : null,
         id_temporada: form.id_temporada?Number(form.id_temporada):null,
@@ -3747,6 +4319,7 @@ function CrudEventos({ idTime, show, readOnly }) {
               <Input label="Data" type="date" value={form.data_evento||""} onChange={e=>set("data_evento",e.target.value)}/>
               <Input label="Meta (R$)" type="number" min="0" step="0.01" value={form.meta||""} onChange={e=>set("meta",e.target.value)}/>
             </div>
+            <Input label="Link de localização (opcional)" placeholder="https://maps.google.com/..." value={form.link_local||""} onChange={e=>set("link_local",e.target.value)}/>
             <Select label="Temporada" value={form.id_temporada} onChange={e=>set("id_temporada",e.target.value)}>
               <option value="">Sem vínculo</option>
               {(temporadas||[]).map(t=><option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
@@ -3771,6 +4344,9 @@ function CrudEventos({ idTime, show, readOnly }) {
       {linkEvento && (
         <Modal title={`Confirmação de presença — ${linkEvento.nome}`} onClose={()=>setLinkEvento(null)}>
           <LinkConfirmacao tipo="evento" idRef={linkEvento.id_evento} idTime={idTime} dataRef={linkEvento.data_evento} show={show} />
+          <div style={{ marginTop:14, display:"flex", justifyContent:"flex-end" }}>
+            <CompartilharPresenca tipo="evento" idRef={linkEvento.id_evento} idTime={idTime} titulo={linkEvento.nome} data={linkEvento.data_evento} linkLocal={linkEvento.link_local} time={_timeEvento?.[0]} show={show} />
+          </div>
         </Modal>
       )}
       {detalhe && (
@@ -4219,7 +4795,7 @@ export default function AdminAppCompleto() {
               {secTitle("Ficha da Partida")}
               <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", marginTop:-20 }} onClick={()=>setPartida(null)}>← Voltar</Btn>
             </div>
-            <FichaPartida partida={partida} onVoltar={()=>setPartida(null)} readOnly={!canEdit("partidas")} idTime={idTime}/>
+            <FichaPartida partida={partida} onVoltar={()=>setPartida(null)} readOnly={!canEdit("partidas")} idTime={idTime} temporada={temporadaSel}/>
           </>)}
 
           {menu === "jogadores"   && (<>{secTitle("Jogadores")}<CrudJogadores idTime={idTime} show={show} readOnly={!canEdit("jogadores")} /></>)}
@@ -5081,16 +5657,18 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
   const ehNovo = !encontro;
   const [idEncontro, setIdEncontro] = useState(encontro?.id_encontro || null);
   const [cabecalho, setCabecalho] = useState({
-    data: encontro?.data ? String(encontro.data).slice(0,10) : "",
-    hora: encontro?.data ? String(encontro.data).slice(11,16) : "",
+    data: dataDeTS(encontro?.data),
+    hora: horaDeTS(encontro?.data),
     id_campo: encontro?.id_campo ? String(encontro.id_campo) : "",
     observacao: encontro?.observacao || "",
     id_responsavel_lavagem: encontro?.id_responsavel_lavagem ? String(encontro.id_responsavel_lavagem) : "",
+    link_local: encontro?.link_local || "",
   });
   const [savingCab, setSavingCab] = useState(false);
 
   // Times internos ativos (sem data_fim) + campos + jogadores ativos
   const { data: timesInternos } = useQuery(() => idTime ? api.get(`time_interno?id_time=eq.${idTime}&data_fim=is.null&select=id_time_interno,nome,cor&order=nome.asc`) : Promise.resolve([]), [idTime]);
+  const { data: _timeEnc } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,cidade:id_cidade_sede(nome,estado)&limit=1`) : Promise.resolve([]), [idTime]);
   const { data: campos } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=id_campo,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
   const { data: jogadores } = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=id_jogador,nome,apelido,camisa&order=camisa.asc`) : Promise.resolve([]), [idTime]);
 
@@ -5103,10 +5681,11 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
   // ── Salvar cabeçalho (cria o encontro) ──
   async function salvarCabecalho() {
     if (!cabecalho.data) { show("Informe a data do encontro.", "error"); return; }
+    if (!linkLocalValido(cabecalho.link_local)) { show(`Link inválido. Recebido: "${String(cabecalho.link_local).slice(0,60)}". Cole um link do mapa.`, "error"); return; }
     setSavingCab(true);
     try {
-      const _dataHora = `${cabecalho.data}T${cabecalho.hora || "12:00"}`;
-      const body = { id_temporada: temporada.id_temporada, data: new Date(_dataHora).toISOString(), id_campo: cabecalho.id_campo ? Number(cabecalho.id_campo) : null, observacao: cabecalho.observacao || null, id_responsavel_lavagem: cabecalho.id_responsavel_lavagem ? Number(cabecalho.id_responsavel_lavagem) : null };
+      const _dataHora = montarDataHoraUTC(cabecalho.data, cabecalho.hora || "12:00");
+      const body = { id_temporada: temporada.id_temporada, data: _dataHora, id_campo: cabecalho.id_campo ? Number(cabecalho.id_campo) : null, observacao: cabecalho.observacao || null, id_responsavel_lavagem: cabecalho.id_responsavel_lavagem ? Number(cabecalho.id_responsavel_lavagem) : null, link_local: normalizarLink(cabecalho.link_local) };
       if (idEncontro) { await api.patch(`encontro?id_encontro=eq.${idEncontro}`, body); show("Encontro atualizado."); }
       else {
         const r = await api.post("encontro", body);
@@ -5139,6 +5718,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
             {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
           </Select>
           <Input label="Observação" value={cabecalho.observacao} onChange={e => setCabecalho(c => ({ ...c, observacao: e.target.value }))} />
+          <Input label="Link de localização (opcional)" placeholder="https://maps.google.com/..." value={cabecalho.link_local} onChange={e => setCabecalho(c => ({ ...c, link_local: e.target.value }))} />
           <Select label="🧺 Responsável pela lavagem" value={cabecalho.id_responsavel_lavagem} onChange={e => setCabecalho(c => ({ ...c, id_responsavel_lavagem: e.target.value }))}>
             <option value="">—</option>
             {(jogadores||[]).map(j => <option key={j.id_jogador} value={j.id_jogador}>{j.apelido || j.nome}</option>)}
@@ -5152,6 +5732,11 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
       {idEncontro && (
         <>
           {!readOnly && <LinkConfirmacao tipo="encontro" idRef={idEncontro} idTime={idTime} dataRef={cabecalho.data ? `${cabecalho.data}T${cabecalho.hora || "12:00"}` : null} show={show} />}
+          {!readOnly && idEncontro && (
+            <div style={{ marginTop:14, display:"flex", justifyContent:"flex-end" }}>
+              <CompartilharPresenca tipo="encontro" idRef={idEncontro} idTime={idTime} titulo="" data={cabecalho.data ? `${cabecalho.data}T${cabecalho.hora || "12:00"}` : null} linkLocal={cabecalho.link_local} time={_timeEnc?.[0]} show={show} />
+            </div>
+          )}
           <JogosEncontro idEncontro={idEncontro} jogos={jogos||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadJogos} show={show} readOnly={readOnly} totalPlacares={totalPlacares} />
           <PresencaEncontro idEncontro={idEncontro} parts={parts||[]} jogadores={jogadores||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadParts} show={show} readOnly={readOnly}
             totais={{ totalPlacares, totalGolsJog, totalAssist, totalGolsContra, somaConfere, assistExcede }} statusAtual={encontro?.status} />

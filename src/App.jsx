@@ -71,8 +71,8 @@ function resultado(p) {
   if (p.gols_marcados < p.gols_sofridos) return { label:"Derrota", cor:C.loss };
   return { label:"Empate", cor:C.draw };
 }
-function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
-function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }) : "—"; }
+function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR", { timeZone:"UTC" }) : "—"; }
+function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 
 // ── SELETOR DE TIMES ──────────────────────────────────────────
 function CardTime({ t, onSelect, destaque = false }) {
@@ -1125,9 +1125,13 @@ function ModalSolicitacao({ onClose }) {
       <div style={{ background:C.surface, borderRadius:16, padding:40, maxWidth:400, width:"100%", textAlign:"center", border:`1px solid ${C.border}` }}>
         <div style={{ fontSize:56, marginBottom:16 }}>✅</div>
         <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:12 }}>Solicitação enviada!</div>
-        <div style={{ fontSize:13, color:C.dim, lineHeight:1.7, marginBottom:24 }}>
+        <div style={{ fontSize:13, color:C.dim, lineHeight:1.7, marginBottom:20 }}>
           Recebemos os dados do <b style={{ color:C.cream }}>{form.nome_time}</b>.
-          Nossa equipe irá analisar e entrar em contato pelo e-mail <b style={{ color:C.gold }}>{form.email_responsavel}</b> em breve.
+          Nossa equipe irá analisar e, em alguns dias, enviar o acesso para o e-mail <b style={{ color:C.gold }}>{form.email_responsavel}</b>.
+        </div>
+        <div style={{ fontSize:12, color:C.cream, lineHeight:1.6, marginBottom:24, background:C.gold+"15", border:`1px solid ${C.gold}44`, borderRadius:10, padding:"12px 14px", textAlign:"left" }}>
+          <b style={{ color:C.gold }}>📬 Fique de olho no seu e-mail nos próximos dias!</b><br/>
+          Confira também as pastas de <b>spam</b>, <b>lixo eletrônico</b> e <b>quarentena</b> — às vezes a mensagem com seu login pode cair ali. Se encontrar, marque como <b>"não é spam"</b> para receber os próximos avisos normalmente.
         </div>
         <button onClick={onClose}
           style={{ background:C.gold, color:"#0B3D2E", border:"none", borderRadius:10, padding:"12px 32px", fontFamily:"inherit", fontWeight:800, fontSize:14, cursor:"pointer", textTransform:"uppercase" }}>

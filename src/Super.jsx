@@ -2242,7 +2242,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.2.5";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.4.5";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
