@@ -1453,6 +1453,7 @@ function CrudMensalidadeTimes({ show }) {
   const [saving, setSaving] = useState(false);
   const [uploadingComp, setUploadingComp] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [filtroNomeMens, setFiltroNomeMens] = useState("");
   const [abaRel, setAbaRel] = useState("mensal");
 
   const { data: times } = useQuery(() =>
@@ -1480,9 +1481,10 @@ function CrudMensalidadeTimes({ show }) {
     return { ...t, pag: pag || null, status: pag?.status || "nao_pago", esperado };
   });
 
-  const filtrados = filtroStatus === "todos"
+  const filtrados = (filtroStatus === "todos"
     ? timesComStatus
-    : timesComStatus.filter(t => t.status === filtroStatus);
+    : timesComStatus.filter(t => t.status === filtroStatus)
+  ).filter(t => !filtroNomeMens || (t.nome||"").toLowerCase().includes(filtroNomeMens.toLowerCase()));
 
   // Totais
   const totalEsperado = timesComStatus
@@ -1640,6 +1642,17 @@ function CrudMensalidadeTimes({ show }) {
 
       {/* Tabela */}
       <Card style={{ padding:0, overflow:"hidden" }}>
+        <div style={{ padding:"14px 16px", borderBottom:`1px solid ${C.border}` }}>
+          <input
+            value={filtroNomeMens}
+            onChange={e => setFiltroNomeMens(e.target.value)}
+            placeholder="🔍 Filtrar por nome do time"
+            style={{ width:"100%", maxWidth:420, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 14px", outline:"none" }}
+          />
+          {filtroNomeMens && (
+            <span style={{ marginLeft:12, fontSize:12, color:C.dim }}>{filtrados.length} resultado(s)</span>
+          )}
+        </div>
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
           <thead><tr style={{ background:C.surf2 }}>
             {["Time","Nível","Status","Esperado","Pago","Comprovante","Ações"].map(h => (
@@ -2242,7 +2255,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.4.5";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.4.6";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
