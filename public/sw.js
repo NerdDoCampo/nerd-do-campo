@@ -1,5 +1,5 @@
 // Cache versionado: muda a cada release, forçando atualização.
-const CACHE_NAME = 'nerd-do-campo-1.3.4';
+const CACHE_NAME = 'nerd-do-campo-1.4.1';
 const STATIC_ASSETS = ['/manifest.json'];
 
 self.addEventListener('install', event => {

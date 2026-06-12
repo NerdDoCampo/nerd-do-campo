@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.3.4";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.4.1";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -202,7 +202,28 @@ function ImageUpload({ label, value, onUpload, bucket, nomeArquivo }) {
 
 // Funções auxiliares compartilhadas
 function fmtDataP(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
-function fmtHoraP(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }) : "—"; }
+// ── Tratamento de HORA — "hora da parede" (Caminho A) ──
+// Convenção: a hora é gravada e lida literalmente em UTC, sem conversão
+// de fuso. Assim "14h" digitado é "14h" em qualquer lugar do mundo.
+// Monta o timestamp para salvar: data (YYYY-MM-DD) + hora (HH:MM) -> ISO com Z
+function montarDataHoraUTC(dataYMD, horaHM) {
+  if (!dataYMD) return null;
+  const h = (horaHM && /^\d{1,2}:\d{2}$/.test(horaHM)) ? horaHM : "00:00";
+  const [hh, mm] = h.split(":");
+  return `${dataYMD}T${hh.padStart(2,"0")}:${mm}:00.000Z`;
+}
+// Lê a hora (HH:MM) de um timestamp, sem conversão de fuso
+function horaDeTS(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return `${String(d.getUTCHours()).padStart(2,"0")}:${String(d.getUTCMinutes()).padStart(2,"0")}`;
+}
+// Lê a data (YYYY-MM-DD) de um timestamp, sem conversão de fuso
+function dataDeTS(ts) {
+  if (!ts) return "";
+  return String(ts).slice(0,10);
+}
+function fmtHoraP(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 function resultadoP(p) {
   if (p.cancelada === "S") return { label:"Cancelado", cor:C.dim };
   if (p.gols_marcados === null) return { label:"Aguardando", cor:C.gold };
@@ -221,8 +242,14 @@ function BadgeP({ label, cor }) {
 // VISÃO DO APP PÚBLICO — espelhada no admin
 // ══════════════════════════════════════════════════════════════
 
-function fmtDataA(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
-function fmtHoraA(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }) : "—"; }
+function fmtDataA(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR", { timeZone:"UTC" }) : "—"; }
+// valida link de localização: aceita vazio, ou uma URL http(s) válida
+function linkLocalValido(v) {
+  if (!v || !v.trim()) return true; // vazio é permitido (campo opcional)
+  try { const u = new URL(v.trim()); return u.protocol === "http:" || u.protocol === "https:"; }
+  catch { return false; }
+}
+function fmtHoraA(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 function resultadoA(p) {
   if (p.cancelada === "S") return { label:"Cancelado", cor:C.dim };
   if (p.gols_marcados === null) return { label:"Aguardando", cor:C.gold };
@@ -1113,7 +1140,7 @@ function useQuery(fetcher, deps = []) {
 }
 
 function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
-function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"; }
+function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone:"UTC" }) : "—"; }
 function resultado(p) {
   if (p.cancelada === "S")      return { label: "Cancelado", cor: C.dim };
   if (p.gols_marcados === null) return { label: "Pendente",  cor: C.dim };
@@ -1298,7 +1325,7 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
                 id_partida: p.id_partida,
                 adversario: p.adversario?.nome||"",
                 data: p.data ? new Date(p.data).toLocaleDateString("pt-BR") : "",
-                hora: p.data ? new Date(p.data).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "",
+                hora: horaDeTS(p.data),
                 em_casa: p.em_casa==="S"?"SIM":"NAO",
                 cancelada: p.cancelada==="S"?"SIM":"NAO",
                 campo: p.campo?.nome||"",
@@ -1402,7 +1429,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
   const { data: campos }      = useQuery(() => temporada?.id_time ? api.get(`campo?id_time=eq.${temporada.id_time}&select=*&order=nome.asc`) : Promise.resolve([]), [temporada]);
   const { data: time }        = useQuery(() => temporada?.id_time ? api.get(`time?id_time=eq.${temporada.id_time}&select=*&limit=1`) : Promise.resolve([]), [temporada]);
 
-  const [form, setForm] = useState({ data: "", horario: "14:00", id_adversario: "", em_casa: "S", id_campo: "", observacoes: "" });
+  const [form, setForm] = useState({ data: "", horario: "14:00", id_adversario: "", em_casa: "S", id_campo: "", observacoes: "", link_local: "" });
   const [saving, setSaving] = useState(false);
   const { toast, show } = useToast();
 
@@ -1418,6 +1445,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
 
   async function salvar() {
     if (!form.data || !form.id_campo) { show("Preencha a data e o campo.", "error"); return; }
+    if (!linkLocalValido(form.link_local)) { show("O link de localização não é válido. Cole um link completo (começando com http).", "error"); return; }
     // Validar que a data está dentro do intervalo da temporada
     if (temporada?.data_inicio && form.data < temporada.data_inicio.split("T")[0]) {
       show(`A data não pode ser anterior ao início da temporada (${temporada.data_inicio.split("T")[0].split("-").reverse().join("/")}).`, "error"); return;
@@ -1435,7 +1463,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
         setSaving(false); return;
       }
 
-      const dataTs = new Date(`${form.data}T${form.horario}:00`).toISOString();
+      const dataTs = montarDataHoraUTC(form.data, form.horario);
       const nova = await api.post("partida", {
         id_temporada: temporada.id_temporada,
         id_adversario: form.id_adversario ? Number(form.id_adversario) : null,
@@ -1443,6 +1471,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
         em_casa: form.em_casa,
         id_campo: Number(form.id_campo),
         observacoes: form.observacoes,
+        link_local: form.link_local?.trim() || null,
         cancelada: "N",
       });
       // REGRA 12: registrar automaticamente a participação do jogador 0 (adversário) na partida
@@ -1478,6 +1507,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
         {(campos || []).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
       </Select>
       <Input label="Observações" value={form.observacoes} onChange={e => set("observacoes", e.target.value)} placeholder="Amistoso, campeonato, etc..." />
+      <Input label="Link de localização (opcional)" value={form.link_local} onChange={e => set("link_local", e.target.value)} placeholder="https://maps.google.com/..." />
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
         <Btn variant="secondary" onClick={onCancelar}>Cancelar</Btn>
         <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Criar Partida"}</Btn>
@@ -1770,8 +1800,8 @@ function ConvocarPartida({ partida, time, idTime, show }) {
     // infos: data, horário, local
     const dt = partida.data ? new Date(partida.data) : null;
     const dias = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
-    const dataTxt = dt ? `${dias[dt.getDay()]}, ${dt.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}` : "A definir";
-    const horaTxt = dt ? dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}).replace(":","h") : "A definir";
+    const dataTxt = dt ? `${dias[dt.getUTCDay()]}, ${dt.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",timeZone:"UTC"})}` : "A definir";
+    const horaTxt = dt ? dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"}).replace(":","h") : "A definir";
     const localTxt = partida.campo?.nome || (emCasa ? (cidade||"A definir") : "Fora");
     const infos = [["📅","DATA",dataTxt],["⏰","HORÁRIO",horaTxt],["📍","LOCAL",localTxt]];
     infos.forEach(([ic,lbl,val]) => {
@@ -1808,7 +1838,7 @@ function ConvocarPartida({ partida, time, idTime, show }) {
       const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
       if (!blob) throw new Error("Falha ao gerar imagem");
       const arquivo = new File([blob], "convocacao-nerd-do-campo.png", { type: "image/png" });
-      const texto = `📣 Confirme sua presença no próximo jogo:\n${url}`;
+      const texto = `📣 Confirme sua presença no próximo jogo:\n${url}` + (partida.link_local && partida.link_local.trim() ? `\n\n📍 Local: ${partida.link_local.trim()}` : "");
 
       // tenta compartilhar imagem + texto (com o link) juntos
       if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
@@ -1840,7 +1870,7 @@ function ConvocarPartida({ partida, time, idTime, show }) {
 }
 
 // ── Card de presença genérico (evento ou encontro): imagem + link ──
-function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, time, show }) {
+function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLocal, time, show }) {
   const [gerando, setGerando] = useState(false);
   const { data: links, reload } = useQuery(
     () => (tipo && idRef) ? api.get(`link_confirmacao?tipo=eq.${tipo}&id_ref=eq.${idRef}&select=*&limit=1`) : Promise.resolve([]),
@@ -1901,9 +1931,9 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, time, 
     const dt = data ? new Date(data) : null;
     const dias = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
     const temHora = data && String(data).length > 10; // TIMESTAMPTZ tem hora; DATE não
-    const dataTxt = dt ? `${dias[dt.getDay()]}, ${dt.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}` : "A definir";
+    const dataTxt = dt ? `${dias[dt.getUTCDay()]}, ${dt.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",timeZone:"UTC"})}` : "A definir";
     const infos = [["📅","DATA",dataTxt]];
-    if (temHora && dt) infos.push(["⏰","HORÁRIO", dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}).replace(":","h")]);
+    if (temHora && dt) infos.push(["⏰","HORÁRIO", dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"}).replace(":","h")]);
     if (local && local.trim()) infos.push(["📍","LOCAL", local.trim()]);
 
     infos.forEach(([ic,lbl,val]) => {
@@ -1940,7 +1970,7 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, time, 
       const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
       if (!blob) throw new Error("Falha ao gerar imagem");
       const arquivo = new File([blob], "convite-nerd-do-campo.png", { type: "image/png" });
-      const texto = `📣 Confirme sua presença:\n${url}`;
+      const texto = `📣 Confirme sua presença:\n${url}` + (linkLocal && linkLocal.trim() ? `\n\n📍 Local: ${linkLocal.trim()}` : "");
       if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
         await navigator.share({ files: [arquivo], text: texto });
       } else {
@@ -4068,7 +4098,7 @@ function CrudEventos({ idTime, show, readOnly }) {
   const [formMov, setFormMov] = useState({});
 
   function abrirNovo() {
-    setForm({ nome:"", data_evento:new Date().toISOString().split("T")[0], meta:"", modo:"detalhado", resultado_direto:"", id_temporada: temporadas?.[0]?.id_temporada || "", observacoes:"" });
+    setForm({ nome:"", data_evento:new Date().toISOString().split("T")[0], link_local:"", meta:"", modo:"detalhado", resultado_direto:"", id_temporada: temporadas?.[0]?.id_temporada || "", observacoes:"" });
     setModal("novo");
   }
   function set(k,v){ setForm(f=>({ ...f, [k]:v })); }
@@ -4082,10 +4112,12 @@ function CrudEventos({ idTime, show, readOnly }) {
 
   async function salvar() {
     if (!form.nome?.trim()) { show("Informe o nome do evento.", "error"); return; }
+    if (!linkLocalValido(form.link_local)) { show("O link de localização não é válido. Cole um link completo (começando com http).", "error"); return; }
     setSaving(true);
     try {
       const body = {
         nome: form.nome.trim(), data_evento: form.data_evento||null,
+        link_local: form.link_local?.trim() || null,
         meta: Number(form.meta)||0, modo: form.modo,
         resultado_direto: form.modo==="direto" ? (Number(form.resultado_direto)||0) : null,
         id_temporada: form.id_temporada?Number(form.id_temporada):null,
@@ -4232,6 +4264,7 @@ function CrudEventos({ idTime, show, readOnly }) {
               <Input label="Data" type="date" value={form.data_evento||""} onChange={e=>set("data_evento",e.target.value)}/>
               <Input label="Meta (R$)" type="number" min="0" step="0.01" value={form.meta||""} onChange={e=>set("meta",e.target.value)}/>
             </div>
+            <Input label="Link de localização (opcional)" placeholder="https://maps.google.com/..." value={form.link_local||""} onChange={e=>set("link_local",e.target.value)}/>
             <Select label="Temporada" value={form.id_temporada} onChange={e=>set("id_temporada",e.target.value)}>
               <option value="">Sem vínculo</option>
               {(temporadas||[]).map(t=><option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
@@ -4257,7 +4290,7 @@ function CrudEventos({ idTime, show, readOnly }) {
         <Modal title={`Confirmação de presença — ${linkEvento.nome}`} onClose={()=>setLinkEvento(null)}>
           <LinkConfirmacao tipo="evento" idRef={linkEvento.id_evento} idTime={idTime} dataRef={linkEvento.data_evento} show={show} />
           <div style={{ marginTop:14, display:"flex", justifyContent:"flex-end" }}>
-            <CompartilharPresenca tipo="evento" idRef={linkEvento.id_evento} idTime={idTime} titulo={linkEvento.nome} data={linkEvento.data_evento} time={_timeEvento?.[0]} show={show} />
+            <CompartilharPresenca tipo="evento" idRef={linkEvento.id_evento} idTime={idTime} titulo={linkEvento.nome} data={linkEvento.data_evento} linkLocal={linkEvento.link_local} time={_timeEvento?.[0]} show={show} />
           </div>
         </Modal>
       )}
@@ -5569,11 +5602,12 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
   const ehNovo = !encontro;
   const [idEncontro, setIdEncontro] = useState(encontro?.id_encontro || null);
   const [cabecalho, setCabecalho] = useState({
-    data: encontro?.data ? String(encontro.data).slice(0,10) : "",
-    hora: encontro?.data ? String(encontro.data).slice(11,16) : "",
+    data: dataDeTS(encontro?.data),
+    hora: horaDeTS(encontro?.data),
     id_campo: encontro?.id_campo ? String(encontro.id_campo) : "",
     observacao: encontro?.observacao || "",
     id_responsavel_lavagem: encontro?.id_responsavel_lavagem ? String(encontro.id_responsavel_lavagem) : "",
+    link_local: encontro?.link_local || "",
   });
   const [savingCab, setSavingCab] = useState(false);
 
@@ -5592,10 +5626,11 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
   // ── Salvar cabeçalho (cria o encontro) ──
   async function salvarCabecalho() {
     if (!cabecalho.data) { show("Informe a data do encontro.", "error"); return; }
+    if (!linkLocalValido(cabecalho.link_local)) { show("O link de localização não é válido. Cole um link completo (começando com http).", "error"); return; }
     setSavingCab(true);
     try {
-      const _dataHora = `${cabecalho.data}T${cabecalho.hora || "12:00"}`;
-      const body = { id_temporada: temporada.id_temporada, data: new Date(_dataHora).toISOString(), id_campo: cabecalho.id_campo ? Number(cabecalho.id_campo) : null, observacao: cabecalho.observacao || null, id_responsavel_lavagem: cabecalho.id_responsavel_lavagem ? Number(cabecalho.id_responsavel_lavagem) : null };
+      const _dataHora = montarDataHoraUTC(cabecalho.data, cabecalho.hora || "12:00");
+      const body = { id_temporada: temporada.id_temporada, data: _dataHora, id_campo: cabecalho.id_campo ? Number(cabecalho.id_campo) : null, observacao: cabecalho.observacao || null, id_responsavel_lavagem: cabecalho.id_responsavel_lavagem ? Number(cabecalho.id_responsavel_lavagem) : null, link_local: cabecalho.link_local?.trim() || null };
       if (idEncontro) { await api.patch(`encontro?id_encontro=eq.${idEncontro}`, body); show("Encontro atualizado."); }
       else {
         const r = await api.post("encontro", body);
@@ -5628,6 +5663,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
             {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
           </Select>
           <Input label="Observação" value={cabecalho.observacao} onChange={e => setCabecalho(c => ({ ...c, observacao: e.target.value }))} />
+          <Input label="Link de localização (opcional)" placeholder="https://maps.google.com/..." value={cabecalho.link_local} onChange={e => setCabecalho(c => ({ ...c, link_local: e.target.value }))} />
           <Select label="🧺 Responsável pela lavagem" value={cabecalho.id_responsavel_lavagem} onChange={e => setCabecalho(c => ({ ...c, id_responsavel_lavagem: e.target.value }))}>
             <option value="">—</option>
             {(jogadores||[]).map(j => <option key={j.id_jogador} value={j.id_jogador}>{j.apelido || j.nome}</option>)}
@@ -5643,7 +5679,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
           {!readOnly && <LinkConfirmacao tipo="encontro" idRef={idEncontro} idTime={idTime} dataRef={cabecalho.data ? `${cabecalho.data}T${cabecalho.hora || "12:00"}` : null} show={show} />}
           {!readOnly && idEncontro && (
             <div style={{ marginTop:14, display:"flex", justifyContent:"flex-end" }}>
-              <CompartilharPresenca tipo="encontro" idRef={idEncontro} idTime={idTime} titulo="" data={cabecalho.data ? `${cabecalho.data}T${cabecalho.hora || "12:00"}` : null} time={_timeEnc?.[0]} show={show} />
+              <CompartilharPresenca tipo="encontro" idRef={idEncontro} idTime={idTime} titulo="" data={cabecalho.data ? `${cabecalho.data}T${cabecalho.hora || "12:00"}` : null} linkLocal={cabecalho.link_local} time={_timeEnc?.[0]} show={show} />
             </div>
           )}
           <JogosEncontro idEncontro={idEncontro} jogos={jogos||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadJogos} show={show} readOnly={readOnly} totalPlacares={totalPlacares} />

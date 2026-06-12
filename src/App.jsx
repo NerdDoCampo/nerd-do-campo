@@ -71,8 +71,8 @@ function resultado(p) {
   if (p.gols_marcados < p.gols_sofridos) return { label:"Derrota", cor:C.loss };
   return { label:"Empate", cor:C.draw };
 }
-function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
-function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit" }) : "—"; }
+function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR", { timeZone:"UTC" }) : "—"; }
+function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 
 // ── SELETOR DE TIMES ──────────────────────────────────────────
 function CardTime({ t, onSelect, destaque = false }) {
