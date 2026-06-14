@@ -230,8 +230,157 @@ function LoginSuper({ onLogin, aviso }) {
 }
 
 // ── DASHBOARD SUPER ───────────────────────────────────────────
+// ── Aba Visão Geral: painel-resumo do Super ──
+function VisaoGeralSuper({ totalTimes, totalUsuarios, solPendentes, faixaAtivo=30, faixaRisco=90, onVerRisco }) {
+  const hoje = new Date();
+  // limites de atividade (configuráveis)
+  const dAtivo = new Date(hoje.getTime() - faixaAtivo*24*60*60*1000).toISOString();
+  const dRisco = new Date(hoje.getTime() - faixaRisco*24*60*60*1000).toISOString();
+  // contagens leves (só ids) por faixa de atividade
+  const { data: ativosRec } = useQuery(() => api.get(`time?select=id_time&ultima_atividade=gte.${dAtivo}&limit=100000`), [dAtivo]);
+  const { data: inativos90 } = useQuery(() => api.get(`time?select=id_time&ultima_atividade=lt.${dRisco}&limit=100000`), [dRisco]);
+  const nAtivos = (ativosRec||[]).length;
+  const nInativos = (inativos90||[]).length;
+  const nAtencao = Math.max(0, totalTimes - nAtivos - nInativos);
+  const mes = hoje.getMonth() + 1, ano = hoje.getFullYear();
+  const nomesMes = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  // totais financeiros do mês atual (mesma RPC da aba mensalidade)
+  const { data: totaisRpc, loading } = useQuery(() => api.post(`rpc/totais_mensalidade_sistema`, { p_mes: mes, p_ano: ano }), [mes, ano]);
+  const _tot = Array.isArray(totaisRpc) ? totaisRpc[0] : totaisRpc;
+  const recebido = Number(_tot?.total_recebido || 0);
+  const esperado = Number(_tot?.total_esperado || 0);
+  const pendente = Number(_tot?.total_pendente || 0);
+  const qtdPago = Number(_tot?.qtd_pago || 0);
+  const qtdNaoPago = Number(_tot?.qtd_nao_pago || 0);
+  const pctPago = esperado > 0 ? Math.round((recebido / esperado) * 100) : 0;
+  const fmt = (n) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const cards = [
+    { ic:"🛡️", num: totalTimes.toLocaleString("pt-BR"), lbl:"Times cadastrados", cor:C.cream },
+    { ic:"✅", num: qtdPago.toLocaleString("pt-BR"), lbl:`Pagantes em ${nomesMes[mes-1]}`, cor:C.win },
+    { ic:"💰", num: `R$ ${fmt(recebido)}`, lbl:"Recebido este mês", cor:C.gold },
+    { ic:"📬", num: solPendentes.toLocaleString("pt-BR"), lbl:"Solicitações pendentes", cor: solPendentes > 0 ? C.loss : C.cream },
+  ];
+
+  return (
+    <div>
+      <div style={{ fontSize:13, color:C.dim, textTransform:"uppercase", letterSpacing:"2px", marginBottom:6 }}>Painel Super Admin</div>
+      <div style={{ fontSize:24, fontWeight:800, color:C.cream, marginBottom:22 }}>Visão Geral — {nomesMes[mes-1]} de {ano}</div>
+
+      {/* cards de números */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(220px, 1fr))", gap:16, marginBottom:24 }}>
+        {cards.map((c,i) => (
+          <div key={i} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:22 }}>
+            <div style={{ fontSize:26, marginBottom:12 }}>{c.ic}</div>
+            <div style={{ fontSize:34, fontWeight:800, color:c.cor, lineHeight:1 }}>{loading && i!==0 && i!==3 ? "…" : c.num}</div>
+            <div style={{ fontSize:13, color:C.dim, marginTop:8 }}>{c.lbl}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* arrecadação do mês */}
+      <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:24, marginBottom:16 }}>
+        <div style={{ fontSize:14, fontWeight:700, textTransform:"uppercase", letterSpacing:"1px", color:C.cream, marginBottom:18 }}>💵 Arrecadação de {nomesMes[mes-1]}</div>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10, fontSize:13, color:C.dim }}>
+          <span>Recebido: <b style={{ color:C.win }}>R$ {fmt(recebido)}</b></span>
+          <span>Esperado: <b style={{ color:C.cream }}>R$ {fmt(esperado)}</b></span>
+          <span>Pendente: <b style={{ color:C.loss }}>R$ {fmt(pendente)}</b></span>
+        </div>
+        <div style={{ height:22, background:C.bg, borderRadius:11, overflow:"hidden" }}>
+          <div style={{ width:`${Math.min(100,pctPago)}%`, height:"100%", background:`linear-gradient(90deg, ${C.gold}, ${C.win})`, borderRadius:11, transition:"width 0.4s" }}/>
+        </div>
+        <div style={{ textAlign:"right", marginTop:8, fontSize:24, fontWeight:800, color:C.gold }}>{pctPago}%</div>
+      </div>
+
+      {/* precisa de atenção */}
+      <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:24 }}>
+        <div style={{ fontSize:14, fontWeight:700, textTransform:"uppercase", letterSpacing:"1px", color:C.cream, marginBottom:16 }}>⚠️ Precisa de atenção</div>
+        {[
+          { nm:`${qtdNaoPago.toLocaleString("pt-BR")} times com mensalidade em aberto`, sub:`Referente a ${nomesMes[mes-1]}`, mostra: qtdNaoPago > 0, cor:C.loss },
+          { nm:`${solPendentes} solicitações de cadastro`, sub:"Aguardando sua aprovação", mostra: solPendentes > 0, cor:C.gold },
+        ].filter(x => x.mostra).map((x,i) => (
+          <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 0", borderBottom: i===0 ? `1px solid ${C.border}` : "none" }}>
+            <div>
+              <div style={{ fontSize:14, color:C.cream, fontWeight:600 }}>{x.nm}</div>
+              <div style={{ fontSize:12, color:C.dim }}>{x.sub}</div>
+            </div>
+            <span style={{ fontSize:11, fontWeight:700, padding:"4px 10px", borderRadius:12, background:x.cor+"22", color:x.cor }}>ver</span>
+          </div>
+        ))}
+        {(qtdNaoPago === 0 && solPendentes === 0) && (
+          <div style={{ fontSize:13, color:C.dim, padding:"8px 0" }}>✅ Tudo em dia — nenhuma pendência no momento.</div>
+        )}
+      </div>
+
+      {/* saúde da base */}
+      <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:24, marginTop:16 }}>
+        <div style={{ fontSize:14, fontWeight:700, textTransform:"uppercase", letterSpacing:"1px", color:C.cream, marginBottom:6 }}>🩺 Saúde da base</div>
+        <div style={{ fontSize:12, color:C.dim, marginBottom:18 }}>Com base na última interação de cada time com o sistema.</div>
+        {[
+          { nm:"Times ativos", sub:`Interagiram nos últimos ${faixaAtivo} dias`, cnt:nAtivos, cor:C.win, faixa:null },
+          { nm:"Atenção", sub:`Entre ${faixaAtivo} e ${faixaRisco} dias sem interação`, cnt:nAtencao, cor:C.gold, faixa:null },
+          { nm:"Em risco", sub:`Mais de ${faixaRisco} dias sem interação`, cnt:nInativos, cor:C.loss, faixa:"risco" },
+        ].map((x,i) => (
+          <div key={i} onClick={x.faixa && onVerRisco ? onVerRisco : undefined}
+            style={{ display:"flex", alignItems:"center", gap:14, padding:14, borderRadius:10, marginBottom:10, background:x.cor+"15", border:`1px solid ${x.cor}33`, cursor: x.faixa && onVerRisco ? "pointer" : "default" }}>
+            <span style={{ width:12, height:12, borderRadius:"50%", background:x.cor, flexShrink:0 }}/>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14, fontWeight:600, color:C.cream }}>{x.nm}{x.faixa && onVerRisco && <span style={{ fontSize:11, color:x.cor, marginLeft:8 }}>→ ver lista</span>}</div>
+              <div style={{ fontSize:12, color:C.dim }}>{x.sub}</div>
+            </div>
+            <div style={{ fontSize:22, fontWeight:800, color:x.cor }}>{x.cnt.toLocaleString("pt-BR")}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DashboardSuper() {
-  const { data: times, loading, reload } = useQuery(() => api.get(`time?select=*,temporada(id_temporada,nome),usuario_time(user_id,role)&order=nome.asc`));
+  const [aba, setAba] = useState("times");
+  const [filtroTime, setFiltroTime] = useState("");
+  const [filtroUf, setFiltroUf] = useState("");       // estado
+  const [filtroNivel, setFiltroNivel] = useState(""); // nível de mensalidade
+  const [filtroStatusTime, setFiltroStatusTime] = useState(""); // ativo/inativo
+  const [filtroAtividade, setFiltroAtividade] = useState(""); // "risco" = só times inativos
+  const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+  const [buscaTime, setBuscaTime] = useState(""); // termo efetivamente buscado (com debounce)
+  const [limiteTimes, setLimiteTimes] = useState(100); // lote de exibição
+  const LOTE_TIMES = 100;
+
+  // debounce: só dispara a busca no servidor 400ms após parar de digitar
+  useEffect(() => {
+    const id = setTimeout(() => { setBuscaTime(filtroTime); setLimiteTimes(LOTE_TIMES); }, 400);
+    return () => clearTimeout(id);
+  }, [filtroTime]);
+
+  // busca no servidor: filtra por nome (ilike) e traz só o lote atual
+  const filtroNomeQ = buscaTime ? `&nome=ilike.*${encodeURIComponent(buscaTime)}*` : "";
+  const filtroNivelQ = filtroNivel ? `&nivel_mensalidade=eq.${filtroNivel}` : "";
+  const filtroStatusQ = filtroStatusTime ? `&status=eq.${encodeURIComponent(filtroStatusTime)}` : "";
+  // estado fica na cidade-sede: usa embed filter (cidade!inner) quando há UF
+  const filtroUfQ = filtroUf ? `&cidade.estado=eq.${filtroUf}` : "";
+  const cidadeEmbed = filtroUf ? `,cidade:id_cidade_sede!inner(estado)` : `,cidade:id_cidade_sede(estado)`;
+  // faixas de atividade (configuráveis no Super)
+  const { data: cfgFaixas } = useQuery(() => api.get(`config_sistema?chave=in.(atividade_dias_ativo,atividade_dias_risco)&select=chave,valor`), []);
+  const faixaAtivo = Number((cfgFaixas||[]).find(c => c.chave === "atividade_dias_ativo")?.valor) || 30;
+  const faixaRisco = Number((cfgFaixas||[]).find(c => c.chave === "atividade_dias_risco")?.valor) || 90;
+  // filtro de atividade: "risco" = times sem interação há mais que a faixa de risco
+  const _dRisco = new Date(Date.now() - faixaRisco*24*60*60*1000).toISOString();
+  const filtroAtivQ = filtroAtividade === "risco" ? `&ultima_atividade=lt.${_dRisco}` : "";
+  const [ordemCampo, setOrdemCampo] = useState("nome");
+  const [ordemDir, setOrdemDir] = useState("asc");
+  function alternarOrdem(campo) {
+    if (ordemCampo === campo) { setOrdemDir(d => d === "asc" ? "desc" : "asc"); }
+    else { setOrdemCampo(campo); setOrdemDir("asc"); }
+    setLimiteTimes(LOTE_TIMES);
+  }
+  const { data: times, loading, reload } = useQuery(
+    () => api.get(`time?select=*,temporada(id_temporada,nome),usuario_time(user_id,role)${cidadeEmbed}${filtroNomeQ}${filtroNivelQ}${filtroStatusQ}${filtroUfQ}${filtroAtivQ}&order=${ordemCampo}.${ordemDir}&limit=${limiteTimes}`),
+    [buscaTime, limiteTimes, ordemCampo, ordemDir, filtroNivel, filtroStatusTime, filtroUf, filtroAtividade]
+  );
+  // contagem total de times (query leve, sem trazer os dados) — usa header via select mínimo
+  const { data: totalTimesData } = useQuery(() => api.get(`time?select=id_time&limit=100000`), []);
   const { data: usuarios } = useQuery(() => api.get(`usuario_time?select=*&order=criado_em.desc`));
   const { data: solPendentes, reload: reloadPendentes } = useQuery(() => api.get(`solicitacao_time?select=id&status=eq.pendente`));
   const { toast, show } = useToast();
@@ -240,10 +389,35 @@ function DashboardSuper() {
   const [timeSelecionado, setTimeSelecionado] = useState(null);
   const [modalPerms, setModalPerms]           = useState(null); // { user_id, id_time, nome }
   const [modalNivel, setModalNivel]           = useState(null); // time selecionado para editar nível
-  const [aba, setAba] = useState("times");
-  const [filtroTime, setFiltroTime] = useState("");
 
-  const totalTimes    = (times||[]).length;
+  const totalTimes    = (totalTimesData||[]).length;
+  // a lista já vem filtrada do servidor; saber se pode ter mais (lote cheio)
+  const podeCarregarMais = (times||[]).length >= limiteTimes;
+
+  // exporta a lista de times atualmente carregada (com os filtros aplicados) em CSV
+  function exportarCSV() {
+    const linhas = (times||[]).map(t => ({
+      Time: t.nome || "",
+      Estado: t.cidade?.estado || "",
+      Nivel: t.nivel_mensalidade ?? "",
+      Status: t.status || "",
+      Temporadas: (t.temporada||[]).length,
+      Admins: (t.usuario_time||[]).length,
+      UltimaAtividade: t.ultima_atividade ? new Date(t.ultima_atividade).toLocaleDateString("pt-BR") : "",
+      Fundacao: t.data_fundacao || "",
+    }));
+    if (!linhas.length) { show("Nada para exportar."); return; }
+    const cols = Object.keys(linhas[0]);
+    const esc = (v) => `"${String(v).replace(/"/g,'""')}"`;
+    const csv = [cols.join(","), ...linhas.map(l => cols.map(c => esc(l[c])).join(","))].join("\n");
+    const blob = new Blob(["\ufeff"+csv], { type:"text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `times-nerd-do-campo-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    show(`${linhas.length} times exportados.`);
+  }
   const totalUsuarios = (usuarios||[]).length;
   const totalAdmins   = (usuarios||[]).filter(u=>u.role==="admin").length;
 
@@ -256,6 +430,7 @@ function DashboardSuper() {
       {/* Abas */}
       <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
         {[
+          { id:"visao",        label:"📊 Visão Geral" },
           { id:"times",        label:"🏆 Times" },
           { id:"mensalidades", label:"💵 Mensalidades" },
           { id:"solicitacoes", label:`📋 Solicitações${(solPendentes||[]).length > 0 ? ` (${(solPendentes||[]).length})` : ""}` },
@@ -281,6 +456,7 @@ function DashboardSuper() {
         );})}
       </div>
 
+      {aba === "visao"        && <VisaoGeralSuper totalTimes={totalTimes} totalUsuarios={(usuarios||[]).length} solPendentes={(solPendentes||[]).length} faixaAtivo={faixaAtivo} faixaRisco={faixaRisco} onVerRisco={()=>{setAba("times"); setFiltroAtividade("risco");}} />}
       {aba === "tipos"        && <CrudTipoTime show={show}/>}
       {aba === "cidades"      && <GestaoCidades show={show}/>}
       {aba === "config"       && <ConfigSistema show={show}/>}
@@ -306,28 +482,61 @@ function DashboardSuper() {
       {/* Times */}
       <Card style={{ padding:0, overflow:"hidden" }}>
         <div style={{ padding:"18px 24px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ fontSize:16, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.cream }}>Times Cadastrados</div>
+          <div style={{ fontSize:16, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", color:C.cream }}>Times Cadastrados{filtroAtividade === "risco" && <span style={{ fontSize:12, color:C.loss, marginLeft:10, textTransform:"none", letterSpacing:0 }}>⚠️ mostrando só times em risco (+{faixaRisco} dias sem atividade)</span>}</div>
           <Btn onClick={()=>setModalNovoTime(true)}>+ Novo Time</Btn>
         </div>
         <div style={{ padding:"14px 24px", borderBottom:`1px solid ${C.border}` }}>
-          <input
-            value={filtroTime}
-            onChange={e => setFiltroTime(e.target.value)}
-            placeholder="🔍 Filtrar por nome do time"
-            style={{ width:"100%", maxWidth:420, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 14px", outline:"none" }}
-          />
-          {filtroTime && (
-            <span style={{ marginLeft:12, fontSize:12, color:C.dim }}>
-              {(times||[]).filter(t => (t.nome||"").toLowerCase().includes(filtroTime.toLowerCase())).length} resultado(s)
-            </span>
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+            <input
+              value={filtroTime}
+              onChange={e => setFiltroTime(e.target.value)}
+              placeholder="🔍 Filtrar por nome do time"
+              style={{ flex:"1 1 240px", minWidth:200, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 14px", outline:"none" }}
+            />
+            <select value={filtroUf} onChange={e=>{setFiltroUf(e.target.value); setLimiteTimes(LOTE_TIMES);}}
+              style={{ background:C.surf2, border:`1px solid ${filtroUf?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", outline:"none", cursor:"pointer" }}>
+              <option value="">Estado (todos)</option>
+              {UFS_BR.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+            </select>
+            <select value={filtroNivel} onChange={e=>{setFiltroNivel(e.target.value); setLimiteTimes(LOTE_TIMES);}}
+              style={{ background:C.surf2, border:`1px solid ${filtroNivel?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", outline:"none", cursor:"pointer" }}>
+              <option value="">Nível (todos)</option>
+              {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>Nível {n}</option>)}
+            </select>
+            <select value={filtroStatusTime} onChange={e=>{setFiltroStatusTime(e.target.value); setLimiteTimes(LOTE_TIMES);}}
+              style={{ background:C.surf2, border:`1px solid ${filtroStatusTime?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", outline:"none", cursor:"pointer" }}>
+              <option value="">Status (todos)</option>
+              <option value="Ativo">Ativos</option>
+              <option value="Inativo">Inativos</option>
+            </select>
+            {(filtroUf || filtroNivel || filtroStatusTime || filtroAtividade) && (
+              <button onClick={()=>{setFiltroUf("");setFiltroNivel("");setFiltroStatusTime("");setFiltroAtividade("");setLimiteTimes(LOTE_TIMES);}}
+                style={{ background:C.loss+"22", border:`1px solid ${C.loss}44`, borderRadius:8, color:C.loss, cursor:"pointer", fontSize:12, padding:"8px 14px", fontFamily:"inherit", fontWeight:700 }}>
+                ✕ Limpar filtros
+              </button>
+            )}
+            <button onClick={exportarCSV}
+              style={{ marginLeft:"auto", background:C.gold, border:"none", borderRadius:8, color:"#0B1A2E", cursor:"pointer", fontSize:13, padding:"10px 16px", fontFamily:"inherit", fontWeight:800 }}>
+              ⬇ Exportar CSV
+            </button>
+          </div>
+          {(filtroTime || filtroUf || filtroNivel || filtroStatusTime) && (
+            <div style={{ marginTop:10, fontSize:12, color:C.dim }}>
+              {loading ? "buscando..." : `${(times||[]).length} resultado(s)${podeCarregarMais ? "+" : ""}`}
+            </div>
           )}
         </div>
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
-            {["Time","Status","Nível","Temporadas","Admins","Fundação","Observação","Ações"].map(h => <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
+            {[["Time","nome"],["Status","status"],["Nível","nivel_mensalidade"],["Temporadas",null],["Admins",null],["Atividade","ultima_atividade"],["Fundação","data_fundacao"],["Observação",null],["Ações",null]].map(([h,campo]) => (
+              <th key={h} onClick={campo ? () => alternarOrdem(campo) : undefined}
+                style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color: ordemCampo===campo ? C.gold : C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, cursor: campo ? "pointer" : "default", userSelect:"none" }}>
+                {h}{campo && (ordemCampo===campo ? <span style={{ marginLeft:4 }}>{ordemDir==="asc"?"▲":"▼"}</span> : <span style={{ marginLeft:4, opacity:0.4 }}>⇅</span>)}
+              </th>
+            ))}
           </tr></thead>
           <tbody>
-            {(times||[]).filter(t => !filtroTime || (t.nome||"").toLowerCase().includes(filtroTime.toLowerCase())).map((t,i) => (
+            {(times||[]).map((t,i) => (
               <tr key={t.id_time} style={{ background:i%2===0?C.surface:C.bg }}>
                 <td style={{ padding:"13px 16px", fontWeight:700, color:C.cream }}>
                   {t.nome}
@@ -344,6 +553,13 @@ function DashboardSuper() {
                 </td>
                 <td style={{ padding:"13px 16px", color:C.dim }}>{t.temporada?.length||0}</td>
                 <td style={{ padding:"13px 16px", color:C.dim }}>{(t.usuario_time||[]).filter(u=>u.role==="admin").length}</td>
+                <td style={{ padding:"13px 16px", fontSize:13 }}>{(() => {
+                  if (!t.ultima_atividade) return <span style={{ color:C.dim }}>—</span>;
+                  const dias = Math.floor((Date.now() - new Date(t.ultima_atividade).getTime()) / (24*60*60*1000));
+                  const cor = dias <= faixaAtivo ? C.win : (dias <= faixaRisco ? C.gold : C.loss);
+                  const txt = dias === 0 ? "hoje" : dias === 1 ? "ontem" : dias < 30 ? `há ${dias} dias` : dias < 60 ? "há ~1 mês" : dias < 365 ? `há ${Math.round(dias/30)} meses` : "há +1 ano";
+                  return <span style={{ display:"inline-flex", alignItems:"center", gap:6, color:cor }}><span style={{ width:8, height:8, borderRadius:"50%", background:cor }}/>{txt}</span>;
+                })()}</td>
                 <td style={{ padding:"13px 16px", color:C.dim, fontSize:13 }}>{t.data_fundacao?new Date(t.data_fundacao).getFullYear():"—"}</td>
                 <td style={{ padding:"13px 16px", color:C.cream, fontSize:13, maxWidth:240 }}>
                   <CelulaObservacao time={t} show={show} reload={reload} />
@@ -375,6 +591,13 @@ function DashboardSuper() {
             ))}
           </tbody>
         </table></div>
+        {podeCarregarMais && (
+          <div style={{ padding:"16px 24px", textAlign:"center", borderTop:`1px solid ${C.border}` }}>
+            <Btn variant="secondary" onClick={()=>setLimiteTimes(l => l + LOTE_TIMES)} disabled={loading}>
+              {loading ? "Carregando..." : `Carregar mais ${LOTE_TIMES} times`}
+            </Btn>
+          </div>
+        )}
       </Card>
 
       {/* Usuários */}
@@ -1191,6 +1414,26 @@ function ConfigSistema({ show }) {
     finally { setSaving(null); }
   }
 
+  // faixas de atividade (dias)
+  const [faixas, setFaixas] = useState({ ativo:"", risco:"" });
+  useEffect(() => {
+    if (!configs) return;
+    const a = configs.find(c => c.chave === "atividade_dias_ativo")?.valor;
+    const r = configs.find(c => c.chave === "atividade_dias_risco")?.valor;
+    setFaixas({ ativo: a ?? "30", risco: r ?? "90" });
+  }, [configs]);
+  async function salvarFaixas() {
+    const a = Number(faixas.ativo), r = Number(faixas.risco);
+    if (!a || !r || a < 1 || r <= a) { show("Verifique: 'ativo' deve ser ≥1 e 'risco' deve ser maior que 'ativo'.", "error"); return; }
+    setSaving("faixas");
+    try {
+      await api.patch(`config_sistema?chave=eq.atividade_dias_ativo`, { valor: String(a), atualizado_em: new Date().toISOString() });
+      await api.patch(`config_sistema?chave=eq.atividade_dias_risco`, { valor: String(r), atualizado_em: new Date().toISOString() });
+      show("Faixas de atividade salvas!"); reload();
+    } catch(e) { show("Erro: " + e.message, "error"); }
+    finally { setSaving(null); }
+  }
+
   async function salvarDescNivel(n) {
     const chave = `mensalidade_nivel_${n}_desc`;
     setSaving(chave);
@@ -1249,6 +1492,38 @@ function ConfigSistema({ show }) {
             </div>
           );
         })}
+      </Card>
+
+      {/* Faixas de atividade */}
+      <Card style={{ padding:24, maxWidth:600 }}>
+        <div style={{ fontSize:15, fontWeight:700, color:C.cream, marginBottom:8, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>
+          🩺 Faixas de atividade dos times
+        </div>
+        <div style={{ fontSize:12, color:C.dim, marginBottom:16, paddingLeft:10 }}>
+          Define como a "Saúde da base" classifica os times pela última interação com o sistema.
+        </div>
+        <div style={{ display:"flex", gap:16, flexWrap:"wrap", alignItems:"flex-end", paddingLeft:10 }}>
+          <div>
+            <div style={{ fontSize:12, color:C.win, marginBottom:5 }}>● Ativo: até</div>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <input type="number" min="1" value={faixas.ativo} onChange={e=>setFaixas(f=>({...f, ativo:e.target.value}))}
+                style={{ width:80, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"8px 12px", outline:"none" }}/>
+              <span style={{ fontSize:13, color:C.dim }}>dias</span>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize:12, color:C.loss, marginBottom:5 }}>● Em risco: acima de</div>
+            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+              <input type="number" min="2" value={faixas.risco} onChange={e=>setFaixas(f=>({...f, risco:e.target.value}))}
+                style={{ width:80, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"8px 12px", outline:"none" }}/>
+              <span style={{ fontSize:13, color:C.dim }}>dias</span>
+            </div>
+          </div>
+          <Btn onClick={salvarFaixas} disabled={saving==="faixas"}>{saving==="faixas"?"Salvando...":"Salvar faixas"}</Btn>
+        </div>
+        <div style={{ fontSize:11, color:C.dim, marginTop:12, paddingLeft:10 }}>
+          Entre {faixas.ativo||"30"} e {faixas.risco||"90"} dias = "Atenção" (amarelo).
+        </div>
       </Card>
 
       {/* Níveis de Mensalidade */}
@@ -1459,10 +1734,29 @@ function CrudMensalidadeTimes({ show }) {
   const [uploadingComp, setUploadingComp] = useState(false);
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroNomeMens, setFiltroNomeMens] = useState("");
+  const [buscaMens, setBuscaMens] = useState(""); // termo com debounce
+  const [limiteMens, setLimiteMens] = useState(100);
+  const LOTE_MENS = 100;
   const [abaRel, setAbaRel] = useState("mensal");
 
+  // debounce da busca por nome
+  useEffect(() => {
+    const id = setTimeout(() => { setBuscaMens(filtroNomeMens); setLimiteMens(LOTE_MENS); }, 400);
+    return () => clearTimeout(id);
+  }, [filtroNomeMens]);
+
+  // lista de times: busca no servidor + lote (não afeta os totais, que vêm da RPC)
+  const filtroNomeMensQ = buscaMens ? `&nome=ilike.*${encodeURIComponent(buscaMens)}*` : "";
   const { data: times } = useQuery(() =>
-    api.get(`time?select=id_time,nome,nivel_mensalidade,status,observacao_super&order=nome.asc`)
+    api.get(`time?select=id_time,nome,nivel_mensalidade,status,observacao_super${filtroNomeMensQ}&order=nome.asc&limit=${limiteMens}`),
+    [buscaMens, limiteMens]
+  );
+  const podeCarregarMaisMens = (times||[]).length >= limiteMens;
+
+  // TOTAIS via agregação no banco (corretos mesmo com a lista paginada)
+  const { data: totaisRpc } = useQuery(() =>
+    api.post(`rpc/totais_mensalidade_sistema`, { p_mes: mesSel, p_ano: anoSel }),
+    [mesSel, anoSel]
   );
   const { data: niveis } = useQuery(() =>
     api.get(`config_sistema?chave=like.mensalidade_nivel_*&select=*`)
@@ -1486,19 +1780,16 @@ function CrudMensalidadeTimes({ show }) {
     return { ...t, pag: pag || null, status: pag?.status || "nao_pago", esperado };
   });
 
-  const filtrados = (filtroStatus === "todos"
+  const filtrados = filtroStatus === "todos"
     ? timesComStatus
-    : timesComStatus.filter(t => t.status === filtroStatus)
-  ).filter(t => !filtroNomeMens || (t.nome||"").toLowerCase().includes(filtroNomeMens.toLowerCase()));
+    : timesComStatus.filter(t => t.status === filtroStatus);
 
-  // Totais
-  const totalEsperado = timesComStatus
-    .filter(t => t.status !== "isento")
-    .reduce((s, t) => s + (t.pag?.valor_esperado ?? t.esperado), 0);
-  const totalRecebido = timesComStatus.reduce((s, t) => s + (t.pag?.valor_pago || 0), 0);
-  const totalPendente = timesComStatus
-    .filter(t => t.status === "nao_pago" || t.status === "parcial")
-    .reduce((s, t) => s + ((t.pag?.valor_esperado ?? t.esperado) - (t.pag?.valor_pago || 0)), 0);
+  // Totais — vêm da agregação no banco (corretos com a lista paginada).
+  // Trata resposta como objeto direto ou array[0] (PostgREST pode variar).
+  const _tot = Array.isArray(totaisRpc) ? totaisRpc[0] : totaisRpc;
+  const totalEsperado = Number(_tot?.total_esperado || 0);
+  const totalRecebido = Number(_tot?.total_recebido || 0);
+  const totalPendente = Number(_tot?.total_pendente || 0);
 
   function abrirModal(t) {
     setForm({
@@ -1657,6 +1948,11 @@ function CrudMensalidadeTimes({ show }) {
           {filtroNomeMens && (
             <span style={{ marginLeft:12, fontSize:12, color:C.dim }}>{filtrados.length} resultado(s)</span>
           )}
+          {filtroStatus !== "todos" && podeCarregarMaisMens && (
+            <span style={{ marginLeft:12, fontSize:11, color:C.gold }}>
+              ⚠️ filtrando status nos {(times||[]).length} times carregados — busque por nome ou carregue mais para abranger todos
+            </span>
+          )}
         </div>
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
           <thead><tr style={{ background:C.surf2 }}>
@@ -1698,6 +1994,13 @@ function CrudMensalidadeTimes({ show }) {
             })}
           </tbody>
         </table></div>
+        {podeCarregarMaisMens && filtroStatus === "todos" && (
+          <div style={{ padding:"16px 24px", textAlign:"center", borderTop:`1px solid ${C.border}` }}>
+            <Btn variant="secondary" onClick={()=>setLimiteMens(l => l + LOTE_MENS)}>
+              Carregar mais {LOTE_MENS} times
+            </Btn>
+          </div>
+        )}
       </Card>
       </>)}
 
@@ -2260,7 +2563,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.5.1";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.9.0";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };

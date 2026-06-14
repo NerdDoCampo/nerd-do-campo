@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.5.1";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.9.0";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -121,11 +121,22 @@ async function sb(path, opts = {}, _jaTentou = false) {
   return txt ? JSON.parse(txt) : null;
 }
 
+// time ativo atual (atualizado pelo app) — usado para carimbar última atividade
+let _idTimeAtivo = null;
+function setIdTimeAtivoGlobal(id) { _idTimeAtivo = id ? Number(id) : null; }
+// dispara o carimbo de atividade sem bloquear a operação (fire-and-forget)
+function _carimbarAtividade() {
+  if (!_idTimeAtivo) return;
+  try {
+    sb("rpc/marcar_atividade_time", { method:"POST", body: JSON.stringify({ p_id_time: _idTimeAtivo }) })
+      .catch(()=>{}); // silencioso: não atrapalha a ação principal se falhar
+  } catch(e) { /* silencioso */ }
+}
 const api = {
   get:    (path)         => sb(path),
-  post:   (path, body)   => sb(path, { method: "POST",   body: JSON.stringify(body) }),
-  patch:  (path, body)   => sb(path, { method: "PATCH",  body: JSON.stringify(body) }),
-  delete: (path)         => sb(path, { method: "DELETE",  prefer: "return=minimal" }),
+  post:   (path, body)   => { const r = sb(path, { method: "POST",   body: JSON.stringify(body) }); if (!String(path).startsWith("rpc/marcar_atividade")) _carimbarAtividade(); return r; },
+  patch:  (path, body)   => { const r = sb(path, { method: "PATCH",  body: JSON.stringify(body) }); _carimbarAtividade(); return r; },
+  delete: (path)         => { const r = sb(path, { method: "DELETE",  prefer: "return=minimal" }); _carimbarAtividade(); return r; },
 };
 
 // ── Upload de imagem para Supabase Storage ────────────────────
@@ -1064,6 +1075,17 @@ const f = (tag, base) => ({ children, style: s = {}, ...p }) =>
 
 function Card({ children, style: s = {} }) {
   return <div style={{ background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, ...s }}>{children}</div>;
+}
+// Estado vazio reutilizável: ícone + título + texto orientativo + ação opcional
+function EstadoVazio({ icone, titulo, texto, acaoLabel, onAcao }) {
+  return (
+    <Card style={{ padding:"40px 24px", textAlign:"center" }}>
+      <div style={{ fontSize:48, marginBottom:12 }}>{icone}</div>
+      <div style={{ fontSize:17, fontWeight:700, color:C.cream, marginBottom:6 }}>{titulo}</div>
+      <div style={{ fontSize:14, color:C.dim, marginBottom: acaoLabel?20:0, maxWidth:400, marginLeft:"auto", marginRight:"auto", lineHeight:1.5 }}>{texto}</div>
+      {acaoLabel && onAcao && <Btn onClick={onAcao}>{acaoLabel}</Btn>}
+    </Card>
+  );
 }
 function Btn({ children, variant = "primary", onClick, disabled, style: s = {}, type = "button" }) {
   const bg = disabled ? C.surf2 : variant === "primary" ? C.gold : variant === "danger" ? C.loss : C.surf2;
@@ -2904,6 +2926,45 @@ const MENU_BASE = [
 // ══════════════════════════════════════════════════════════════
 // PÁGINA DE INÍCIO / ONBOARDING
 // ══════════════════════════════════════════════════════════════
+// ── Tour de boas-vindas: modal exibido na primeira entrada ──
+function TourBoasVindas({ ehTurmaFechada, onFechar, onIr }) {
+  const [passo, setPasso] = useState(0);
+  const telas = ehTurmaFechada ? [
+    { ic:"👋", tit:"Bem-vindo ao Nerd do Campo!", txt:"Aqui você gerencia sua turma: jogadores, encontros, presença e estatísticas — tudo num lugar só." },
+    { ic:"📋", tit:"Comece pelo básico", txt:"Cadastre seus times internos e jogadores, crie a temporada e registre os encontros. A tela inicial tem um passo a passo que se completa sozinho conforme você avança." },
+    { ic:"📲", tit:"Compartilhe e engaje", txt:"Gere convites e resultados em imagem para mandar no grupo do WhatsApp, e use o link de presença para a galera confirmar sem precisar de login." },
+  ] : [
+    { ic:"👋", tit:"Bem-vindo ao Nerd do Campo!", txt:"Aqui você gerencia seu time: elenco, partidas, estatísticas, presença e até as finanças — tudo num lugar só." },
+    { ic:"📋", tit:"Comece pelo básico", txt:"Cadastre seus campos, jogadores e a temporada, depois registre suas partidas. A tela inicial tem um passo a passo que se completa sozinho conforme você avança." },
+    { ic:"📲", tit:"Compartilhe e engaje", txt:"Gere convocações e resultados em imagem para mandar no grupo do WhatsApp, e use o link de presença para a galera confirmar sem precisar de login." },
+  ];
+  const ultima = passo === telas.length - 1;
+  const t = telas[passo];
+  return (
+    <Modal title="" onClose={onFechar}>
+      <div style={{ textAlign:"center", padding:"8px 4px" }}>
+        <div style={{ fontSize:56, marginBottom:16 }}>{t.ic}</div>
+        <div style={{ fontSize:22, fontWeight:800, color:C.cream, marginBottom:12 }}>{t.tit}</div>
+        <div style={{ fontSize:15, color:C.dim, lineHeight:1.6, marginBottom:24, maxWidth:420, marginLeft:"auto", marginRight:"auto" }}>{t.txt}</div>
+        {/* indicadores de passo */}
+        <div style={{ display:"flex", gap:8, justifyContent:"center", marginBottom:24 }}>
+          {telas.map((_,i) => (
+            <span key={i} style={{ width: i===passo?24:8, height:8, borderRadius:4, background: i===passo?C.gold:C.border, transition:"all 0.3s" }}/>
+          ))}
+        </div>
+        <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+          {!ultima && <Btn variant="secondary" onClick={onFechar}>Pular</Btn>}
+          {ultima ? (
+            <Btn onClick={() => { onFechar(); onIr && onIr("inicio"); }}>Começar 🚀</Btn>
+          ) : (
+            <Btn onClick={() => setPasso(p => p+1)}>Próximo</Btn>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function PaginaInicio({ dados, onNavegar }) {
   const { cidades, campos, posicoes, adversarios, jogadores, temporadas, partidas, ehTurmaFechada, timesInternos, encontros } = dados;
 
@@ -3040,6 +3101,11 @@ function PaginaInicio({ dados, onNavegar }) {
           {concluidas} de {etapas.length} etapas concluídas
           {proxima && <> · <span style={{ color:C.cream }}>Próxima: {proxima.titulo}</span></>}
         </div>
+        {pct === 100 && (
+          <div style={{ marginTop:14, padding:"12px 16px", background:`${C.win}22`, border:`1px solid ${C.win}66`, borderRadius:10, fontSize:14, color:C.cream, fontWeight:600 }}>
+            🎉 Tudo pronto! Seu time está configurado. Agora é só registrar os jogos e acompanhar as estatísticas.
+          </div>
+        )}
       </Card>
 
       {/* Dica de importação */}
@@ -4252,6 +4318,11 @@ function CrudEventos({ idTime, show, readOnly }) {
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
       {!readOnly && <div><Btn onClick={abrirNovo}>+ Novo Evento</Btn></div>}
 
+      {(eventos||[]).length === 0 && !loading && (
+        <EstadoVazio icone="🎉" titulo="Nenhum evento ainda"
+          texto="Crie eventos como churrascos, rifas ou festas para organizar arrecadações do time. Você acompanha aqui quanto cada um arrecadou."
+          acaoLabel={!readOnly ? "+ Criar primeiro evento" : null} onAcao={!readOnly ? abrirNovo : null}/>
+      )}
       {(eventos||[]).map(ev => {
         const resultado = ev.status==="encerrado" ? Number(ev.resultado_final||0)
           : ev.modo==="direto" ? Number(ev.resultado_direto||0) : resultadoCalculado(ev.id_evento);
@@ -4382,10 +4453,22 @@ export default function AdminAppCompleto() {
   const [session, setSession]       = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
   const [idTime, setIdTime]         = useState(null);
+  useEffect(() => { setIdTimeAtivoGlobal(idTime); }, [idTime]);
   const [meusTimes, setMeusTimes]   = useState([]); // vínculos do admin (pode ter vários times)
   const [timeInativo, setTimeInativo] = useState(false);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [menu, setMenu] = useState("inicio");
+  // tour de boas-vindas: mostra uma vez por navegador
+  const [mostrarTour, setMostrarTour] = useState(false);
+  useEffect(() => {
+    try {
+      if (idTime && !localStorage.getItem("ndc_tour_visto")) setMostrarTour(true);
+    } catch(e) { /* localStorage indisponível: simplesmente não mostra */ }
+  }, [idTime]);
+  function fecharTour() {
+    setMostrarTour(false);
+    try { localStorage.setItem("ndc_tour_visto", "1"); } catch(e) {}
+  }
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
@@ -4756,6 +4839,7 @@ export default function AdminAppCompleto() {
               onNavegar={setMenu}
             />
           )}
+          {mostrarTour && <TourBoasVindas ehTurmaFechada={ehTurmaFechada} onFechar={fecharTour} onIr={setMenu} />}
           {menu === "app" && (
             <VisaoAppPublico time={(times||[])[0]} temporadas={temporadas}/>
           )}
@@ -5012,6 +5096,11 @@ function CrudJogadores({ idTime, show, readOnly }) {
         {!readOnly && <Btn onClick={abrirNovo}>+ Novo Jogador</Btn>}
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
+      {ativos.length === 0 && inativos.length === 0 && !loading && (
+        <EstadoVazio icone="👟" titulo="Nenhum jogador ainda"
+          texto="Cadastre os jogadores do seu elenco para montar escalações, registrar gols e acompanhar estatísticas. Você pode adicionar um a um ou importar vários de uma planilha."
+          acaoLabel={!readOnly ? "+ Cadastrar primeiro jogador" : null} onAcao={!readOnly ? abrirNovo : null}/>
+      )}
       {ativos.length > 0 && (
         <TabelaJogadores grupo="Ativos" lista={sortData(ativos, _sk, _asc)} sk={_sk} asc={_asc}
           onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
@@ -5160,6 +5249,11 @@ function CrudAdversarios({ idTime, show, readOnly }) {
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
+        {(adversarios||[]).length === 0 && !loading && (
+          <EstadoVazio icone="👥" titulo="Nenhum adversário cadastrado"
+            texto="Cadastre os times que você costuma enfrentar para registrá-los nas partidas. Você também pode deixar para definir o adversário na hora de criar cada jogo."
+            acaoLabel={!readOnly ? "+ Cadastrar adversário" : null} onAcao={!readOnly ? abrirNovo : null}/>
+        )}
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
                   <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
@@ -5315,6 +5409,11 @@ function CrudCampos({ idTime, show, readOnly }) {
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
+        {(campos||[]).length === 0 && !loading && (
+          <EstadoVazio icone="📍" titulo="Nenhum campo cadastrado"
+            texto="Cadastre os campos onde seu time joga. Eles aparecem ao criar partidas e ajudam a galera a saber onde é o jogo."
+            acaoLabel={!readOnly ? "+ Cadastrar campo" : null} onAcao={!readOnly ? abrirNovo : null}/>
+        )}
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
                   <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
@@ -5465,6 +5564,11 @@ function CrudTimesInternos({ idTime, show, readOnly }) {
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
+        {(times||[]).length === 0 && !loading && (
+          <EstadoVazio icone="🎽" titulo="Nenhum time interno cadastrado"
+            texto="Os times internos são os grupos fixos que se enfrentam nos encontros da turma (ex: Laranja, Preto, Branco). Cadastre-os para montar os jogos."
+            acaoLabel={!readOnly ? "+ Cadastrar time interno" : null} onAcao={!readOnly ? abrirNovo : null}/>
+        )}
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
             {["Time","Início","Encerrado em","Situação",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
@@ -6300,6 +6404,11 @@ function CrudTemporadas({ idTime, show, readOnly }) {
       </div>
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImportTemporadas} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
+        {(temporadas||[]).length === 0 && !loading && (
+          <EstadoVazio icone="📆" titulo="Nenhuma temporada criada"
+            texto="A temporada organiza suas partidas e estatísticas por período. Crie a primeira para começar a registrar jogos."
+            acaoLabel={!readOnly ? "+ Criar temporada" : null} onAcao={!readOnly ? abrirNovo : null}/>
+        )}
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
                   <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Temporada</ThSortable>
