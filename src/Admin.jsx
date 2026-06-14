@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.9.0";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.10.1";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -798,7 +798,7 @@ function Gols({ temporada }) {
 }
 
 
-function VisaoAppPublico({ time, temporadas }) {
+function VisaoAppPublico({ time, temporadas, onNavegar }) {
   const [aba, setAba] = useState(0);
   const [temporadaSel, setTemporadaSel] = useState(null);
   useEffect(() => { if (temporadas?.length && !temporadaSel) setTemporadaSel(temporadas[0]); }, [temporadas]);
@@ -810,6 +810,16 @@ function VisaoAppPublico({ time, temporadas }) {
     { label:"Estatísticas",icon:"📈" },
     { label:"Gols",        icon:"⚽" },
   ];
+
+  // sem nenhuma temporada cadastrada: a Visão App não tem o que mostrar.
+  // (temporadas === undefined = ainda carregando; array vazio = realmente não tem)
+  if (Array.isArray(temporadas) && temporadas.length === 0) {
+    return (
+      <EstadoVazio icone="📅" titulo="Nenhuma temporada cadastrada"
+        texto="A Visão App mostra como o público enxerga seu time — mas isso depende de ter ao menos uma temporada criada, que organiza partidas, elenco e estatísticas. Crie sua primeira temporada para liberar esta visão."
+        acaoLabel={onNavegar ? "📆 Criar temporada" : null} onAcao={onNavegar ? () => onNavegar("temporadas") : null}/>
+    );
+  }
 
   if (!temporadaSel) return <Spinner/>;
 
@@ -2917,6 +2927,7 @@ const MENU_BASE = [
   { id:"mensalidades",label:"Mensalidades", icon:"💰", grupo:"Financeiro" },
   { id:"caixa",       label:"Caixa",        icon:"💵", grupo:"Financeiro" },
   { id:"eventos",     label:"Eventos",      icon:"🎉", grupo:"Financeiro" },
+  { id:"relatorio",   label:"Relatório",    icon:"📊", grupo:"Financeiro" },
   { id:"app",         label:"Visão App",   icon:"👁️", grupo:"Acompanhar" },
   { id:"dicas",       label:"Dicas",       icon:"💡", grupo:"Acompanhar" },
   { id:"ajuda",       label:"Ajuda",        icon:"❓", grupo:"Acompanhar" },
@@ -4197,6 +4208,249 @@ function CrudCaixa({ idTime, show, readOnly }) {
 // ══════════════════════════════════════════════════════════════
 // MÓDULO FINANCEIRO — Eventos (arrecadações)
 // ══════════════════════════════════════════════════════════════
+// ── Relatório Financeiro do time (para o admin) ──
+function RelatorioFinanceiro({ idTime, show }) {
+  const hoje = new Date();
+  const { data: timeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=saldo_inicial,nome`) : Promise.resolve([]), [idTime]);
+  const { data: temporadas } = useQuery(() => idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*&order=data_inicio.desc`) : Promise.resolve([]), [idTime]);
+  const { data: movimentos, loading } = useQuery(
+    () => idTime ? api.get(`movimento_caixa?id_time=eq.${idTime}&select=*,tipo_movimento(descricao),evento(nome),partida(data,adversario(nome))&order=data_movimento.asc`) : Promise.resolve([]),
+    [idTime]
+  );
+
+  const saldoInicial = Number(timeData?.[0]?.saldo_inicial || 0);
+  const nomeTime = timeData?.[0]?.nome || "Time";
+
+  // filtros de período
+  const [modoPeriodo, setModoPeriodo] = useState("tudo"); // tudo | temporada | intervalo
+  const [tempSel, setTempSel] = useState("");
+  const [dataIni, setDataIni] = useState("");
+  const [dataFim, setDataFim] = useState("");
+
+  const movs = movimentos || [];
+
+  // aplica o filtro de período
+  const movsFiltrados = useMemo(() => {
+    return movs.filter(m => {
+      const d = (m.data_movimento || "").slice(0,10);
+      if (modoPeriodo === "intervalo") {
+        if (dataIni && d < dataIni) return false;
+        if (dataFim && d > dataFim) return false;
+      }
+      if (modoPeriodo === "temporada" && tempSel) {
+        const t = (temporadas||[]).find(x => String(x.id_temporada) === String(tempSel));
+        if (t) {
+          if (t.data_inicio && d < t.data_inicio.slice(0,10)) return false;
+          if (t.data_fim && d > t.data_fim.slice(0,10)) return false;
+        }
+      }
+      return true;
+    });
+  }, [movs, modoPeriodo, tempSel, dataIni, dataFim, temporadas]);
+
+  // totais
+  const receitas = movsFiltrados.filter(m => m.natureza === "receita");
+  const despesas = movsFiltrados.filter(m => m.natureza === "despesa");
+  const totalRec = receitas.reduce((s,m) => s + Number(m.valor||0), 0);
+  const totalDesp = despesas.reduce((s,m) => s + Number(m.valor||0), 0);
+  const saldoPeriodo = totalRec - totalDesp;
+  // saldo considerando inicial só faz sentido em "tudo"
+  const saldoComInicial = saldoInicial + totalRec - totalDesp;
+
+  // agrupamento por categoria (tipo de movimento)
+  function agrupaPorCategoria(lista) {
+    const mapa = {};
+    lista.forEach(m => {
+      const cat = m.tipo_movimento?.descricao || "Sem categoria";
+      mapa[cat] = (mapa[cat] || 0) + Number(m.valor||0);
+    });
+    return Object.entries(mapa).sort((a,b) => b[1] - a[1]);
+  }
+  const recPorCat = agrupaPorCategoria(receitas);
+  const despPorCat = agrupaPorCategoria(despesas);
+
+  // agrupamento mês a mês
+  const porMes = useMemo(() => {
+    const mapa = {};
+    movsFiltrados.forEach(m => {
+      const mesAno = (m.data_movimento || "").slice(0,7); // YYYY-MM
+      if (!mesAno) return;
+      if (!mapa[mesAno]) mapa[mesAno] = { rec:0, desp:0 };
+      if (m.natureza === "receita") mapa[mesAno].rec += Number(m.valor||0);
+      else mapa[mesAno].desp += Number(m.valor||0);
+    });
+    return Object.entries(mapa).sort((a,b) => a[0].localeCompare(b[0]));
+  }, [movsFiltrados]);
+
+  const maxMes = Math.max(1, ...porMes.map(([,v]) => Math.max(v.rec, v.desp)));
+  const nomesMes = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  const fmtMesAno = (ma) => { const [a,m] = ma.split("-"); return `${nomesMes[Number(m)-1]}/${a.slice(2)}`; };
+
+  const labelPeriodo = modoPeriodo === "tudo" ? "Todo o histórico"
+    : modoPeriodo === "temporada" ? (temporadas||[]).find(t=>String(t.id_temporada)===String(tempSel))?.nome || "Temporada"
+    : `${dataIni||"início"} até ${dataFim||"hoje"}`;
+
+  // ── exportações ──
+  function exportarCSV() {
+    if (!movsFiltrados.length) { show("Nada para exportar no período."); return; }
+    const linhas = movsFiltrados.map(m => ({
+      Data: (m.data_movimento||"").slice(0,10),
+      Natureza: m.natureza,
+      Categoria: m.tipo_movimento?.descricao || "",
+      Valor: Number(m.valor||0).toFixed(2).replace(".",","),
+      Origem: m.evento?.nome || (m.partida ? `Partida ${m.partida?.adversario?.nome||""}` : ""),
+      Observacao: m.observacao || "",
+    }));
+    const cols = Object.keys(linhas[0]);
+    const esc = (v) => `"${String(v).replace(/"/g,'""')}"`;
+    const csv = [cols.join(";"), ...linhas.map(l => cols.map(c => esc(l[c])).join(";"))].join("\n");
+    const blob = new Blob(["\ufeff"+csv], { type:"text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `relatorio-${nomeTime.replace(/\s+/g,"-")}-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    show(`${linhas.length} lançamentos exportados.`);
+  }
+  function exportarPDF() { window.print(); }
+
+  if (loading) return <div style={{ color:C.dim, padding:20 }}>Carregando relatório…</div>;
+
+  return (
+    <div className="relatorio-print">
+      {/* CSS de impressão: esconde menu/botões, mostra só o relatório */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .relatorio-print, .relatorio-print * { visibility: visible; }
+          .relatorio-print { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; background: #fff !important; color: #000 !important; }
+          .no-print { display: none !important; }
+          .relatorio-print .card-rel { border: 1px solid #ccc !important; background: #fff !important; color: #000 !important; page-break-inside: avoid; }
+          .relatorio-print .txt-claro { color: #000 !important; }
+          .relatorio-print .txt-dim { color: #444 !important; }
+        }
+      `}</style>
+
+      {/* cabeçalho + ações */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12, marginBottom:18 }}>
+        <div>
+          <div style={{ fontSize:20, fontWeight:800, color:C.cream }} className="txt-claro">Relatório Financeiro</div>
+          <div style={{ fontSize:13, color:C.dim }} className="txt-dim">{nomeTime} · {labelPeriodo}</div>
+        </div>
+        <div style={{ display:"flex", gap:8 }} className="no-print">
+          <Btn variant="secondary" onClick={exportarCSV}>⬇ CSV</Btn>
+          <Btn onClick={exportarPDF}>🖨️ PDF</Btn>
+        </div>
+      </div>
+
+      {/* filtro de período */}
+      <Card style={{ padding:16, marginBottom:16 }}>
+        <div className="no-print" style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+          <select value={modoPeriodo} onChange={e=>setModoPeriodo(e.target.value)}
+            style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none", cursor:"pointer" }}>
+            <option value="tudo">Todo o histórico</option>
+            <option value="temporada">Por temporada</option>
+            <option value="intervalo">Intervalo de datas</option>
+          </select>
+          {modoPeriodo === "temporada" && (
+            <select value={tempSel} onChange={e=>setTempSel(e.target.value)}
+              style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none", cursor:"pointer" }}>
+              <option value="">Selecione a temporada</option>
+              {(temporadas||[]).map(t => <option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
+            </select>
+          )}
+          {modoPeriodo === "intervalo" && (
+            <>
+              <input type="date" value={dataIni} onChange={e=>setDataIni(e.target.value)}
+                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none" }}/>
+              <span style={{ color:C.dim }}>até</span>
+              <input type="date" value={dataFim} onChange={e=>setDataFim(e.target.value)}
+                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none" }}/>
+            </>
+          )}
+        </div>
+      </Card>
+
+      {/* 1) RESUMO */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12, marginBottom:16 }}>
+        <Card style={{ padding:18 }} className="card-rel">
+          <div style={{ fontSize:12, color:C.dim }} className="txt-dim">Receitas</div>
+          <div style={{ fontSize:22, fontWeight:800, color:C.win }}>{fmtMoeda(totalRec)}</div>
+        </Card>
+        <Card style={{ padding:18 }} className="card-rel">
+          <div style={{ fontSize:12, color:C.dim }} className="txt-dim">Despesas</div>
+          <div style={{ fontSize:22, fontWeight:800, color:C.loss }}>{fmtMoeda(totalDesp)}</div>
+        </Card>
+        <Card style={{ padding:18 }} className="card-rel">
+          <div style={{ fontSize:12, color:C.dim }} className="txt-dim">Saldo do período</div>
+          <div style={{ fontSize:22, fontWeight:800, color: saldoPeriodo>=0?C.win:C.loss }}>{fmtMoeda(saldoPeriodo)}</div>
+        </Card>
+        {modoPeriodo === "tudo" && (
+          <Card style={{ padding:18 }} className="card-rel">
+            <div style={{ fontSize:12, color:C.dim }} className="txt-dim">Saldo atual (c/ inicial)</div>
+            <div style={{ fontSize:22, fontWeight:800, color: saldoComInicial>=0?C.win:C.loss }}>{fmtMoeda(saldoComInicial)}</div>
+          </Card>
+        )}
+      </div>
+
+      {/* 2) MENSAL com gráfico */}
+      <Card style={{ padding:20, marginBottom:16 }} className="card-rel">
+        <div style={{ fontSize:14, fontWeight:700, color:C.cream, marginBottom:16 }} className="txt-claro">📅 Movimentação mês a mês</div>
+        {porMes.length === 0 ? <div style={{ color:C.dim, fontSize:13 }}>Sem lançamentos no período.</div> : (
+          <div style={{ display:"flex", alignItems:"flex-end", gap:12, height:180, overflowX:"auto", paddingBottom:8 }}>
+            {porMes.map(([ma,v]) => (
+              <div key={ma} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4, minWidth:48 }}>
+                <div style={{ display:"flex", alignItems:"flex-end", gap:3, height:140 }}>
+                  <div title={`Receita: ${fmtMoeda(v.rec)}`} style={{ width:14, height:`${Math.max(2,(v.rec/maxMes)*140)}px`, background:C.win, borderRadius:"3px 3px 0 0" }}/>
+                  <div title={`Despesa: ${fmtMoeda(v.desp)}`} style={{ width:14, height:`${Math.max(2,(v.desp/maxMes)*140)}px`, background:C.loss, borderRadius:"3px 3px 0 0" }}/>
+                </div>
+                <div style={{ fontSize:10, color:C.dim }} className="txt-dim">{fmtMesAno(ma)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ display:"flex", gap:16, marginTop:10, fontSize:11, color:C.dim }} className="txt-dim">
+          <span><span style={{ display:"inline-block", width:10, height:10, background:C.win, borderRadius:2, marginRight:5 }}/>Receitas</span>
+          <span><span style={{ display:"inline-block", width:10, height:10, background:C.loss, borderRadius:2, marginRight:5 }}/>Despesas</span>
+        </div>
+      </Card>
+
+      {/* 3) POR CATEGORIA */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:16 }}>
+        <Card style={{ padding:20 }} className="card-rel">
+          <div style={{ fontSize:14, fontWeight:700, color:C.win, marginBottom:14 }}>↗ Receitas por categoria</div>
+          {recPorCat.length === 0 ? <div style={{ color:C.dim, fontSize:13 }}>Nenhuma receita.</div> :
+            recPorCat.map(([cat,val]) => (
+              <div key={cat} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:4 }}>
+                  <span style={{ color:C.cream }} className="txt-claro">{cat}</span>
+                  <span style={{ color:C.win, fontWeight:700 }}>{fmtMoeda(val)}</span>
+                </div>
+                <div style={{ height:6, background:C.bg, borderRadius:3, overflow:"hidden" }}>
+                  <div style={{ width:`${(val/totalRec)*100}%`, height:"100%", background:C.win }}/>
+                </div>
+              </div>
+            ))}
+        </Card>
+        <Card style={{ padding:20 }} className="card-rel">
+          <div style={{ fontSize:14, fontWeight:700, color:C.loss, marginBottom:14 }}>↘ Despesas por categoria</div>
+          {despPorCat.length === 0 ? <div style={{ color:C.dim, fontSize:13 }}>Nenhuma despesa.</div> :
+            despPorCat.map(([cat,val]) => (
+              <div key={cat} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:4 }}>
+                  <span style={{ color:C.cream }} className="txt-claro">{cat}</span>
+                  <span style={{ color:C.loss, fontWeight:700 }}>{fmtMoeda(val)}</span>
+                </div>
+                <div style={{ height:6, background:C.bg, borderRadius:3, overflow:"hidden" }}>
+                  <div style={{ width:`${(val/totalDesp)*100}%`, height:"100%", background:C.loss }}/>
+                </div>
+              </div>
+            ))}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 function CrudEventos({ idTime, show, readOnly }) {
   // idTime recebido por prop (filtrado pelo usuário logado no componente pai)
   const { data: _timeEvento } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,cidade:id_cidade_sede(nome,estado)&limit=1`) : Promise.resolve([]), [idTime]);
@@ -4841,7 +5095,7 @@ export default function AdminAppCompleto() {
           )}
           {mostrarTour && <TourBoasVindas ehTurmaFechada={ehTurmaFechada} onFechar={fecharTour} onIr={setMenu} />}
           {menu === "app" && (
-            <VisaoAppPublico time={(times||[])[0]} temporadas={temporadas}/>
+            <VisaoAppPublico time={(times||[])[0]} temporadas={temporadas} onNavegar={setMenu}/>
           )}
           {/* Turma fechada: "Partidas" vira "Encontros" */}
           {menu === "partidas" && ehTurmaFechada && (<>{secTitle("Encontros")}
@@ -4890,6 +5144,7 @@ export default function AdminAppCompleto() {
           {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas idTime={idTime} show={show} readOnly={!canEdit("temporadas")} /></>)}
           {menu === "mensalidades" && (<CrudMensalidades idTime={idTime} show={show} readOnly={!canEdit("mensalidades")}/>)}
           {menu === "caixa"         && (<CrudCaixa idTime={idTime} show={show} readOnly={!canEdit("caixa")}/>)}
+          {menu === "relatorio"     && (<RelatorioFinanceiro idTime={idTime} show={show}/>)}
           {menu === "eventos"       && (<CrudEventos idTime={idTime} show={show} readOnly={!canEdit("eventos")}/>)}
           {menu === "tiposmov"      && (<CrudTiposMov idTime={idTime} show={show} readOnly={!canEdit("tiposmov")}/>)}
           {menu === "dicas"         && (<PaginaDicas ehTurmaFechada={ehTurmaFechada}/>)}
