@@ -129,7 +129,17 @@ function SeletorTimes({ onSelect }) {
   const [modalCadastro, setModalCadastro] = useState(false);
 
   const { data: allTimes, loading } = useQuery(() => sb(`time?select=*,temporada(id_temporada,nome,data_inicio,data_fim,publico)&publico=eq.true&order=nome.asc`));
-  const { data: _cidades } = useQuery(() => sb(`cidade?select=id_cidade,nome,estado,latitude,longitude`));
+  // resolve apenas as cidades que os times realmente usam (poucas — evita o limite de 1000 do Brasil inteiro)
+  const idsCidadesTimes = useMemo(() => {
+    const ids = [...new Set((allTimes||[]).map(t => t.id_cidade_sede).filter(Boolean))];
+    return ids;
+  }, [allTimes]);
+  const { data: _cidades } = useQuery(() => idsCidadesTimes.length
+    ? sb(`cidade?id_cidade=in.(${idsCidadesTimes.join(",")})&select=id_cidade,nome,estado,latitude,longitude`)
+    : Promise.resolve([]), [idsCidadesTimes]);
+  // cidades do estado selecionado no filtro de raio (busca sob demanda, evita o limite de 1000)
+  const { data: _cidadesUf } = useQuery(() => ufRef ? sb(`cidade?estado=eq.${ufRef}&select=id_cidade,nome,estado,latitude,longitude&order=nome.asc&limit=2000`) : Promise.resolve([]), [ufRef]);
+  const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
   const { data: _campos } = useQuery(() => sb(`campo?select=id_campo,nome`));
   const { data: tiposAtivos } = useQuery(() => sb(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
   const { data: configSistema } = useQuery(() => sb(`config_sistema?chave=eq.cadastro_time_ativo&select=valor&limit=1`));
@@ -162,8 +172,8 @@ function SeletorTimes({ onSelect }) {
     if (!allTimes) return [];
     const mapaCidade = new Map((_cidades||[]).map(c => [c.id_cidade, c]));
     const mapaCampo = new Map((_campos||[]).map(c => [c.id_campo, c]));
-    // cidade de referência para o filtro de raio
-    const cidadeRefObj = cidadeRef ? mapaCidade.get(Number(cidadeRef)) : null;
+    // cidade de referência para o filtro de raio (vem da lista do estado selecionado)
+    const cidadeRefObj = cidadeRef ? (_cidadesUf||[]).find(c => String(c.id_cidade) === String(cidadeRef)) : null;
     const raioNum = raioRef ? Number(raioRef) : null;
     const filtroRaioAtivo = cidadeRefObj && raioNum > 0 && cidadeRefObj.latitude != null && cidadeRefObj.longitude != null;
     return allTimes.filter(t => {
@@ -189,7 +199,7 @@ function SeletorTimes({ onSelect }) {
       cidade: t.id_cidade_sede ? mapaCidade.get(t.id_cidade_sede) : null,
       campo: t.id_campo ? mapaCampo.get(t.id_campo) : null,
     }));
-  }, [allTimes, dataRef, tipoFiltro, _cidades, _campos, descricaoDoTipo, cidadeRef, raioRef]);
+  }, [allTimes, dataRef, tipoFiltro, _cidades, _campos, descricaoDoTipo, cidadeRef, raioRef, _cidadesUf]);
 
   const timesDestaque = useMemo(() => (times||[]).filter(t => t.destaque === true), [times]);
   const timesNormais  = useMemo(() => (times||[]).filter(t => !t.destaque), [times]);
@@ -313,18 +323,18 @@ function SeletorTimes({ onSelect }) {
               <select value={ufRef} onChange={e => { setUfRef(e.target.value); setCidadeRef(""); }}
                 style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px", outline:"none", cursor:"pointer" }}>
                 <option value="">Estado</option>
-                {[...new Set((_cidades||[]).map(c => c.estado).filter(Boolean))].sort().map(uf => <option key={uf} value={uf}>{uf}</option>)}
+                {UFS_BR.map(uf => <option key={uf} value={uf}>{uf}</option>)}
               </select>
               <select value={cidadeRef} onChange={e => setCidadeRef(e.target.value)} disabled={!ufRef}
                 style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px", outline:"none", cursor: ufRef ? "pointer" : "not-allowed", opacity: ufRef ? 1 : 0.5 }}>
-                <option value="">{ufRef ? "Cidade" : "Escolha o estado"}</option>
-                {(_cidades||[]).filter(c => c.estado === ufRef).sort((a,b)=>(a.nome||"").localeCompare(b.nome||"")).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
+                <option value="">{!ufRef ? "Escolha o estado" : (_cidadesUf == null ? "Carregando..." : "Cidade")}</option>
+                {(_cidadesUf||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
               </select>
               <input type="number" min="1" step="1" value={raioRef} onChange={e => setRaioRef(e.target.value)} placeholder="Raio km"
                 style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:14, fontWeight:700, padding:"10px", outline:"none", WebkitAppearance:"none" }}/>
             </div>
             {cidadeRef && raioRef && (() => {
-              const c = (_cidades||[]).find(x => String(x.id_cidade) === String(cidadeRef));
+              const c = (_cidadesUf||[]).find(x => String(x.id_cidade) === String(cidadeRef));
               if (c && (c.latitude == null || c.longitude == null)) {
                 return <div style={{ padding:"0 16px 12px", fontSize:11, color:C.loss }}>⚠️ Esta cidade não tem coordenadas cadastradas, então o filtro de distância pode não funcionar para ela.</div>;
               }
