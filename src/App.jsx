@@ -72,6 +72,15 @@ function resultado(p) {
   return { label:"Empate", cor:C.draw };
 }
 function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR", { timeZone:"UTC" }) : "—"; }
+// distância em km entre duas coordenadas (haversine)
+function distanciaKm(lat1, lon1, lat2, lon2) {
+  if ([lat1, lon1, lat2, lon2].some(v => v == null || isNaN(Number(v)))) return null;
+  const R = 6371;
+  const rad = (g) => (Number(g) * Math.PI) / 180;
+  const dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon/2)**2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+}
 function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 
 // ── SELETOR DE TIMES ──────────────────────────────────────────
@@ -114,13 +123,28 @@ function CardTime({ t, onSelect, destaque = false }) {
 
 function SeletorTimes({ onSelect }) {
   const [dataRef, setDataRef] = useState(""); // vazio = sem filtro de data
+  const [ufRef, setUfRef] = useState("");       // estado de referência do filtro de raio
+  const [cidadeRef, setCidadeRef] = useState(""); // id da cidade de referência
+  const [raioRef, setRaioRef] = useState("");   // raio em km (vazio = sem filtro)
   const [modalCadastro, setModalCadastro] = useState(false);
 
   const { data: allTimes, loading } = useQuery(() => sb(`time?select=*,temporada(id_temporada,nome,data_inicio,data_fim,publico)&publico=eq.true&order=nome.asc`));
-  const { data: _cidades } = useQuery(() => sb(`cidade?select=id_cidade,nome,estado`));
+  // resolve apenas as cidades que os times realmente usam (poucas — evita o limite de 1000 do Brasil inteiro)
+  const idsCidadesTimes = useMemo(() => {
+    const ids = [...new Set((allTimes||[]).map(t => t.id_cidade_sede).filter(Boolean))];
+    return ids;
+  }, [allTimes]);
+  const { data: _cidades } = useQuery(() => idsCidadesTimes.length
+    ? sb(`cidade?id_cidade=in.(${idsCidadesTimes.join(",")})&select=id_cidade,nome,estado,latitude,longitude`)
+    : Promise.resolve([]), [idsCidadesTimes]);
+  // cidades do estado selecionado no filtro de raio (busca sob demanda, evita o limite de 1000)
+  const { data: _cidadesUf } = useQuery(() => ufRef ? sb(`cidade?estado=eq.${ufRef}&select=id_cidade,nome,estado,latitude,longitude&order=nome.asc&limit=2000`) : Promise.resolve([]), [ufRef]);
+  const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
   const { data: _campos } = useQuery(() => sb(`campo?select=id_campo,nome`));
   const { data: tiposAtivos } = useQuery(() => sb(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
   const { data: configSistema } = useQuery(() => sb(`config_sistema?chave=eq.cadastro_time_ativo&select=valor&limit=1`));
+  const { data: cfgFiltroData } = useQuery(() => sb(`config_sistema?chave=eq.filtro_data_publico_ativo&select=valor&limit=1`));
+  const filtroDataAtivo = cfgFiltroData == null || cfgFiltroData.length === 0 || String(cfgFiltroData[0]?.valor).toLowerCase() === "true";
   const cadastroAtivo = ["true","1"].includes(String(configSistema?.[0]?.valor ?? "").trim().toLowerCase());
   const tipoFutebolCampo = (tiposAtivos||[]).find(t => t.descricao.toLowerCase().includes("campo"))?.id_tipo_time || null;
   const [tipoFiltro, setTipoFiltro] = useState(null);
@@ -148,10 +172,21 @@ function SeletorTimes({ onSelect }) {
     if (!allTimes) return [];
     const mapaCidade = new Map((_cidades||[]).map(c => [c.id_cidade, c]));
     const mapaCampo = new Map((_campos||[]).map(c => [c.id_campo, c]));
+    // cidade de referência para o filtro de raio (vem da lista do estado selecionado)
+    const cidadeRefObj = cidadeRef ? (_cidadesUf||[]).find(c => String(c.id_cidade) === String(cidadeRef)) : null;
+    const raioNum = raioRef ? Number(raioRef) : null;
+    const filtroRaioAtivo = cidadeRefObj && raioNum > 0 && cidadeRefObj.latitude != null && cidadeRefObj.longitude != null;
     return allTimes.filter(t => {
       const tempsPublicas = (t.temporada||[]).filter(temp => temp.publico === true);
       if (!tempsPublicas.length) return false;
       if (tipoFiltro && tipoFiltro !== "todos" && descricaoDoTipo.get(t.id_tipo_time) !== tipoFiltro) return false;
+      // filtro de raio: só times dentro da distância a partir da cidade de referência
+      if (filtroRaioAtivo) {
+        const cidadeTime = t.id_cidade_sede ? mapaCidade.get(t.id_cidade_sede) : null;
+        if (!cidadeTime || cidadeTime.latitude == null || cidadeTime.longitude == null) return false;
+        const dist = distanciaKm(cidadeRefObj.latitude, cidadeRefObj.longitude, cidadeTime.latitude, cidadeTime.longitude);
+        if (dist == null || dist > raioNum) return false;
+      }
       if (!dataRef) return true;
       return tempsPublicas.some(temp => {
         const inicio = temp.data_inicio ? new Date(temp.data_inicio) : null;
@@ -164,7 +199,7 @@ function SeletorTimes({ onSelect }) {
       cidade: t.id_cidade_sede ? mapaCidade.get(t.id_cidade_sede) : null,
       campo: t.id_campo ? mapaCampo.get(t.id_campo) : null,
     }));
-  }, [allTimes, dataRef, tipoFiltro, _cidades, _campos, descricaoDoTipo]);
+  }, [allTimes, dataRef, tipoFiltro, _cidades, _campos, descricaoDoTipo, cidadeRef, raioRef, _cidadesUf]);
 
   const timesDestaque = useMemo(() => (times||[]).filter(t => t.destaque === true), [times]);
   const timesNormais  = useMemo(() => (times||[]).filter(t => !t.destaque), [times]);
@@ -222,7 +257,8 @@ function SeletorTimes({ onSelect }) {
           </div>
         )}
 
-        {/* Filtro de data de referência — opcional */}
+        {/* Filtro de data de referência — opcional (controlado por config do Super) */}
+        {filtroDataAtivo && (
         <div style={{ marginBottom:24 }}>
           <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${dataRef ? C.gold : C.border}`, overflow:"hidden", transition:"border 0.2s" }}>
             {/* Header do filtro */}
@@ -255,6 +291,55 @@ function SeletorTimes({ onSelect }) {
                 <span style={{ fontSize:11, color:C.dim, fontStyle:"italic", flexShrink:0 }}>ou deixe em branco</span>
               )}
             </div>
+          </div>
+        </div>
+        )}
+
+        {/* Filtro de raio por cidade — opcional, sempre visível */}
+        <div style={{ marginBottom:24 }}>
+          <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${(cidadeRef && raioRef) ? C.gold : C.border}`, overflow:"hidden", transition:"border 0.2s" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", borderBottom:`1px solid ${C.border}` }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:16 }}>📍</span>
+                <div>
+                  <div style={{ fontSize:12, fontWeight:700, color:C.cream, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                    Filtrar por distância
+                  </div>
+                  <div style={{ fontSize:10, color:C.dim, marginTop:1 }}>
+                    {(cidadeRef && raioRef)
+                      ? `Times até ${raioRef} km da cidade escolhida`
+                      : "Opcional — escolha uma cidade e o raio em km"}
+                  </div>
+                </div>
+              </div>
+              {(ufRef || cidadeRef || raioRef) && (
+                <button onClick={() => { setUfRef(""); setCidadeRef(""); setRaioRef(""); }}
+                  style={{ background:C.loss+"22", border:`1px solid ${C.loss}44`, borderRadius:6, color:C.loss, cursor:"pointer", fontSize:11, padding:"4px 10px", fontFamily:"inherit", fontWeight:700, flexShrink:0 }}>
+                  ✕ Limpar
+                </button>
+              )}
+            </div>
+            <div style={{ padding:"12px 16px", display:"grid", gridTemplateColumns:"1fr 1.5fr 1fr", gap:10 }}>
+              <select value={ufRef} onChange={e => { setUfRef(e.target.value); setCidadeRef(""); }}
+                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px", outline:"none", cursor:"pointer" }}>
+                <option value="">Estado</option>
+                {UFS_BR.map(uf => <option key={uf} value={uf}>{uf}</option>)}
+              </select>
+              <select value={cidadeRef} onChange={e => setCidadeRef(e.target.value)} disabled={!ufRef}
+                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px", outline:"none", cursor: ufRef ? "pointer" : "not-allowed", opacity: ufRef ? 1 : 0.5 }}>
+                <option value="">{!ufRef ? "Escolha o estado" : (_cidadesUf == null ? "Carregando..." : "Cidade")}</option>
+                {(_cidadesUf||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
+              </select>
+              <input type="number" min="1" step="1" value={raioRef} onChange={e => setRaioRef(e.target.value)} placeholder="Raio km"
+                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:14, fontWeight:700, padding:"10px", outline:"none", WebkitAppearance:"none" }}/>
+            </div>
+            {cidadeRef && raioRef && (() => {
+              const c = (_cidadesUf||[]).find(x => String(x.id_cidade) === String(cidadeRef));
+              if (c && (c.latitude == null || c.longitude == null)) {
+                return <div style={{ padding:"0 16px 12px", fontSize:11, color:C.loss }}>⚠️ Esta cidade não tem coordenadas cadastradas, então o filtro de distância pode não funcionar para ela.</div>;
+              }
+              return null;
+            })()}
           </div>
         </div>
 
