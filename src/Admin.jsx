@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.10.1";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.10.2";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -4906,7 +4906,9 @@ export default function AdminAppCompleto() {
         return base;
       })()
     : MENU_BASE;
-  const MENU = MENU_COM_TURMA.filter(m => canVer(m.id));
+  // o Relatório Financeiro herda a permissão do Caixa (mesma fonte e sensibilidade de dados)
+  const permDoModulo = (id) => id === "relatorio" ? "caixa" : id;
+  const MENU = MENU_COM_TURMA.filter(m => canVer(permDoModulo(m.id)));
 
   const secTitle = (label) => (
     <div style={{ fontSize:18, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:20, display:"flex", alignItems:"center", gap:10 }}>
@@ -5144,7 +5146,7 @@ export default function AdminAppCompleto() {
           {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas idTime={idTime} show={show} readOnly={!canEdit("temporadas")} /></>)}
           {menu === "mensalidades" && (<CrudMensalidades idTime={idTime} show={show} readOnly={!canEdit("mensalidades")}/>)}
           {menu === "caixa"         && (<CrudCaixa idTime={idTime} show={show} readOnly={!canEdit("caixa")}/>)}
-          {menu === "relatorio"     && (<RelatorioFinanceiro idTime={idTime} show={show}/>)}
+          {menu === "relatorio"     && (canVer("caixa") ? <RelatorioFinanceiro idTime={idTime} show={show}/> : <EstadoVazio icone="🔒" titulo="Sem acesso" texto="Você não tem permissão para ver o relatório financeiro. Fale com o responsável pelo time."/>)}
           {menu === "eventos"       && (<CrudEventos idTime={idTime} show={show} readOnly={!canEdit("eventos")}/>)}
           {menu === "tiposmov"      && (<CrudTiposMov idTime={idTime} show={show} readOnly={!canEdit("tiposmov")}/>)}
           {menu === "dicas"         && (<PaginaDicas ehTurmaFechada={ehTurmaFechada}/>)}
