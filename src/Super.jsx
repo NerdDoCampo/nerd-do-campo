@@ -1126,6 +1126,11 @@ const CONFIGS_LABEL = {
     desc:  "Bloqueia TODO o acesso (público e admin) exibindo tela de manutenção",
     icon:  "🔧",
   },
+  "filtro_data_publico_ativo": {
+    label: "Filtro de Data no Público",
+    desc:  "Exibe o filtro de data (temporada ativa) na lista de times do app público",
+    icon:  "📅",
+  },
 };
 
 function ConfigSistema({ show }) {
@@ -2255,7 +2260,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.4.6";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.5.0";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
