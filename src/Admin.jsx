@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.11.3";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.0";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -3713,6 +3713,10 @@ function PaginaDicas({ ehTurmaFechada }) {
     { ic:"📊", t:"Seu time numa vitrine pública", d:"As estatísticas do time ficam numa página que qualquer um acessa pelo celular, sem instalar app. Bom pra mostrar a artilharia e o histórico pra galera." },
     { ic:"👥", t:"Um login, vários times", d:"Se você administra mais de um time com o mesmo e-mail, dá pra alternar entre eles no seletor lá em cima — sem precisar sair e entrar de novo." },
     { ic:"🎂", t:"Idade do jogador automática", d:"Cadastre a data de nascimento e o sistema calcula a idade sozinho na lista de jogadores. Dá até pra ordenar do mais novo ao mais velho." },
+    { ic:"📈", t:"Relatório financeiro com gráficos", d:"Em Financeiro → Relatório você vê tudo consolidado: receitas e despesas por mês, de onde veio cada real e em que saiu. Filtre por temporada ou período e exporte em PDF (pra imprimir) ou Excel. Ótimo pra prestar contas pra galera." },
+    { ic:"📍", t:"Link do local no convite", d:"Ao criar uma partida, encontro ou evento, cole o link do Google Maps no campo de localização. Quando você compartilhar o convite, o link vai junto — a galera toca e o mapa abre direto, sem ninguém perguntar 'onde é?'." },
+    { ic:"📅", t:"Remarcou? É só editar", d:"Mudou o horário, o campo ou a data do jogo? Na ficha da partida, toque em 'Editar dados' e ajuste na hora — sem precisar apagar e cadastrar tudo de novo." },
+    { ic:"🕐", t:"O horário que você digita é o que vale", d:"A hora do jogo aparece igualzinha pra todo mundo, sem confusão de fuso. Se você marcou 19h, todo mundo vê 19h." },
   ];
   const DICAS_TURMA = [
     { ic:"🎽", t:"Turma fechada: times internos", d:"No modo turma fechada, você monta times que se enfrentam entre si (Laranja x Preto) e registra cada rodada do racha." },
@@ -3754,7 +3758,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.4.2" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.11.3" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
