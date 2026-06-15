@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 // ── Supabase ──────────────────────────────────────────────────
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
@@ -2738,7 +2738,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.11.2";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.11.3";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
