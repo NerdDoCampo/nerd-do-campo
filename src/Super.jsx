@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 // ── Supabase ──────────────────────────────────────────────────
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
@@ -1735,6 +1735,8 @@ function CrudMensalidadeTimes({ show }) {
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroNomeMens, setFiltroNomeMens] = useState("");
   const [buscaMens, setBuscaMens] = useState(""); // termo com debounce
+  const [selecionados, setSelecionados] = useState(() => new Set()); // id_time marcados p/ baixa em lote
+  const [salvandoLote, setSalvandoLote] = useState(false);
   const [limiteMens, setLimiteMens] = useState(100);
   const LOTE_MENS = 100;
   const [abaRel, setAbaRel] = useState("mensal");
@@ -1747,9 +1749,65 @@ function CrudMensalidadeTimes({ show }) {
 
   // lista de times: busca no servidor + lote (não afeta os totais, que vêm da RPC)
   const filtroNomeMensQ = buscaMens ? `&nome=ilike.*${encodeURIComponent(buscaMens)}*` : "";
+  // vínculos admin↔time (para filtrar/mostrar o admin de cada time) — relação N:N
+  const { data: vinculosAdmin } = useQuery(() => api.post(`rpc/listar_usuarios_time`, {}), []);
+  // mapa id_time -> lista de emails de admins (exclui superadmin)
+  const mapaAdmins = useMemo(() => {
+    const m = {};
+    (vinculosAdmin||[]).forEach(v => {
+      if (v.role === "superadmin") return;
+      if (!v.id_time || !v.email) return;
+      if (!m[v.id_time]) m[v.id_time] = [];
+      if (!m[v.id_time].includes(v.email)) m[v.id_time].push(v.email);
+    });
+    return m;
+  }, [vinculosAdmin]);
+  const adminsDistintos = useMemo(() => {
+    const s = new Set();
+    (vinculosAdmin||[]).forEach(v => { if (v.role !== "superadmin" && v.email) s.add(v.email); });
+    return [...s].sort();
+  }, [vinculosAdmin]);
+  const [filtroAdmin, setFiltroAdmin] = useState(""); // email do admin selecionado
+  const [buscaTel, setBuscaTel] = useState("");       // número digitado para busca
+  const [telConfirmado, setTelConfirmado] = useState(""); // número efetivamente buscado
+  // só dígitos, para comparar telefones salvos em formatos diferentes
+  const soDigitos = (v) => String(v||"").replace(/\D/g, "");
+  // solicitações (têm telefone + id_time_criado) — segunda trilha
+  const { data: solicitacoes } = useQuery(() => api.get(`solicitacao_time?select=telefone,id_time_criado&id_time_criado=not.is.null`), []);
+  // times com telefone (primeira trilha) — busca sob demanda quando há número confirmado
+  const { data: timesPorTel } = useQuery(() => {
+    const d = soDigitos(telConfirmado);
+    if (d.length < 8) return Promise.resolve([]); // evita busca com número curto demais
+    return api.get(`time?select=id_time,telefone&telefone=not.is.null`);
+  }, [telConfirmado]);
+  // resolve os id_time ligados ao número (união das duas trilhas)
+  const idsPorTelefone = useMemo(() => {
+    const d = soDigitos(telConfirmado);
+    if (d.length < 8) return null;
+    const ids = new Set();
+    // trilha 1: telefone do próprio time
+    (timesPorTel||[]).forEach(t => { if (soDigitos(t.telefone).includes(d) || d.includes(soDigitos(t.telefone))) ids.add(t.id_time); });
+    // trilha 2: telefone na solicitação que originou o time
+    (solicitacoes||[]).forEach(s => { if (s.id_time_criado && (soDigitos(s.telefone).includes(d) || d.includes(soDigitos(s.telefone)))) ids.add(s.id_time_criado); });
+    return ids;
+  }, [telConfirmado, timesPorTel, solicitacoes]);
+  // ids de times do admin selecionado (para buscar direto, sem depender da paginação)
+  const idsDoAdminQ = useMemo(() => {
+    if (!filtroAdmin) return "";
+    const ids = Object.entries(mapaAdmins).filter(([,emails]) => emails.includes(filtroAdmin)).map(([id]) => id);
+    return ids.length ? `&id_time=in.(${ids.join(",")})` : "&id_time=eq.-1"; // -1 = nenhum, evita listar tudo
+  }, [filtroAdmin, mapaAdmins]);
+  // ids por telefone (busca direta também, para não depender da paginação)
+  const idsPorTelQ = useMemo(() => {
+    if (!idsPorTelefone) return "";
+    const ids = [...idsPorTelefone];
+    return ids.length ? `&id_time=in.(${ids.join(",")})` : "&id_time=eq.-1";
+  }, [idsPorTelefone]);
+  const filtroEspecialAtivo = !!(filtroAdmin || (idsPorTelefone));
+
   const { data: times } = useQuery(() =>
-    api.get(`time?select=id_time,nome,nivel_mensalidade,status,observacao_super${filtroNomeMensQ}&order=nome.asc&limit=${limiteMens}`),
-    [buscaMens, limiteMens]
+    api.get(`time?select=id_time,nome,nivel_mensalidade,status,observacao_super${filtroNomeMensQ}${idsDoAdminQ}${idsPorTelQ}&order=nome.asc&limit=${filtroEspecialAtivo ? 1000 : limiteMens}`),
+    [buscaMens, limiteMens, idsDoAdminQ, idsPorTelQ]
   );
   const podeCarregarMaisMens = (times||[]).length >= limiteMens;
 
@@ -1872,6 +1930,58 @@ function CrudMensalidadeTimes({ show }) {
     } catch(e) { show("Erro: " + e.message, "error"); }
   }
 
+  // ── Baixa em lote (agrupamento manual) ──
+  // alterna seleção de um time
+  function toggleSelecao(id_time) {
+    setSelecionados(prev => {
+      const n = new Set(prev);
+      n.has(id_time) ? n.delete(id_time) : n.add(id_time);
+      return n;
+    });
+  }
+  // times elegíveis para baixa (na lista atual, não pagos e não isentos)
+  const elegiveisLote = filtrados.filter(t => t.status !== "pago" && t.status !== "isento");
+  const todosSelecionados = elegiveisLote.length > 0 && elegiveisLote.every(t => selecionados.has(t.id_time));
+  function toggleTodos() {
+    setSelecionados(prev => {
+      if (elegiveisLote.every(t => prev.has(t.id_time))) return new Set(); // desmarca todos
+      return new Set(elegiveisLote.map(t => t.id_time)); // marca todos os elegíveis
+    });
+  }
+  // times selecionados (objetos) e total esperado somado
+  const timesSelec = filtrados.filter(t => selecionados.has(t.id_time) && t.status !== "pago" && t.status !== "isento");
+  const totalSelec = timesSelec.reduce((s,t) => s + (t.pag?.valor_esperado ?? t.esperado), 0);
+
+  async function marcarPagoLote() {
+    if (!timesSelec.length) return;
+    if (!confirm(`Dar baixa em ${timesSelec.length} time(s), cada um pelo seu valor (total ${fmtBRL(totalSelec)})? Mês ${mesSel}/${anoSel}.`)) return;
+    setSalvandoLote(true);
+    const hoje = new Date().toISOString().split("T")[0];
+    let ok = 0, erros = 0;
+    // processa em sequência para não sobrecarregar; cada time pelo SEU valor
+    for (const t of timesSelec) {
+      const esperado = t.pag?.valor_esperado ?? t.esperado;
+      const body = {
+        id_time: t.id_time, mes: mesSel, ano: anoSel, status: "pago",
+        valor_esperado: esperado, valor_pago: esperado,
+        data_pagamento: hoje, atualizado_em: new Date().toISOString(),
+      };
+      try {
+        if (t.pag?.id_mensalidade_time) {
+          await api.patch(`mensalidade_time?id_mensalidade_time=eq.${t.pag.id_mensalidade_time}`, body);
+        } else {
+          await api.post(`mensalidade_time`, body);
+        }
+        ok++;
+      } catch(e) { erros++; }
+    }
+    setSalvandoLote(false);
+    setSelecionados(new Set());
+    reloadPag();
+    if (erros === 0) show(`${ok} time(s) baixados com sucesso ✅`);
+    else show(`${ok} baixados, ${erros} com erro. Verifique os que faltaram.`, erros < ok ? "info" : "error");
+  }
+
   // Inadimplentes — times com 2+ meses em aberto
   const inadimplentes = (times||[]).map(t => {
     const debitos = (todasMensTimes||[]).filter(m =>
@@ -1939,14 +2049,48 @@ function CrudMensalidadeTimes({ show }) {
       {/* Tabela */}
       <Card style={{ padding:0, overflow:"hidden" }}>
         <div style={{ padding:"14px 16px", borderBottom:`1px solid ${C.border}` }}>
-          <input
-            value={filtroNomeMens}
-            onChange={e => setFiltroNomeMens(e.target.value)}
-            placeholder="🔍 Filtrar por nome do time"
-            style={{ width:"100%", maxWidth:420, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 14px", outline:"none" }}
-          />
-          {filtroNomeMens && (
-            <span style={{ marginLeft:12, fontSize:12, color:C.dim }}>{filtrados.length} resultado(s)</span>
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+            <input
+              value={filtroNomeMens}
+              onChange={e => setFiltroNomeMens(e.target.value)}
+              placeholder="🔍 Filtrar por nome do time"
+              style={{ flex:"1 1 280px", minWidth:200, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 14px", outline:"none" }}
+            />
+            <select value={filtroAdmin} onChange={e => { setFiltroAdmin(e.target.value); setSelecionados(new Set()); }}
+              style={{ background:C.surf2, border:`1px solid ${filtroAdmin?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", outline:"none", cursor:"pointer", maxWidth:280 }}>
+              <option value="">👤 Todos os admins</option>
+              {adminsDistintos.map(em => <option key={em} value={em}>{em}</option>)}
+            </select>
+            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+              <input
+                value={buscaTel}
+                onChange={e => setBuscaTel(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") { setTelConfirmado(buscaTel); setSelecionados(new Set()); } }}
+                placeholder="📱 Buscar por telefone"
+                style={{ width:180, background:C.surf2, border:`1px solid ${telConfirmado?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", outline:"none" }}
+              />
+              <Btn variant="secondary" style={{ fontSize:12, padding:"8px 12px" }}
+                onClick={() => { setTelConfirmado(buscaTel); setSelecionados(new Set()); }}>Buscar</Btn>
+              {telConfirmado && (
+                <Btn variant="secondary" style={{ fontSize:12, padding:"8px 10px" }}
+                  onClick={() => { setBuscaTel(""); setTelConfirmado(""); }}>✕</Btn>
+              )}
+            </div>
+          </div>
+          {telConfirmado && idsPorTelefone && (
+            <div style={{ marginTop:10, fontSize:12, color: idsPorTelefone.size > 0 ? C.gold : C.loss }}>
+              {idsPorTelefone.size > 0
+                ? <>📱 {filtrados.length} time(s) ligado(s) ao telefone <b>{telConfirmado}</b> (pelo cadastro do time ou pela solicitação de origem).</>
+                : <>Nenhum time encontrado com o telefone <b>{telConfirmado}</b>. O número pode não estar cadastrado em nenhum time nem solicitação.</>}
+            </div>
+          )}
+          {filtroAdmin && (
+            <div style={{ marginTop:10, fontSize:12, color:C.gold }}>
+              📋 Mostrando os {filtrados.length} time(s) de <b>{filtroAdmin}</b> — marque e dê baixa em lote.
+            </div>
+          )}
+          {filtroNomeMens && !filtroAdmin && (
+            <span style={{ marginLeft:0, fontSize:12, color:C.dim }}>{filtrados.length} resultado(s)</span>
           )}
           {filtroStatus !== "todos" && podeCarregarMaisMens && (
             <span style={{ marginLeft:12, fontSize:11, color:C.gold }}>
@@ -1955,8 +2099,28 @@ function CrudMensalidadeTimes({ show }) {
           )}
         </div>
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+          {timesSelec.length > 0 && (
+            <caption style={{ captionSide:"top", padding:0 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10, background:C.gold+"18", border:`1px solid ${C.gold}55`, borderRadius:10, padding:"12px 16px", marginBottom:10 }}>
+                <div style={{ fontSize:13, color:C.cream, textAlign:"left" }}>
+                  <b style={{ color:C.gold }}>{timesSelec.length} time(s) selecionado(s)</b> · total esperado <b>{fmtBRL(totalSelec)}</b>
+                  <div style={{ fontSize:11, color:C.dim, marginTop:2 }}>Cada time será baixado pelo seu próprio valor, no mês {mesSel}/{anoSel}.</div>
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <Btn variant="secondary" style={{ fontSize:12, padding:"6px 12px" }} onClick={() => setSelecionados(new Set())}>Limpar</Btn>
+                  <Btn style={{ fontSize:12, padding:"6px 14px", background:C.win, color:"white" }} onClick={marcarPagoLote} disabled={salvandoLote}>
+                    {salvandoLote ? "Dando baixa..." : `✅ Dar baixa em ${timesSelec.length}`}
+                  </Btn>
+                </div>
+              </div>
+            </caption>
+          )}
           <thead><tr style={{ background:C.surf2 }}>
-            {["Time","Nível","Status","Esperado","Pago","Comprovante","Ações"].map(h => (
+            <th style={{ padding:"10px 14px", width:36 }}>
+              <input type="checkbox" checked={todosSelecionados} onChange={toggleTodos} title="Selecionar todos os não pagos"
+                style={{ cursor:"pointer", width:16, height:16 }}/>
+            </th>
+            {["Time","Admin","Nível","Status","Esperado","Pago","Comprovante","Ações"].map(h => (
               <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>{h}</th>
             ))}
           </tr></thead>
@@ -1966,8 +2130,19 @@ function CrudMensalidadeTimes({ show }) {
               const esperado = t.pag?.valor_esperado ?? t.esperado;
               const pago = t.pag?.valor_pago || 0;
               return (
-                <tr key={t.id_time} style={{ background:i%2===0?C.surface:C.bg }}>
+                <tr key={t.id_time} style={{ background: selecionados.has(t.id_time) ? C.gold+"18" : (i%2===0?C.surface:C.bg) }}>
+                  <td style={{ padding:"11px 14px", textAlign:"center" }}>
+                    {(t.status !== "pago" && t.status !== "isento")
+                      ? <input type="checkbox" checked={selecionados.has(t.id_time)} onChange={() => toggleSelecao(t.id_time)}
+                          style={{ cursor:"pointer", width:16, height:16 }}/>
+                      : null}
+                  </td>
                   <td style={{ padding:"11px 14px", fontWeight:700, color:C.cream }}>{t.nome}</td>
+                  <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{(() => {
+                    const admins = mapaAdmins[t.id_time] || [];
+                    if (admins.length === 0) return <span style={{ color:C.dim }}>—</span>;
+                    return <span title={admins.join(", ")}>{admins[0]}{admins.length > 1 ? <b style={{ color:C.gold }}> +{admins.length-1}</b> : ""}</span>;
+                  })()}</td>
                   <td style={{ padding:"11px 14px", color:C.dim }}>Nível {t.nivel_mensalidade||1}</td>
                   <td style={{ padding:"11px 14px" }}>
                     <span style={{ background:cfg.cor+"22", color:cfg.cor, border:`1px solid ${cfg.cor}44`, borderRadius:6, padding:"2px 10px", fontSize:11, fontWeight:700 }}>
@@ -2563,7 +2738,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.10.2";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.11.3";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
