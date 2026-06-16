@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.12.0";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.18.5";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -78,6 +78,18 @@ async function sbAuth(path, body) {
   return res.json();
 }
 
+// Busca o usuário atual a partir do access_token (usado ao reidratar após refresh da página).
+async function buscarUsuarioAtual() {
+  if (!SESSION_TOKEN) return null;
+  try {
+    const res = await fetch(`${URL}/auth/v1/user`, {
+      headers: { apikey: ANON, Authorization: `Bearer ${SESSION_TOKEN}` },
+    });
+    if (!res.ok) return null;
+    return await res.json(); // { id, email, ... }
+  } catch (e) { return null; }
+}
+
 // Renova o access_token usando o refresh_token. Retorna true se renovou.
 async function renovarToken() {
   if (!REFRESH_TOKEN) return false;
@@ -98,6 +110,7 @@ function encerrarSessao() {
   SESSION_TOKEN = null; REFRESH_TOKEN = null;
   sessionStorage.removeItem("ndc_token");
   sessionStorage.removeItem("ndc_refresh");
+  sessionStorage.removeItem("ndc_id_time");
   window.dispatchEvent(new CustomEvent("ndc-sessao-expirada"));
 }
 
@@ -2976,7 +2989,70 @@ function TourBoasVindas({ ehTurmaFechada, onFechar, onIr }) {
   );
 }
 
-function PaginaInicio({ dados, onNavegar }) {
+// ── Aniversariantes do mês (e do próximo, nos últimos 5 dias) ──
+function AniversariantesDoMes({ idTime }) {
+  const { data: jogadores } = useQuery(
+    () => idTime ? api.get(`jogador?id_time=eq.${idTime}&id_jogador=gt.0&data_fim=is.null&data_nascimento=not.is.null&select=id_jogador,nome,apelido,camisa,foto_url,data_nascimento`) : Promise.resolve([]),
+    [idTime]
+  );
+
+  const hoje = new Date();
+  const diaHoje = hoje.getDate();
+  const mesAtual = hoje.getMonth() + 1; // 1-12
+  // último dia do mês atual
+  const ultimoDiaMes = new Date(hoje.getFullYear(), mesAtual, 0).getDate();
+  const estaNosUltimos5 = (ultimoDiaMes - diaHoje) < 5; // faltam menos de 5 dias p/ acabar o mês
+  const proxMes = mesAtual === 12 ? 1 : mesAtual + 1;
+  const nomesMes = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+
+  // extrai dia/mês do nascimento (YYYY-MM-DD), ignorando ano e fuso
+  function diaMes(dn) {
+    const [, m, d] = (dn || "").split("-").map(Number);
+    return { dia: d, mes: m };
+  }
+  // monta a lista: mês atual sempre; próximo mês só nos últimos 5 dias
+  const mesesMostrar = estaNosUltimos5 ? [mesAtual, proxMes] : [mesAtual];
+
+  const lista = (jogadores || [])
+    .map(j => ({ ...j, ...diaMes(j.data_nascimento) }))
+    .filter(j => mesesMostrar.includes(j.mes))
+    .sort((a, b) => (a.mes - b.mes) || (a.dia - b.dia));
+
+  if (!jogadores) return null;           // ainda carregando
+  if (lista.length === 0) return null;   // ninguém faz aniversário no período: não ocupa espaço
+
+  const ehHoje = (j) => j.dia === diaHoje && j.mes === mesAtual;
+
+  return (
+    <Card style={{ padding:20, marginBottom:20 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+        <span style={{ fontSize:22 }}>🎂</span>
+        <div style={{ fontSize:15, fontWeight:800, color:C.cream }}>
+          Aniversariantes {estaNosUltimos5 ? <span style={{ color:C.dim, fontWeight:600, fontSize:13 }}>de {nomesMes[mesAtual-1]} e {nomesMes[proxMes-1]}</span> : <span style={{ color:C.dim, fontWeight:600, fontSize:13 }}>de {nomesMes[mesAtual-1]}</span>}
+        </div>
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {lista.map(j => (
+          <div key={j.id_jogador} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 10px", borderRadius:8, background: ehHoje(j) ? C.gold+"22" : "transparent", border: ehHoje(j) ? `1px solid ${C.gold}55` : "1px solid transparent" }}>
+            <div style={{ width:36, height:36, borderRadius:"50%", background:C.surf2, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", overflow:"hidden", fontSize:16 }}>
+              {j.foto_url ? <img src={j.foto_url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}/> : "👤"}
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:C.cream, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                {j.apelido || j.nome}{j.camisa ? <span style={{ color:C.dim, fontWeight:400 }}> · #{j.camisa}</span> : ""}
+              </div>
+              <div style={{ fontSize:12, color: ehHoje(j) ? C.gold : C.dim }}>
+                {String(j.dia).padStart(2,"0")}/{String(j.mes).padStart(2,"0")} {ehHoje(j) ? "🎉 é hoje!" : `· ${nomesMes[j.mes-1]}`}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function PaginaInicio({ dados, onNavegar, idTime }) {
   const { cidades, campos, posicoes, adversarios, jogadores, temporadas, partidas, ehTurmaFechada, timesInternos, encontros } = dados;
 
   const etapas = ehTurmaFechada ? [
@@ -3118,6 +3194,9 @@ function PaginaInicio({ dados, onNavegar }) {
           </div>
         )}
       </Card>
+
+      {/* Aniversariantes do mês */}
+      <AniversariantesDoMes idTime={idTime} />
 
       {/* Dica de importação */}
       <Card style={{ padding:"14px 20px", background:C.surf2, border:`1px solid ${C.gold}44`, display:"flex", gap:14, alignItems:"flex-start" }}>
@@ -3960,6 +4039,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
   function origemLabel(m) {
     if (m.origem==="mensalidade") return "💰 Mensalidade";
     if (m.origem==="evento") return `🎉 ${m.evento?.nome || "Evento"}`;
+    if (m.origem==="venda_evento") return `🎟️ ${m.evento?.nome || "Venda de cartões"}`;
     if (m.origem==="partida") return `📅 vs ${m.partida?.adversario?.nome || "Adversário"}`;
     return m.origem;
   }
@@ -3967,6 +4047,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
   function origemTexto(m) {
     if (m.origem==="mensalidade") return "Mensalidade";
     if (m.origem==="evento") return `Evento: ${m.evento?.nome || ""}`;
+    if (m.origem==="venda_evento") return `Venda de cartões: ${m.evento?.nome || ""}`;
     if (m.origem==="partida") return `Partida vs ${m.partida?.adversario?.nome || ""}`;
     return m.origem;
   }
@@ -4455,6 +4536,478 @@ function RelatorioFinanceiro({ idTime, show }) {
   );
 }
 
+// ── Gestão de vendedores de um evento (venda por quantidade) ──
+// Fases 2 e 3: controle de quem vendeu quanto, meta, complemento e status.
+// NÃO mexe no caixa (isso é a Fase 4).
+function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
+  const valorUnit = Number(evento.valor_unitario || 0);
+  const metaPadrao = Number(evento.meta_padrao || 0);
+  const eventoEncerrado = evento.status === "encerrado";
+
+  const { data: vendedores, reload } = useQuery(
+    () => api.get(`evento_vendedor?id_evento=eq.${evento.id_evento}&select=*&order=id_evento_vendedor.asc`),
+    [evento.id_evento]
+  );
+  // atletas do time (para o seletor) — ativos
+  const { data: jogadores } = useQuery(
+    () => api.get(`jogador?id_time=eq.${idTime}&id_jogador=gt.0&data_fim=is.null&select=id_jogador,nome,apelido,camisa&order=nome.asc`),
+    [idTime]
+  );
+
+  const [novoTipo, setNovoTipo] = useState("atleta"); // atleta | convidado
+  const [novoJogador, setNovoJogador] = useState("");
+  const [novoNome, setNovoNome] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const lista = vendedores || [];
+  const mapaJog = {};
+  (jogadores || []).forEach(j => { mapaJog[j.id_jogador] = j; });
+
+  // nome de exibição de um vendedor
+  function nomeVend(v) {
+    if (v.nome_convidado) return v.nome_convidado;
+    const j = mapaJog[v.id_jogador];
+    if (j) return j.apelido || j.nome;
+    if (v.id_jogador) return "Atleta"; // ainda carregando o nome
+    return "(vendedor removido)"; // atleta apagado do banco: linha órfã, admin ajusta
+  }
+  // valores derivados de um vendedor
+  function calc(v) {
+    const arrecadadoVenda = Number(v.vendidos || 0) * valorUnit;
+    const complemento = Number(v.complemento || 0);
+    const metaValor = Number(v.meta_unidades || 0) * valorUnit;
+    const entregue = arrecadadoVenda + complemento;
+    const faltante = metaValor > 0 ? Math.max(0, metaValor - entregue) : 0;
+    return { arrecadadoVenda, complemento, metaValor, entregue, faltante };
+  }
+
+  // totais do topo
+  const tot = lista.reduce((acc, v) => {
+    const c = calc(v);
+    acc.cartoes += Number(v.vendidos || 0);
+    acc.arrecadado += c.entregue;
+    if (Number(v.meta_unidades || 0) > 0 && c.faltante === 0) acc.bateram += 1;
+    if (v.status === "aberto") acc.abertos += 1;
+    return acc;
+  }, { cartoes: 0, arrecadado: 0, bateram: 0, abertos: 0 });
+
+  async function adicionar() {
+    if (novoTipo === "atleta") {
+      if (!novoJogador) { show("Escolha um atleta.", "error"); return; }
+      if (lista.some(v => String(v.id_jogador) === String(novoJogador))) { show("Esse atleta já está na lista.", "error"); return; }
+    } else {
+      const nome = novoNome.trim();
+      if (!nome) { show("Informe o nome do convidado.", "error"); return; }
+      if (lista.some(v => (v.nome_convidado || "").toLowerCase() === nome.toLowerCase())) { show("Já existe um convidado com esse nome neste evento.", "error"); return; }
+    }
+    setSalvando(true);
+    try {
+      const body = {
+        id_evento: evento.id_evento, id_time: idTime,
+        id_jogador: novoTipo === "atleta" ? Number(novoJogador) : null,
+        nome_convidado: novoTipo === "convidado" ? novoNome.trim() : null,
+        meta_unidades: metaPadrao, vendidos: 0, complemento: 0, status: "aberto",
+      };
+      await api.post("evento_vendedor", body);
+      setNovoJogador(""); setNovoNome("");
+      reload();
+    } catch (e) { show("Erro ao adicionar: " + e.message, "error"); }
+    finally { setSalvando(false); }
+  }
+
+  // adiciona de uma vez todos os atletas ativos que ainda não estão na lista
+  async function adicionarTodos() {
+    const faltantes = (jogadores || []).filter(j => !lista.some(v => String(v.id_jogador) === String(j.id_jogador)));
+    if (faltantes.length === 0) { show("Todos os atletas ativos já estão na lista."); return; }
+    if (!confirm(`Adicionar ${faltantes.length} atleta(s) ativo(s) à lista de vendedores, cada um com meta ${metaPadrao} un.?`)) return;
+    setSalvando(true);
+    try {
+      const corpo = faltantes.map(j => ({
+        id_evento: evento.id_evento, id_time: idTime,
+        id_jogador: j.id_jogador, nome_convidado: null,
+        meta_unidades: metaPadrao, vendidos: 0, complemento: 0, status: "aberto",
+      }));
+      await api.post("evento_vendedor", corpo); // PostgREST aceita array = insert em lote
+      reload();
+      show(`${faltantes.length} atleta(s) adicionado(s).`);
+    } catch (e) { show("Erro ao adicionar em massa: " + e.message, "error"); }
+    finally { setSalvando(false); }
+  }
+
+  async function atualizarCampo(v, campo, valor) {
+    try {
+      await api.patch(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`, { [campo]: valor, atualizado_em: new Date().toISOString() });
+      reload();
+    } catch (e) { show("Erro ao atualizar: " + e.message, "error"); }
+  }
+
+  // ── Fase 4: integração com o caixa ──
+  // Espelha o padrão da mensalidade: acertar gera receita; reabrir remove.
+  // O vínculo id_evento_vendedor permite achar/atualizar/remover o lançamento certo.
+  function montarObservacaoVenda(v) {
+    const c = calc(v);
+    const partes = [`${Number(v.vendidos||0)} cartões`];
+    if (c.complemento > 0) partes.push(`+ ${fmtMoeda(c.complemento)} complemento`);
+    let obs = `Venda de cartões — ${evento.nome} — ${nomeVend(v)} (${partes.join(" ")})`;
+    if (c.faltante > 0) obs += ` — faltaram ${fmtMoeda(c.faltante)}`;
+    return obs;
+  }
+  async function lancarReceitaVendedor(v) {
+    const c = calc(v);
+    // acha (ou cria) o lançamento de receita vinculado a este vendedor
+    const existentes = await api.get(`movimento_caixa?id_evento_vendedor=eq.${v.id_evento_vendedor}&select=id_movimento`);
+    const temMov = existentes && existentes.length > 0;
+    // tipo de receita "Venda de cartões": busca; se não existir no time, cria na hora
+    let idTipo = null;
+    try {
+      const tEspec = await api.get(`tipo_movimento?id_time=eq.${idTime}&natureza=eq.receita&descricao=eq.${encodeURIComponent("Venda de cartões")}&select=id_tipo_movimento&limit=1`);
+      idTipo = tEspec?.[0]?.id_tipo_movimento || null;
+      if (!idTipo) {
+        const criado = await api.post(`tipo_movimento`, { descricao:"Venda de cartões", natureza:"receita", status:"Ativo", id_time: idTime });
+        idTipo = Array.isArray(criado) ? criado?.[0]?.id_tipo_movimento : criado?.id_tipo_movimento;
+      }
+    } catch(e) { idTipo = null; } // se falhar, lança sem categoria (não bloqueia a receita)
+    const body = {
+      id_time: idTime, id_tipo_movimento: idTipo, natureza: "receita",
+      valor: c.entregue,
+      data_movimento: evento.data_evento || new Date().toISOString().split("T")[0],
+      observacao: montarObservacaoVenda(v),
+      origem: "venda_evento", id_evento: evento.id_evento, id_evento_vendedor: v.id_evento_vendedor,
+      registrado_por: emailUsuarioLogado(),
+    };
+    if (temMov) await api.patch(`movimento_caixa?id_evento_vendedor=eq.${v.id_evento_vendedor}`, body);
+    else await api.post(`movimento_caixa`, body);
+  }
+  async function removerReceitaVendedor(v) {
+    await api.delete(`movimento_caixa?id_evento_vendedor=eq.${v.id_evento_vendedor}`);
+  }
+
+  async function acertar(v) {
+    const c = calc(v);
+    let msg = `Acertar ${nomeVend(v)}?\n\nEntra ${fmtMoeda(c.entregue)} no caixa do time.`;
+    if (c.faltante > 0) msg += `\n\n(Meta de ${fmtMoeda(c.metaValor)} — faltaram ${fmtMoeda(c.faltante)}. Você pode acertar mesmo assim.)`;
+    if (!confirm(msg)) return;
+    try {
+      // 1º lança no caixa; só marca acertado se o lançamento der certo (transacional)
+      await lancarReceitaVendedor(v);
+      await api.patch(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`, { status:"acertado", atualizado_em: new Date().toISOString() });
+      reload();
+      show(`${nomeVend(v)}: acertado e lançado no caixa ✅`);
+    } catch (e) {
+      // o caixa falhou: o status permanece "aberto", sem inconsistência.
+      // tenta desfazer um eventual lançamento parcial, por garantia.
+      try { await removerReceitaVendedor(v); } catch(_) {}
+      reload();
+      show("Não foi possível lançar no caixa — o vendedor continua em aberto. Tente de novo.", "error");
+    }
+  }
+  async function reabrir(v) {
+    if (!confirm(`Reabrir ${nomeVend(v)}?\n\nO lançamento de ${fmtMoeda(calc(v).entregue)} será removido do caixa.`)) return;
+    try {
+      await removerReceitaVendedor(v);
+      await api.patch(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`, { status:"aberto", atualizado_em: new Date().toISOString() });
+      reload();
+      show(`${nomeVend(v)}: reaberto`);
+    } catch (e) {
+      reload();
+      show("Não foi possível reabrir/remover do caixa. Verifique o financeiro.", "error");
+    }
+  }
+  async function remover(v) {
+    if (v.status === "acertado") { show("Reabra o vendedor antes de remover.", "error"); return; }
+    if (!confirm(`Remover ${nomeVend(v)} deste evento?`)) return;
+    try {
+      await api.delete(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`);
+      reload();
+    } catch (e) { show("Erro ao remover: " + e.message, "error"); }
+  }
+
+  return (
+    <Modal title={`Vendedores — ${evento.nome}`} onClose={onClose}>
+      <div style={{ display:"flex", flexDirection:"column", gap:14, minWidth:0 }}>
+        {/* Totais */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10 }}>
+          <div style={{ background:C.surf2, borderRadius:8, padding:"10px 12px" }}>
+            <div style={{ fontSize:11, color:C.dim }}>Unidades vendidas</div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.cream }}>{tot.cartoes}</div>
+          </div>
+          <div style={{ background:C.surf2, borderRadius:8, padding:"10px 12px" }}>
+            <div style={{ fontSize:11, color:C.dim }}>Arrecadado</div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.win }}>{fmtMoeda(tot.arrecadado)}</div>
+          </div>
+          <div style={{ background:C.surf2, borderRadius:8, padding:"10px 12px" }}>
+            <div style={{ fontSize:11, color:C.dim }}>Bateram a meta</div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.cream }}>{tot.bateram}</div>
+          </div>
+          <div style={{ background:C.surf2, borderRadius:8, padding:"10px 12px" }}>
+            <div style={{ fontSize:11, color:C.dim }}>Em aberto</div>
+            <div style={{ fontSize:18, fontWeight:800, color: tot.abertos>0?C.gold:C.cream }}>{tot.abertos}</div>
+          </div>
+        </div>
+        <div style={{ fontSize:12, color:C.dim }}>Valor por unidade: <b style={{ color:C.cream }}>{fmtMoeda(valorUnit)}</b>{metaPadrao>0 && <> · Meta padrão: <b style={{ color:C.cream }}>{metaPadrao} un.</b></>}</div>
+
+        {/* Adicionar vendedor */}
+        {!readOnly && !eventoEncerrado && (
+          <div style={{ background:C.surf2, borderRadius:8, padding:12, display:"flex", flexDirection:"column", gap:10 }}>
+            <div style={{ display:"flex", gap:8 }}>
+              <button onClick={()=>setNovoTipo("atleta")} style={{ flex:1, padding:"7px", borderRadius:6, border:`1px solid ${novoTipo==="atleta"?C.gold:C.border}`, background: novoTipo==="atleta"?C.gold+"22":"transparent", color:C.cream, fontFamily:"inherit", fontSize:13, fontWeight:700, cursor:"pointer" }}>Atleta</button>
+              <button onClick={()=>setNovoTipo("convidado")} style={{ flex:1, padding:"7px", borderRadius:6, border:`1px solid ${novoTipo==="convidado"?C.gold:C.border}`, background: novoTipo==="convidado"?C.gold+"22":"transparent", color:C.cream, fontFamily:"inherit", fontSize:13, fontWeight:700, cursor:"pointer" }}>Convidado</button>
+            </div>
+            {novoTipo === "atleta" ? (
+              <Select label="" value={novoJogador} onChange={e=>setNovoJogador(e.target.value)}>
+                <option value="">Selecione o atleta…</option>
+                {(jogadores||[]).filter(j => !lista.some(v => String(v.id_jogador)===String(j.id_jogador))).map(j => (
+                  <option key={j.id_jogador} value={j.id_jogador}>{j.apelido || j.nome}{j.camisa?` (#${j.camisa})`:""}</option>
+                ))}
+              </Select>
+            ) : (
+              <Input label="" placeholder="Nome do convidado" value={novoNome} onChange={e=>setNovoNome(e.target.value)}/>
+            )}
+            <Btn onClick={adicionar} disabled={salvando}>{salvando?"Adicionando…":"+ Adicionar vendedor"}</Btn>
+            {novoTipo === "atleta" && (
+              <Btn variant="secondary" onClick={adicionarTodos} disabled={salvando} style={{ fontSize:13 }}>
+                ⊕ Adicionar todos os atletas ativos
+              </Btn>
+            )}
+          </div>
+        )}
+
+        {/* Lista de vendedores */}
+        {lista.length === 0 ? (
+          <div style={{ textAlign:"center", color:C.dim, fontSize:13, padding:"20px 0" }}>Nenhum vendedor ainda. Adicione atletas ou convidados acima.</div>
+        ) : lista.map(v => {
+          const c = calc(v);
+          const acertado = v.status === "acertado";
+          const travado = acertado || readOnly || eventoEncerrado;
+          return (
+            <div key={v.id_evento_vendedor} style={{ border:`1px solid ${acertado?C.win+"55":C.border}`, borderRadius:8, padding:12, background: acertado?C.win+"11":"transparent" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:8 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:C.cream }}>
+                  {nomeVend(v)}
+                  {v.nome_convidado && <span style={{ fontSize:11, color:C.gold, marginLeft:6 }}>convidado</span>}
+                  {acertado && <span style={{ fontSize:11, color:C.win, marginLeft:6 }}>✅ acertado</span>}
+                </div>
+                <div style={{ fontSize:15, fontWeight:800, color:C.win }}>{fmtMoeda(c.entregue)}</div>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:8 }}>
+                <div>
+                  <div style={{ fontSize:10, color:C.dim, marginBottom:2 }}>Vendidos</div>
+                  <input key={`vend-${v.id_evento_vendedor}-${v.vendidos}-${v.status}`} type="number" min="0" step="1" disabled={travado} defaultValue={v.vendidos||0}
+                    onBlur={e=>{ const n=Number(e.target.value)||0; if(n!==Number(v.vendidos||0)) atualizarCampo(v,"vendidos",n); }}
+                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px", outline:"none" }}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:10, color:C.dim, marginBottom:2 }}>Meta (un.)</div>
+                  <input key={`meta-${v.id_evento_vendedor}-${v.meta_unidades}-${v.status}`} type="number" min="0" step="1" disabled={travado} defaultValue={v.meta_unidades||0}
+                    onBlur={e=>{ const n=Number(e.target.value)||0; if(n!==Number(v.meta_unidades||0)) atualizarCampo(v,"meta_unidades",n); }}
+                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px", outline:"none" }}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:10, color:C.dim, marginBottom:2 }}>Complemento (R$)</div>
+                  <input key={`comp-${v.id_evento_vendedor}-${v.complemento}-${v.status}`} type="number" min="0" step="0.01" disabled={travado} defaultValue={v.complemento||0}
+                    onBlur={e=>{ const n=Number(e.target.value)||0; if(n!==Number(v.complemento||0)) atualizarCampo(v,"complemento",n); }}
+                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px", outline:"none" }}/>
+                </div>
+              </div>
+              {/* linha informativa de meta/faltante */}
+              <div style={{ fontSize:11, color:C.dim, marginBottom: travado&&!acertado?0:8 }}>
+                {c.metaValor>0
+                  ? <>Venda {fmtMoeda(c.arrecadadoVenda)} + complemento {fmtMoeda(c.complemento)} · meta {fmtMoeda(c.metaValor)}{c.faltante>0 ? <span style={{ color:C.loss }}> · faltam {fmtMoeda(c.faltante)}</span> : <span style={{ color:C.win }}> · meta ok</span>}</>
+                  : <>Venda {fmtMoeda(c.arrecadadoVenda)} + complemento {fmtMoeda(c.complemento)} · sem meta</>}
+              </div>
+              {/* ações */}
+              {!readOnly && !eventoEncerrado && (
+                <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                  {!acertado && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>remover(v)}>Remover</Btn>}
+                  {acertado
+                    ? <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>reabrir(v)}>🔓 Reabrir</Btn>
+                    : <Btn style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>acertar(v)}>Acertar</Btn>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <div style={{ display:"flex", justifyContent:"flex-end" }}>
+          <Btn variant="secondary" onClick={onClose}>Fechar</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+
+// ── Relatório de vendas do evento (fase 5, só-leitura) ──
+// Retrato das vendas por vendedor. Lê evento_vendedor; NÃO olha o caixa.
+function RelatorioVendas({ evento, idTime, onClose }) {
+  const valorUnit = Number(evento.valor_unitario || 0);
+  const { data: vendedores } = useQuery(
+    () => api.get(`evento_vendedor?id_evento=eq.${evento.id_evento}&select=*&order=id_evento_vendedor.asc`),
+    [evento.id_evento]
+  );
+  const { data: jogadores } = useQuery(
+    () => api.get(`jogador?id_time=eq.${idTime}&id_jogador=gt.0&select=id_jogador,nome,apelido,camisa&order=nome.asc`),
+    [idTime]
+  );
+  const [ordem, setOrdem] = useState("nome"); // nome | vendidos | arrecadado | status
+
+  const mapaJog = {};
+  (jogadores || []).forEach(j => { mapaJog[j.id_jogador] = j; });
+  function nomeVend(v) {
+    if (v.nome_convidado) return v.nome_convidado;
+    const j = mapaJog[v.id_jogador];
+    if (j) return j.apelido || j.nome;
+    if (v.id_jogador) return "Atleta";
+    return "(removido)";
+  }
+  function calc(v) {
+    const venda = Number(v.vendidos || 0) * valorUnit;
+    const complemento = Number(v.complemento || 0);
+    const metaValor = Number(v.meta_unidades || 0) * valorUnit;
+    const entregue = venda + complemento;
+    const faltante = metaValor > 0 ? Math.max(0, metaValor - entregue) : 0;
+    const bateu = metaValor > 0 && faltante === 0;
+    return { venda, complemento, metaValor, entregue, faltante, bateu };
+  }
+
+  const linhas = (vendedores || []).map(v => ({ v, nome: nomeVend(v), ...calc(v) }));
+  const ordenadas = [...linhas].sort((a, b) => {
+    if (ordem === "vendidos") return Number(b.v.vendidos||0) - Number(a.v.vendidos||0);
+    if (ordem === "arrecadado") return b.entregue - a.entregue;
+    if (ordem === "status") return (a.v.status||"").localeCompare(b.v.status||"");
+    return a.nome.localeCompare(b.nome);
+  });
+
+  const tot = linhas.reduce((acc, l) => {
+    acc.cartoes += Number(l.v.vendidos || 0);
+    acc.venda += l.venda;
+    acc.complemento += l.complemento;
+    acc.entregue += l.entregue;
+    if (Number(l.v.meta_unidades||0) > 0) { acc.comMeta += 1; if (l.bateu) acc.bateram += 1; }
+    if (l.v.status === "acertado") acc.acertados += 1; else acc.abertos += 1;
+    return acc;
+  }, { cartoes:0, venda:0, complemento:0, entregue:0, comMeta:0, bateram:0, acertados:0, abertos:0 });
+
+  const dataStr = evento.data_evento ? new Date(evento.data_evento+"T12:00:00").toLocaleDateString("pt-BR") : "sem data";
+
+  function exportarCSV() {
+    if (!linhas.length) return;
+    const cols = ["Vendedor","Tipo","Vendidos","Venda(R$)","Complemento(R$)","Meta(un)","Meta(R$)","Entregue(R$)","Falta(R$)","Status"];
+    const esc = (x) => `"${String(x).replace(/"/g,'""')}"`;
+    const fmt = (n) => Number(n).toFixed(2).replace(".",",");
+    const rows = ordenadas.map(l => [
+      l.nome, l.v.nome_convidado ? "convidado" : "atleta",
+      l.v.vendidos||0, fmt(l.venda), fmt(l.complemento),
+      l.v.meta_unidades||0, fmt(l.metaValor), fmt(l.entregue),
+      fmt(l.faltante), l.v.status,
+    ]);
+    const csv = [cols.join(";"), ...rows.map(r => r.map(esc).join(";"))].join("\n");
+    const blob = new Blob(["\ufeff"+csv], { type:"text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `vendas-${(evento.nome||"evento").replace(/\s+/g,"-")}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  }
+  function exportarPDF() { window.print(); }
+
+  const Th = ({ children, k, alin }) => (
+    <th onClick={k?()=>setOrdem(k):undefined}
+      style={{ padding:"8px 10px", textAlign: alin||"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700, cursor:k?"pointer":"default", whiteSpace:"nowrap" }}>
+      {children}{k && ordem===k ? " ▾" : ""}
+    </th>
+  );
+
+  return (
+    <Modal title="" onClose={onClose}>
+      <div className="rel-vendas">
+        <style>{`
+          @media print {
+            body * { visibility: hidden; }
+            .rel-vendas, .rel-vendas * { visibility: visible; }
+            .rel-vendas { position:absolute; left:0; top:0; width:100%; padding:20px; background:#fff !important; color:#000 !important; }
+            .rel-vendas .no-print { display:none !important; }
+            .rel-vendas .clr { color:#000 !important; }
+            .rel-vendas table { color:#000 !important; }
+          }
+        `}</style>
+
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:10, marginBottom:16 }}>
+          <div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.cream }} className="clr">Relatório de vendas</div>
+            <div style={{ fontSize:13, color:C.dim }} className="clr">{evento.nome} · {dataStr} · {fmtMoeda(valorUnit)}/unidade</div>
+          </div>
+          <div style={{ display:"flex", gap:8 }} className="no-print">
+            <Btn variant="secondary" onClick={exportarCSV}>⬇ CSV</Btn>
+            <Btn onClick={exportarPDF}>🖨️ PDF</Btn>
+          </div>
+        </div>
+
+        {/* Totais */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))", gap:10, marginBottom:16 }}>
+          {[
+            { l:"Unidades", v:tot.cartoes, c:C.cream },
+            { l:"Arrecadado", v:fmtMoeda(tot.entregue), c:C.win },
+            { l:"Sendo venda", v:fmtMoeda(tot.venda), c:C.cream },
+            { l:"Complementos", v:fmtMoeda(tot.complemento), c:C.cream },
+            { l:"Bateram meta", v:`${tot.bateram}/${tot.comMeta}`, c:C.cream },
+            { l:"Em aberto", v:tot.abertos, c: tot.abertos>0?C.gold:C.cream },
+          ].map((x,i)=>(
+            <div key={i} style={{ background:C.surf2, borderRadius:8, padding:"10px 12px" }} className="clr">
+              <div style={{ fontSize:11, color:C.dim }} className="clr">{x.l}</div>
+              <div style={{ fontSize:17, fontWeight:800, color:x.c }} className="clr">{x.v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabela */}
+        {linhas.length === 0 ? (
+          <div style={{ textAlign:"center", color:C.dim, fontSize:13, padding:"20px 0" }}>Nenhum vendedor neste evento.</div>
+        ) : (
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+              <thead><tr style={{ background:C.surf2 }}>
+                <Th k="nome">Vendedor</Th>
+                <Th k="vendidos" alin="right">Vendidos</Th>
+                <Th alin="right">Venda</Th>
+                <Th alin="right">Compl.</Th>
+                <Th alin="right">Meta</Th>
+                <Th k="arrecadado" alin="right">Entregue</Th>
+                <Th alin="right">Falta</Th>
+                <Th k="status">Status</Th>
+              </tr></thead>
+              <tbody>
+                {ordenadas.map((l,i) => (
+                  <tr key={l.v.id_evento_vendedor} style={{ background: i%2===0?C.surface:C.bg }} className="clr">
+                    <td style={{ padding:"8px 10px", color:C.cream, fontWeight:600 }} className="clr">
+                      {l.nome}{l.v.nome_convidado && <span style={{ fontSize:10, color:C.gold, marginLeft:5 }}>convidado</span>}
+                    </td>
+                    <td style={{ padding:"8px 10px", textAlign:"right", color:C.cream }} className="clr">{l.v.vendidos||0}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"right", color:C.dim }} className="clr">{fmtMoeda(l.venda)}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"right", color:C.dim }} className="clr">{l.complemento>0?fmtMoeda(l.complemento):"—"}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"right", color:C.dim }} className="clr">{l.metaValor>0?fmtMoeda(l.metaValor):"—"}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"right", color:C.win, fontWeight:700 }} className="clr">{fmtMoeda(l.entregue)}</td>
+                    <td style={{ padding:"8px 10px", textAlign:"right", color: l.faltante>0?C.loss:C.dim }} className="clr">{l.faltante>0?fmtMoeda(l.faltante):"—"}</td>
+                    <td style={{ padding:"8px 10px" }} className="clr">
+                      {l.v.status==="acertado"
+                        ? <span style={{ color:C.win, fontSize:12, fontWeight:700 }}>✅ acertado</span>
+                        : <span style={{ color:C.gold, fontSize:12 }}>aberto</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:16 }} className="no-print">
+          <Btn variant="secondary" onClick={onClose}>Fechar</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+
 function CrudEventos({ idTime, show, readOnly }) {
   // idTime recebido por prop (filtrado pelo usuário logado no componente pai)
   const { data: _timeEvento } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,cidade:id_cidade_sede(nome,estado)&limit=1`) : Promise.resolve([]), [idTime]);
@@ -4465,7 +5018,7 @@ function CrudEventos({ idTime, show, readOnly }) {
   const { data: temporadas } = useQuery(() => idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*&order=data_inicio.desc`) : Promise.resolve([]), [idTime]);
   const { data: tiposMov } = useQuery(() => idTime ? api.get(`tipo_movimento?id_time=eq.${idTime}&status=eq.Ativo&select=*&order=descricao.asc`) : Promise.resolve([]), [idTime]);
   const { data: movsEvento, reload: reloadMovs } = useQuery(
-    () => idTime ? api.get(`movimento_caixa?id_time=eq.${idTime}&origem=eq.evento&select=*,tipo_movimento(descricao)`) : Promise.resolve([]),
+    () => idTime ? api.get(`movimento_caixa?id_time=eq.${idTime}&origem=in.(evento,venda_evento)&select=*,tipo_movimento(descricao)`) : Promise.resolve([]),
     [idTime]
   );
 
@@ -4473,11 +5026,14 @@ function CrudEventos({ idTime, show, readOnly }) {
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [detalhe, setDetalhe] = useState(null); // evento aberto para ver/lançar movimentos
+  const [vendedoresDe, setVendedoresDe] = useState(null); // evento cujo controle de venda está aberto
+  const [relatorioDe, setRelatorioDe] = useState(null); // evento cujo relatório de vendas está aberto
+  const [processando, setProcessando] = useState(null); // texto do overlay enquanto processa em lote (ex: encerrar com vendedores)
   const [linkEvento, setLinkEvento] = useState(null); // evento cujo link de confirmação está aberto
   const [formMov, setFormMov] = useState({});
 
   function abrirNovo() {
-    setForm({ nome:"", data_evento:new Date().toISOString().split("T")[0], link_local:"", meta:"", modo:"detalhado", resultado_direto:"", id_temporada: temporadas?.[0]?.id_temporada || "", observacoes:"" });
+    setForm({ nome:"", data_evento:new Date().toISOString().split("T")[0], link_local:"", meta:"", modo:"detalhado", resultado_direto:"", id_temporada: temporadas?.[0]?.id_temporada || "", observacoes:"", eh_financeiro:true, controla_venda:false, valor_unitario:"", meta_padrao:"" });
     setModal("novo");
   }
   function set(k,v){ setForm(f=>({ ...f, [k]:v })); }
@@ -4494,11 +5050,18 @@ function CrudEventos({ idTime, show, readOnly }) {
     if (!linkLocalValido(form.link_local)) { show(`Link inválido. Recebido: "${String(form.link_local).slice(0,60)}". Cole um link do mapa.`, "error"); return; }
     setSaving(true);
     try {
+      const ehFin = form.eh_financeiro !== false; // default true
+      const controlaVenda = ehFin && !!form.controla_venda; // venda só faz sentido em evento financeiro
       const body = {
         nome: form.nome.trim(), data_evento: form.data_evento||null,
         link_local: normalizarLink(form.link_local),
-        meta: Number(form.meta)||0, modo: form.modo,
-        resultado_direto: form.modo==="direto" ? (Number(form.resultado_direto)||0) : null,
+        eh_financeiro: ehFin,
+        meta: ehFin ? (Number(form.meta)||0) : 0,
+        modo: ehFin ? form.modo : "detalhado",
+        resultado_direto: (ehFin && form.modo==="direto") ? (Number(form.resultado_direto)||0) : null,
+        controla_venda: controlaVenda,
+        valor_unitario: controlaVenda ? (Number(form.valor_unitario)||0) : 0,
+        meta_padrao: controlaVenda ? (Number(form.meta_padrao)||0) : 0,
         id_temporada: form.id_temporada?Number(form.id_temporada):null,
         observacoes: form.observacoes||null, id_time: idTime,
       };
@@ -4511,17 +5074,80 @@ function CrudEventos({ idTime, show, readOnly }) {
 
   function abrirEditar(ev) {
     if (ev.status==="encerrado") { show("Evento encerrado não pode ser editado.", "error"); return; }
-    setForm({ ...ev, meta:ev.meta||"", resultado_direto:ev.resultado_direto||"" }); setModal("editar");
+    setForm({ ...ev, meta:ev.meta||"", resultado_direto:ev.resultado_direto||"", eh_financeiro: ev.eh_financeiro !== false, controla_venda: !!ev.controla_venda, valor_unitario: ev.valor_unitario||"", meta_padrao: ev.meta_padrao||"" }); setModal("editar");
   }
 
   async function encerrar(ev) {
     const resultado = ev.modo==="direto" ? Number(ev.resultado_direto||0) : resultadoCalculado(ev.id_evento);
     const atingiu = resultado >= Number(ev.meta||0);
-    if (!confirm(`Encerrar "${ev.nome}"?\nResultado: ${fmtMoeda(resultado)}\nMeta: ${fmtMoeda(ev.meta)}\n${atingiu?"✅ Meta atingida":"❌ Abaixo da meta"}`)) return;
+
+    // Se o evento controla venda, verifica vendedores ainda em aberto.
+    let vendAbertos = [];
+    if (ev.controla_venda) {
+      try {
+        vendAbertos = await api.get(`evento_vendedor?id_evento=eq.${ev.id_evento}&status=eq.aberto&select=*`) || [];
+      } catch(e) { vendAbertos = []; }
+    }
+    const valorUnit = Number(ev.valor_unitario||0);
+    const entregueDe = (v) => Number(v.vendidos||0)*valorUnit + Number(v.complemento||0);
+    const totalAbertos = vendAbertos.reduce((s,v)=>s+entregueDe(v),0);
+
+    let msg = `Encerrar "${ev.nome}"?\nResultado: ${fmtMoeda(resultado)}\nMeta: ${fmtMoeda(ev.meta)}\n${atingiu?"✅ Meta atingida":"❌ Abaixo da meta"}`;
+    if (vendAbertos.length > 0) {
+      msg += `\n\n⚠️ ${vendAbertos.length} vendedor(es) ainda em aberto, somando ${fmtMoeda(totalAbertos)}.\nAo encerrar, eles serão ACERTADOS e lançados no caixa automaticamente.`;
+    }
+    if (!confirm(msg)) return;
+    if (vendAbertos.length > 0) setProcessando(`Acertando ${vendAbertos.length} vendedor(es) e lançando no caixa…`);
     try {
+      // acerta cada vendedor em aberto: lança no caixa + marca acertado
+      // processa cada vendedor de forma resiliente; conta sucessos e falhas
+      let okCount = 0; const falhas = [];
+      for (const v of vendAbertos) {
+        try {
+          const entregue = entregueDe(v);
+          const metaValor = Number(v.meta_unidades||0)*valorUnit;
+          const faltante = metaValor>0 ? Math.max(0, metaValor-entregue) : 0;
+          let nome = v.nome_convidado || "Atleta";
+          if (!v.nome_convidado && v.id_jogador) {
+            try { const j = await api.get(`jogador?id_jogador=eq.${v.id_jogador}&select=nome,apelido&limit=1`); nome = j?.[0]?.apelido || j?.[0]?.nome || "Atleta"; } catch(e){}
+          }
+          const partes = [`${Number(v.vendidos||0)} cartões`];
+          if (Number(v.complemento||0) > 0) partes.push(`+ ${fmtMoeda(v.complemento)} complemento`);
+          let obs = `Venda de cartões — ${ev.nome} — ${nome} (${partes.join(" ")})`;
+          if (faltante > 0) obs += ` — faltaram ${fmtMoeda(faltante)}`;
+          let idTipo = null;
+          try {
+            const t = await api.get(`tipo_movimento?id_time=eq.${idTime}&natureza=eq.receita&descricao=eq.${encodeURIComponent("Venda de cartões")}&select=id_tipo_movimento&limit=1`);
+            idTipo = t?.[0]?.id_tipo_movimento || null;
+            if (!idTipo) {
+              const cr = await api.post(`tipo_movimento`, { descricao:"Venda de cartões", natureza:"receita", status:"Ativo", id_time: idTime });
+              idTipo = Array.isArray(cr) ? cr?.[0]?.id_tipo_movimento : cr?.id_tipo_movimento;
+            }
+          } catch(e){ idTipo = null; }
+          const existe = await api.get(`movimento_caixa?id_evento_vendedor=eq.${v.id_evento_vendedor}&select=id_movimento`);
+          const body = { id_time:idTime, id_tipo_movimento:idTipo, natureza:"receita", valor:entregue,
+            data_movimento: ev.data_evento || new Date().toISOString().split("T")[0], observacao:obs,
+            origem:"venda_evento", id_evento:ev.id_evento, id_evento_vendedor:v.id_evento_vendedor, registrado_por: emailUsuarioLogado() };
+          // lança no caixa PRIMEIRO; só marca acertado se o lançamento deu certo
+          if (existe && existe.length>0) await api.patch(`movimento_caixa?id_evento_vendedor=eq.${v.id_evento_vendedor}`, body);
+          else await api.post(`movimento_caixa`, body);
+          await api.patch(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`, { status:"acertado", atualizado_em:new Date().toISOString() });
+          okCount++;
+        } catch(errV) {
+          falhas.push(v); // este vendedor não foi processado; segue para os demais
+        }
+      }
+      // Só encerra o evento se TODOS os vendedores foram acertados com sucesso.
+      if (falhas.length > 0) {
+        setProcessando(null);
+        reload();
+        show(`${okCount} vendedor(es) acertado(s), mas ${falhas.length} falhou(aram). O evento NÃO foi encerrado — resolva os pendentes e tente de novo.`, "error");
+        return;
+      }
       await api.patch(`evento?id_evento=eq.${ev.id_evento}`, { status:"encerrado", resultado_final:resultado, meta_atingida:atingiu });
-      show("Evento encerrado!"); reload();
-    } catch(e){ show("Erro: "+e.message, "error"); }
+      setProcessando(null);
+      show(vendAbertos.length>0 ? `Evento encerrado! ${vendAbertos.length} vendedor(es) acertado(s).` : "Evento encerrado!"); reload();
+    } catch(e){ setProcessando(null); show("Erro ao encerrar: "+e.message, "error"); reload(); }
   }
 
   async function reabrir(ev) {
@@ -4578,38 +5204,42 @@ function CrudEventos({ idTime, show, readOnly }) {
 
       {(eventos||[]).length === 0 && !loading && (
         <EstadoVazio icone="🎉" titulo="Nenhum evento ainda"
-          texto="Crie eventos como churrascos, rifas ou festas para organizar arrecadações do time. Você acompanha aqui quanto cada um arrecadou."
+          texto="Crie eventos de arrecadação (churrasco, rifa, festa) com meta e controle financeiro, ou eventos só de presença (como uma janta) para organizar quem vai — sem mexer em dinheiro."
           acaoLabel={!readOnly ? "+ Criar primeiro evento" : null} onAcao={!readOnly ? abrirNovo : null}/>
       )}
       {(eventos||[]).map(ev => {
+        const ehFin = ev.eh_financeiro !== false; // eventos antigos (sem o campo) = financeiros
         const resultado = ev.status==="encerrado" ? Number(ev.resultado_final||0)
           : ev.modo==="direto" ? Number(ev.resultado_direto||0) : resultadoCalculado(ev.id_evento);
         const meta = Number(ev.meta||0);
         const atingiu = resultado >= meta;
-        const movs = (movsEvento||[]).filter(m=>m.id_evento===ev.id_evento);
+        const movs = (movsEvento||[]).filter(m=>m.id_evento===ev.id_evento && m.origem==="evento"); // só avulsos (lista/exclusão)
         return (
           <Card key={ev.id_evento} style={{ padding:20 }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
               <div>
                 <div style={{ fontSize:16, fontWeight:800, color:C.cream }}>
                   🎉 {ev.nome}
+                  {!ehFin && <span style={{ fontSize:11, color:C.gold, marginLeft:8, fontWeight:600 }}>· só presença</span>}
                   {ev.status==="encerrado" && <span style={{ fontSize:11, color:C.dim, marginLeft:8 }}>(encerrado)</span>}
                 </div>
                 <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>
                   {ev.data_evento ? new Date(ev.data_evento+"T12:00:00").toLocaleDateString("pt-BR") : "Sem data"}
                   {ev.temporada?.nome && ` · ${ev.temporada.nome}`}
-                  {` · Modo ${ev.modo==="direto"?"resultado direto":"detalhado"}`}
+                  {ehFin && ` · Modo ${ev.modo==="direto"?"resultado direto":"detalhado"}`}
                 </div>
               </div>
-              <div style={{ textAlign:"right" }}>
-                <div style={{ fontSize:20, fontWeight:800, color: resultado>=0?C.win:C.loss }}>{fmtMoeda(resultado)}</div>
-                <div style={{ fontSize:11, color:C.dim }}>Meta: {fmtMoeda(meta)}</div>
-                {meta>0 && <div style={{ fontSize:11, fontWeight:700, color: atingiu?C.win:C.loss }}>{atingiu?"✅ Meta atingida":"❌ Abaixo da meta"}</div>}
-              </div>
+              {ehFin && (
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:20, fontWeight:800, color: resultado>=0?C.win:C.loss }}>{fmtMoeda(resultado)}</div>
+                  <div style={{ fontSize:11, color:C.dim }}>Meta: {fmtMoeda(meta)}</div>
+                  {meta>0 && <div style={{ fontSize:11, fontWeight:700, color: atingiu?C.win:C.loss }}>{atingiu?"✅ Meta atingida":"❌ Abaixo da meta"}</div>}
+                </div>
+              )}
             </div>
 
-            {/* Movimentos do evento (modo detalhado) */}
-            {ev.modo==="detalhado" && movs.length>0 && (
+            {/* Movimentos do evento (modo detalhado) — só financeiro */}
+            {ehFin && ev.modo==="detalhado" && movs.length>0 && (
               <div style={{ marginTop:14, background:C.surf2, borderRadius:8, padding:"10px 14px" }}>
                 {movs.map(m => (
                   <div key={m.id_movimento} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 0", fontSize:12 }}>
@@ -4626,12 +5256,14 @@ function CrudEventos({ idTime, show, readOnly }) {
             {/* Ações */}
             {!readOnly && (
               <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
-                {ev.status!=="encerrado" && ev.modo==="detalhado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>abrirLancar(ev)}>+ Lançar receita/despesa</Btn>}
+                {ehFin && ev.status!=="encerrado" && ev.modo==="detalhado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>abrirLancar(ev)}>+ Lançar receita/despesa</Btn>}
+                {ehFin && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>setVendedoresDe(ev)}>🎟️ Vendedores</Btn>}
+                {ehFin && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>setRelatorioDe(ev)}>📊 Relatório</Btn>}
                 {ev.status!=="encerrado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>abrirEditar(ev)}>Editar</Btn>}
                 {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>setLinkEvento(ev)}>📲 Confirmação</Btn>}
-                {ev.status!=="encerrado" && <Btn style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>encerrar(ev)}>Encerrar</Btn>}
-                {ev.status==="encerrado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>reabrir(ev)}>🔓 Reabrir</Btn>}
-                {!movs.length && <Btn variant="danger" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>excluir(ev)}>Excluir</Btn>}
+                {ehFin && ev.status!=="encerrado" && <Btn style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>encerrar(ev)}>Encerrar</Btn>}
+                {ehFin && ev.status==="encerrado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>reabrir(ev)}>🔓 Reabrir</Btn>}
+                {!movs.length && !(movsEvento||[]).some(m=>m.id_evento===ev.id_evento) && <Btn variant="danger" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>excluir(ev)}>Excluir</Btn>}
               </div>
             )}
           </Card>
@@ -4644,22 +5276,47 @@ function CrudEventos({ idTime, show, readOnly }) {
         <Modal title={modal==="novo"?"Novo Evento":"Editar Evento"} onClose={()=>setModal(null)}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <Input label="Nome do Evento" value={form.nome||""} onChange={e=>set("nome",e.target.value)} placeholder="Ex: Buffet de cachorro-quente"/>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-              <Input label="Data" type="date" value={form.data_evento||""} onChange={e=>set("data_evento",e.target.value)}/>
-              <Input label="Meta (R$)" type="number" min="0" step="0.01" value={form.meta||""} onChange={e=>set("meta",e.target.value)}/>
-            </div>
+            <Input label="Data" type="date" value={form.data_evento||""} onChange={e=>set("data_evento",e.target.value)}/>
             <Input label="Link de localização (opcional)" placeholder="https://maps.google.com/..." value={form.link_local||""} onChange={e=>set("link_local",e.target.value)}/>
             <Select label="Temporada" value={form.id_temporada} onChange={e=>set("id_temporada",e.target.value)}>
               <option value="">Sem vínculo</option>
               {(temporadas||[]).map(t=><option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
             </Select>
-            <Select label="Modo de apuração" value={form.modo} onChange={e=>set("modo",e.target.value)}>
-              <option value="detalhado">Detalhado (vincular receitas/despesas)</option>
-              <option value="direto">Resultado direto (digitar valor final)</option>
-            </Select>
-            {form.modo==="direto" && (
-              <Input label="Resultado Final (R$)" type="number" step="0.01" value={form.resultado_direto||""} onChange={e=>set("resultado_direto",e.target.value)}/>
-            )}
+
+            {/* tipo do evento: financeiro (arrecadação) ou só presença */}
+            <label style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"12px 14px", background:C.surf2, border:`1px solid ${form.eh_financeiro!==false?C.gold+"55":C.border}`, borderRadius:8, cursor:"pointer" }}>
+              <input type="checkbox" checked={form.eh_financeiro!==false} onChange={e=>set("eh_financeiro", e.target.checked)} style={{ width:18, height:18, marginTop:1, cursor:"pointer", flexShrink:0 }}/>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:C.cream }}>Este evento controla dinheiro</div>
+                <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>Marcado: evento de arrecadação, com meta e apuração de receitas/despesas. Desmarcado: serve só como lista de presença (ex: uma janta), sem controle financeiro.</div>
+              </div>
+            </label>
+
+            {form.eh_financeiro!==false && (<>
+              <Input label="Meta (R$)" type="number" min="0" step="0.01" value={form.meta||""} onChange={e=>set("meta",e.target.value)}/>
+              <Select label="Modo de apuração" value={form.modo} onChange={e=>set("modo",e.target.value)}>
+                <option value="detalhado">Detalhado (vincular receitas/despesas)</option>
+                <option value="direto">Resultado direto (digitar valor final)</option>
+              </Select>
+              {form.modo==="direto" && (
+                <Input label="Resultado Final (R$)" type="number" step="0.01" value={form.resultado_direto||""} onChange={e=>set("resultado_direto",e.target.value)}/>
+              )}
+
+              {/* controle de venda por quantidade (rifa/cartões) */}
+              <label style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"12px 14px", background:C.surf2, border:`1px solid ${form.controla_venda?C.gold+"55":C.border}`, borderRadius:8, cursor:"pointer" }}>
+                <input type="checkbox" checked={!!form.controla_venda} onChange={e=>set("controla_venda", e.target.checked)} style={{ width:18, height:18, marginTop:1, cursor:"pointer", flexShrink:0 }}/>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:700, color:C.cream }}>Controlar venda por pessoa (rifa/cartões)</div>
+                  <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>Acompanhe quanto cada atleta ou convidado vendeu, com meta opcional. Funciona junto com os lançamentos de receita/despesa do evento.</div>
+                </div>
+              </label>
+              {form.controla_venda && (
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <Input label="Valor por unidade (R$)" type="number" min="0" step="0.01" value={form.valor_unitario||""} onChange={e=>set("valor_unitario",e.target.value)} placeholder="Ex: 10,00"/>
+                  <Input label="Meta padrão (unidades)" type="number" min="0" step="1" value={form.meta_padrao||""} onChange={e=>set("meta_padrao",e.target.value)} placeholder="0 = sem mínimo"/>
+                </div>
+              )}
+            </>)}
             <Input label="Observações" value={form.observacoes||""} onChange={e=>set("observacoes",e.target.value)}/>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
               <Btn variant="secondary" onClick={()=>setModal(null)}>Cancelar</Btn>
@@ -4677,6 +5334,20 @@ function CrudEventos({ idTime, show, readOnly }) {
             <CompartilharPresenca tipo="evento" idRef={linkEvento.id_evento} idTime={idTime} titulo={linkEvento.nome} data={linkEvento.data_evento} linkLocal={linkEvento.link_local} time={_timeEvento?.[0]} show={show} />
           </div>
         </Modal>
+      )}
+      {processando && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:9999, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
+          <div style={{ width:48, height:48, border:`4px solid ${C.surf2}`, borderTopColor:C.gold, borderRadius:"50%", animation:"ndcspin 0.8s linear infinite" }}/>
+          <div style={{ color:C.cream, fontSize:15, fontWeight:700, textAlign:"center", maxWidth:300, padding:"0 20px" }}>{processando}</div>
+          <div style={{ color:C.dim, fontSize:12 }}>Aguarde, não feche a página…</div>
+          <style>{`@keyframes ndcspin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+      {vendedoresDe && (
+        <GestaoVendedores evento={vendedoresDe} idTime={idTime} show={show} readOnly={readOnly} onClose={()=>setVendedoresDe(null)} />
+      )}
+      {relatorioDe && (
+        <RelatorioVendas evento={relatorioDe} idTime={idTime} onClose={()=>setRelatorioDe(null)} />
       )}
       {detalhe && (
         <Modal title={`Lançar em — ${detalhe.nome}`} onClose={()=>setDetalhe(null)}>
@@ -4710,9 +5381,19 @@ function CrudEventos({ idTime, show, readOnly }) {
 export default function AdminAppCompleto() {
   const [session, setSession]       = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const [idTime, setIdTime]         = useState(null);
+  const [idTime, setIdTime]         = useState(() => {
+    // recupera o time escolhido na sessão (sobrevive ao refresh da página)
+    try { const v = sessionStorage.getItem("ndc_id_time"); return v ? Number(v) : null; } catch(e) { return null; }
+  });
   useEffect(() => { setIdTimeAtivoGlobal(idTime); }, [idTime]);
   const [meusTimes, setMeusTimes]   = useState([]); // vínculos do admin (pode ter vários times)
+  // persiste o time escolhido para sobreviver ao refresh (multi-time)
+  useEffect(() => {
+    try {
+      if (idTime) sessionStorage.setItem("ndc_id_time", String(idTime));
+      else sessionStorage.removeItem("ndc_id_time");
+    } catch(e) {}
+  }, [idTime]);
   const [timeInativo, setTimeInativo] = useState(false);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [menu, setMenu] = useState("inicio");
@@ -4748,6 +5429,16 @@ export default function AdminAppCompleto() {
   );
   const emManutencao = ["true","1"].includes(String(manutCfg?.[0]?.valor ?? "").trim().toLowerCase());
 
+  // Após refresh, o session é reconstruído só com o token (sem user.id).
+  // Busca o usuário pelo token e completa o session, para o seletor de times reaparecer.
+  useEffect(() => {
+    if (session && !session.user?.id) {
+      buscarUsuarioAtual().then(u => {
+        if (u?.id) setSession(s => ({ ...(s||{}), user: u }));
+      });
+    }
+  }, [session]);
+
   // Buscar time do usuário logado
   useEffect(() => {
     const uid = session?.user?.id;
@@ -4760,6 +5451,7 @@ export default function AdminAppCompleto() {
           if (sa) {
             setIsSuperadmin(true);
             setIdTime(null); // superadmin vê tudo
+            try { sessionStorage.removeItem("ndc_id_time"); } catch(e) {}
             return;
           }
           // Admin comum: pode ter vínculo com VÁRIOS times.
@@ -4774,8 +5466,14 @@ export default function AdminAppCompleto() {
           if (ativos.length === 1) {
             // só um time: entra direto nele
             setIdTime(ativos[0].id_time);
+          } else if (ativos.length > 1) {
+            // vários times: se havia um escolhido (restaurado da sessão) e ele
+            // ainda é um time válido do usuário, mantém; senão, deixa escolher.
+            setIdTime(prev => {
+              if (prev && ativos.some(ut => ut.id_time === prev)) return prev;
+              return null;
+            });
           }
-          // se tiver mais de um, idTime fica null e o seletor aparece (abaixo)
         }
       }).catch(() => {});
   }, [session]);
@@ -5097,8 +5795,8 @@ export default function AdminAppCompleto() {
             <PaginaInicio
               dados={{ cidades:_cidades, campos:_campos, posicoes:_posicoes, adversarios:_adversarios, jogadores:_jogadores, temporadas, partidas:_partidas, ehTurmaFechada, timesInternos:_timesInternos, encontros:_encontros }}
               onNavegar={setMenu}
-            />
-          )}
+              idTime={idTime}
+            />)}
           {mostrarTour && <TourBoasVindas ehTurmaFechada={ehTurmaFechada} onFechar={fecharTour} onIr={setMenu} />}
           {menu === "app" && (
             <VisaoAppPublico time={(times||[])[0]} temporadas={temporadas} onNavegar={setMenu}/>
