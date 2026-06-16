@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.18.0";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.18.1";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -98,6 +98,7 @@ function encerrarSessao() {
   SESSION_TOKEN = null; REFRESH_TOKEN = null;
   sessionStorage.removeItem("ndc_token");
   sessionStorage.removeItem("ndc_refresh");
+  sessionStorage.removeItem("ndc_id_time");
   window.dispatchEvent(new CustomEvent("ndc-sessao-expirada"));
 }
 
@@ -5354,9 +5355,19 @@ function CrudEventos({ idTime, show, readOnly }) {
 export default function AdminAppCompleto() {
   const [session, setSession]       = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const [idTime, setIdTime]         = useState(null);
+  const [idTime, setIdTime]         = useState(() => {
+    // recupera o time escolhido na sessão (sobrevive ao refresh da página)
+    try { const v = sessionStorage.getItem("ndc_id_time"); return v ? Number(v) : null; } catch(e) { return null; }
+  });
   useEffect(() => { setIdTimeAtivoGlobal(idTime); }, [idTime]);
   const [meusTimes, setMeusTimes]   = useState([]); // vínculos do admin (pode ter vários times)
+  // persiste o time escolhido para sobreviver ao refresh (multi-time)
+  useEffect(() => {
+    try {
+      if (idTime) sessionStorage.setItem("ndc_id_time", String(idTime));
+      else sessionStorage.removeItem("ndc_id_time");
+    } catch(e) {}
+  }, [idTime]);
   const [timeInativo, setTimeInativo] = useState(false);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [menu, setMenu] = useState("inicio");
@@ -5404,6 +5415,7 @@ export default function AdminAppCompleto() {
           if (sa) {
             setIsSuperadmin(true);
             setIdTime(null); // superadmin vê tudo
+            try { sessionStorage.removeItem("ndc_id_time"); } catch(e) {}
             return;
           }
           // Admin comum: pode ter vínculo com VÁRIOS times.
@@ -5418,8 +5430,14 @@ export default function AdminAppCompleto() {
           if (ativos.length === 1) {
             // só um time: entra direto nele
             setIdTime(ativos[0].id_time);
+          } else if (ativos.length > 1) {
+            // vários times: se havia um escolhido (restaurado da sessão) e ele
+            // ainda é um time válido do usuário, mantém; senão, deixa escolher.
+            setIdTime(prev => {
+              if (prev && ativos.some(ut => ut.id_time === prev)) return prev;
+              return null;
+            });
           }
-          // se tiver mais de um, idTime fica null e o seletor aparece (abaixo)
         }
       }).catch(() => {});
   }, [session]);
