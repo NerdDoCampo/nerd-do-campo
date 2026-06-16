@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.17.2";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.18.0";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -4673,14 +4673,17 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
     if (c.faltante > 0) msg += `\n\n(Meta de ${fmtMoeda(c.metaValor)} — faltaram ${fmtMoeda(c.faltante)}. Você pode acertar mesmo assim.)`;
     if (!confirm(msg)) return;
     try {
-      await api.patch(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`, { status:"acertado", atualizado_em: new Date().toISOString() });
+      // 1º lança no caixa; só marca acertado se o lançamento der certo (transacional)
       await lancarReceitaVendedor(v);
+      await api.patch(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`, { status:"acertado", atualizado_em: new Date().toISOString() });
       reload();
       show(`${nomeVend(v)}: acertado e lançado no caixa ✅`);
     } catch (e) {
-      // o status pode ter mudado mas o caixa falhou: avisa sem deixar inconsistência silenciosa
+      // o caixa falhou: o status permanece "aberto", sem inconsistência.
+      // tenta desfazer um eventual lançamento parcial, por garantia.
+      try { await removerReceitaVendedor(v); } catch(_) {}
       reload();
-      show("Acertado, mas o lançamento no caixa falhou. Reabra e tente de novo, ou verifique o financeiro.", "error");
+      show("Não foi possível lançar no caixa — o vendedor continua em aberto. Tente de novo.", "error");
     }
   }
   async function reabrir(v) {
@@ -5080,35 +5083,48 @@ function CrudEventos({ idTime, show, readOnly }) {
     if (!confirm(msg)) return;
     try {
       // acerta cada vendedor em aberto: lança no caixa + marca acertado
+      // processa cada vendedor de forma resiliente; conta sucessos e falhas
+      let okCount = 0; const falhas = [];
       for (const v of vendAbertos) {
-        const entregue = entregueDe(v);
-        const metaValor = Number(v.meta_unidades||0)*valorUnit;
-        const faltante = metaValor>0 ? Math.max(0, metaValor-entregue) : 0;
-        // nome do vendedor para a observação
-        let nome = v.nome_convidado || "Atleta";
-        if (!v.nome_convidado && v.id_jogador) {
-          try { const j = await api.get(`jogador?id_jogador=eq.${v.id_jogador}&select=nome,apelido&limit=1`); nome = j?.[0]?.apelido || j?.[0]?.nome || "Atleta"; } catch(e){}
-        }
-        const partes = [`${Number(v.vendidos||0)} cartões`];
-        if (Number(v.complemento||0) > 0) partes.push(`+ ${fmtMoeda(v.complemento)} complemento`);
-        let obs = `Venda de cartões — ${ev.nome} — ${nome} (${partes.join(" ")})`;
-        if (faltante > 0) obs += ` — faltaram ${fmtMoeda(faltante)}`;
-        let idTipo = null;
         try {
-          const t = await api.get(`tipo_movimento?id_time=eq.${idTime}&natureza=eq.receita&descricao=eq.${encodeURIComponent("Venda de cartões")}&select=id_tipo_movimento&limit=1`);
-          idTipo = t?.[0]?.id_tipo_movimento || null;
-          if (!idTipo) {
-            const cr = await api.post(`tipo_movimento`, { descricao:"Venda de cartões", natureza:"receita", status:"Ativo", id_time: idTime });
-            idTipo = Array.isArray(cr) ? cr?.[0]?.id_tipo_movimento : cr?.id_tipo_movimento;
+          const entregue = entregueDe(v);
+          const metaValor = Number(v.meta_unidades||0)*valorUnit;
+          const faltante = metaValor>0 ? Math.max(0, metaValor-entregue) : 0;
+          let nome = v.nome_convidado || "Atleta";
+          if (!v.nome_convidado && v.id_jogador) {
+            try { const j = await api.get(`jogador?id_jogador=eq.${v.id_jogador}&select=nome,apelido&limit=1`); nome = j?.[0]?.apelido || j?.[0]?.nome || "Atleta"; } catch(e){}
           }
-        } catch(e){ idTipo = null; }
-        const existe = await api.get(`movimento_caixa?id_evento_vendedor=eq.${v.id_evento_vendedor}&select=id_movimento`);
-        const body = { id_time:idTime, id_tipo_movimento:idTipo, natureza:"receita", valor:entregue,
-          data_movimento: ev.data_evento || new Date().toISOString().split("T")[0], observacao:obs,
-          origem:"venda_evento", id_evento:ev.id_evento, id_evento_vendedor:v.id_evento_vendedor, registrado_por: emailUsuarioLogado() };
-        if (existe && existe.length>0) await api.patch(`movimento_caixa?id_evento_vendedor=eq.${v.id_evento_vendedor}`, body);
-        else await api.post(`movimento_caixa`, body);
-        await api.patch(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`, { status:"acertado", atualizado_em:new Date().toISOString() });
+          const partes = [`${Number(v.vendidos||0)} cartões`];
+          if (Number(v.complemento||0) > 0) partes.push(`+ ${fmtMoeda(v.complemento)} complemento`);
+          let obs = `Venda de cartões — ${ev.nome} — ${nome} (${partes.join(" ")})`;
+          if (faltante > 0) obs += ` — faltaram ${fmtMoeda(faltante)}`;
+          let idTipo = null;
+          try {
+            const t = await api.get(`tipo_movimento?id_time=eq.${idTime}&natureza=eq.receita&descricao=eq.${encodeURIComponent("Venda de cartões")}&select=id_tipo_movimento&limit=1`);
+            idTipo = t?.[0]?.id_tipo_movimento || null;
+            if (!idTipo) {
+              const cr = await api.post(`tipo_movimento`, { descricao:"Venda de cartões", natureza:"receita", status:"Ativo", id_time: idTime });
+              idTipo = Array.isArray(cr) ? cr?.[0]?.id_tipo_movimento : cr?.id_tipo_movimento;
+            }
+          } catch(e){ idTipo = null; }
+          const existe = await api.get(`movimento_caixa?id_evento_vendedor=eq.${v.id_evento_vendedor}&select=id_movimento`);
+          const body = { id_time:idTime, id_tipo_movimento:idTipo, natureza:"receita", valor:entregue,
+            data_movimento: ev.data_evento || new Date().toISOString().split("T")[0], observacao:obs,
+            origem:"venda_evento", id_evento:ev.id_evento, id_evento_vendedor:v.id_evento_vendedor, registrado_por: emailUsuarioLogado() };
+          // lança no caixa PRIMEIRO; só marca acertado se o lançamento deu certo
+          if (existe && existe.length>0) await api.patch(`movimento_caixa?id_evento_vendedor=eq.${v.id_evento_vendedor}`, body);
+          else await api.post(`movimento_caixa`, body);
+          await api.patch(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`, { status:"acertado", atualizado_em:new Date().toISOString() });
+          okCount++;
+        } catch(errV) {
+          falhas.push(v); // este vendedor não foi processado; segue para os demais
+        }
+      }
+      // Só encerra o evento se TODOS os vendedores foram acertados com sucesso.
+      if (falhas.length > 0) {
+        reload();
+        show(`${okCount} vendedor(es) acertado(s), mas ${falhas.length} falhou(aram). O evento NÃO foi encerrado — resolva os pendentes e tente de novo.`, "error");
+        return;
       }
       await api.patch(`evento?id_evento=eq.${ev.id_evento}`, { status:"encerrado", resultado_final:resultado, meta_atingida:atingiu });
       show(vendAbertos.length>0 ? `Evento encerrado! ${vendAbertos.length} vendedor(es) acertado(s).` : "Evento encerrado!"); reload();
