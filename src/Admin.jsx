@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.17.1";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.17.2";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -4600,6 +4600,25 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
     finally { setSalvando(false); }
   }
 
+  // adiciona de uma vez todos os atletas ativos que ainda não estão na lista
+  async function adicionarTodos() {
+    const faltantes = (jogadores || []).filter(j => !lista.some(v => String(v.id_jogador) === String(j.id_jogador)));
+    if (faltantes.length === 0) { show("Todos os atletas ativos já estão na lista."); return; }
+    if (!confirm(`Adicionar ${faltantes.length} atleta(s) ativo(s) à lista de vendedores, cada um com meta ${metaPadrao} un.?`)) return;
+    setSalvando(true);
+    try {
+      const corpo = faltantes.map(j => ({
+        id_evento: evento.id_evento, id_time: idTime,
+        id_jogador: j.id_jogador, nome_convidado: null,
+        meta_unidades: metaPadrao, vendidos: 0, complemento: 0, status: "aberto",
+      }));
+      await api.post("evento_vendedor", corpo); // PostgREST aceita array = insert em lote
+      reload();
+      show(`${faltantes.length} atleta(s) adicionado(s).`);
+    } catch (e) { show("Erro ao adicionar em massa: " + e.message, "error"); }
+    finally { setSalvando(false); }
+  }
+
   async function atualizarCampo(v, campo, valor) {
     try {
       await api.patch(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`, { [campo]: valor, atualizado_em: new Date().toISOString() });
@@ -4727,6 +4746,11 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
               <Input label="" placeholder="Nome do convidado" value={novoNome} onChange={e=>setNovoNome(e.target.value)}/>
             )}
             <Btn onClick={adicionar} disabled={salvando}>{salvando?"Adicionando…":"+ Adicionar vendedor"}</Btn>
+            {novoTipo === "atleta" && (
+              <Btn variant="secondary" onClick={adicionarTodos} disabled={salvando} style={{ fontSize:13 }}>
+                ⊕ Adicionar todos os atletas ativos
+              </Btn>
+            )}
           </div>
         )}
 
