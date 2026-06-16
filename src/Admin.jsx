@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.18.1";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.18.2";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -76,6 +76,18 @@ async function sbAuth(path, body) {
     body: JSON.stringify(body),
   });
   return res.json();
+}
+
+// Busca o usuário atual a partir do access_token (usado ao reidratar após refresh da página).
+async function buscarUsuarioAtual() {
+  if (!SESSION_TOKEN) return null;
+  try {
+    const res = await fetch(`${URL}/auth/v1/user`, {
+      headers: { apikey: ANON, Authorization: `Bearer ${SESSION_TOKEN}` },
+    });
+    if (!res.ok) return null;
+    return await res.json(); // { id, email, ... }
+  } catch (e) { return null; }
 }
 
 // Renova o access_token usando o refresh_token. Retorna true se renovou.
@@ -5402,6 +5414,16 @@ export default function AdminAppCompleto() {
     api.get(`config_sistema?chave=eq.sistema_manutencao&select=valor&limit=1`)
   );
   const emManutencao = ["true","1"].includes(String(manutCfg?.[0]?.valor ?? "").trim().toLowerCase());
+
+  // Após refresh, o session é reconstruído só com o token (sem user.id).
+  // Busca o usuário pelo token e completa o session, para o seletor de times reaparecer.
+  useEffect(() => {
+    if (session && !session.user?.id) {
+      buscarUsuarioAtual().then(u => {
+        if (u?.id) setSession(s => ({ ...(s||{}), user: u }));
+      });
+    }
+  }, [session]);
 
   // Buscar time do usuário logado
   useEffect(() => {
