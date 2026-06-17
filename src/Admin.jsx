@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.19.0";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.19.1";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -7827,6 +7827,11 @@ function ConfigTime({ idTime, show, readOnly }) {
         raio_busca_km: form.raio_busca_km ? Number(form.raio_busca_km) : 50,
         observacoes: form.observacoes||null, publico: form.publico !== false
       };
+      // Modo de registro de gols: só para time normal e nunca grava nulo
+      // (regra: depois de definido, não volta a ficar indefinido).
+      if (!ehTurmaFechada && (form.modo_gol === "simples" || form.modo_gol === "detalhado")) {
+        body.modo_gol = form.modo_gol;
+      }
       await api.patch(`time?id_time=eq.${form.id_time}`, body);
       // Se trocou o tipo de time: zera a posição dos jogadores (cadastro atual),
       // preservando o histórico das partidas (participacao não é tocada).
@@ -7892,6 +7897,13 @@ function ConfigTime({ idTime, show, readOnly }) {
             </Select>
             <Input label="Valor Mensalidade (R$)" type="number" min="0" step="0.01" value={form.valor_mensalidade||""} onChange={e => set("valor_mensalidade", e.target.value)}/>
             <Input label="Raio de busca de adversários (km)" type="number" min="1" step="1" value={form.raio_busca_km ?? 50} onChange={e => set("raio_busca_km", e.target.value)}/>
+            {!ehTurmaFechada && (
+              <Select label="Registro de gols" value={form.modo_gol||""} onChange={e => set("modo_gol", e.target.value)}>
+                <option value="" disabled>Selecione…</option>
+                <option value="simples">Simples — total de gols e assistências por jogador</option>
+                <option value="detalhado">Detalhado — cada gol com minuto, assistência, etc.</option>
+              </Select>
+            )}
             <Input label="Saldo Inicial do Caixa (R$)" type="number" step="0.01" value={form.saldo_inicial||""} onChange={e => set("saldo_inicial", e.target.value)}/>
           </div>
         </div>
