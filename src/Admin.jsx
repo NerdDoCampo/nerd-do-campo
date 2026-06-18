@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.18.5";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.19.1";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1801,7 +1801,7 @@ function ConvocarPartida({ partida, time, idTime, show }) {
   async function garantirLink() {
     if (links?.[0]?.token) return links[0].token;
     const token = (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g,"") : (Math.random().toString(36).slice(2)+Date.now().toString(36)));
-    const expira = partida.data ? new Date(new Date(partida.data).getTime() + 24*60*60*1000).toISOString() : null;
+    const expira = partida.data ? new Date(new Date(partida.data).getTime() + 16*24*60*60*1000).toISOString() : null; // 16 dias após a data (regra original de 1 dia + 15 dias para ajustes pós-jogo)
     await api.post("link_confirmacao", { token, tipo:"partida", id_ref: partida.id_partida, id_time: idTime, expira_em: expira });
     reload();
     return token;
@@ -1941,7 +1941,7 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
   async function garantirLink() {
     if (links?.[0]?.token) return links[0].token;
     const token = (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g,"") : (Math.random().toString(36).slice(2)+Date.now().toString(36)));
-    const expira = data ? new Date(new Date(data).getTime() + 24*60*60*1000).toISOString() : null;
+    const expira = data ? new Date(new Date(data).getTime() + 16*24*60*60*1000).toISOString() : null; // 16 dias após a data (1 dia original + 15 dias para ajustes pós-jogo)
     await api.post("link_confirmacao", { token, tipo, id_ref: idRef, id_time: idTime, expira_em: expira });
     reload();
     return token;
@@ -2054,6 +2054,124 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
   );
 }
 
+// ── Lançamento simples de gols/assistências (modo simples) ──
+// Edita participacao.gols / .assistencias por jogador; jogador 0 (gol contra)
+// entra sob demanda e só edita gols_contra.
+function GolsSimples({ partida, participacoes, jogadores, readOnly, show, onMudou }) {
+  const [salvandoId, setSalvandoId] = useState(null);
+  // a participação do jogador 0 não vem na query de escalação (que filtra id_jogador>0),
+  // então buscamos à parte. Ela já existe (criada por trigger ao criar a partida).
+  const { data: zeroData, reload: reloadZero } = useQuery(
+    () => api.get(`participacao?id_partida=eq.${partida.id_partida}&id_jogador=eq.0&select=*&limit=1`),
+    [partida.id_partida]
+  );
+  const partZero = zeroData?.[0];
+  const [mostrarZero, setMostrarZero] = useState(false);
+  // revela a linha automaticamente se já houver gol contra registrado
+  useEffect(() => { if (Number(partZero?.gols_contra || 0) > 0) setMostrarZero(true); }, [partZero]);
+
+  // mapa de jogador para exibir nome/camisa
+  const mapaJog = {};
+  (jogadores || []).forEach(j => { mapaJog[j.id_jogador] = j; });
+
+  // participações reais (jogadores)
+  const reais = (participacoes || []).filter(p => p.id_jogador > 0);
+
+  function nomeDe(p) {
+    const j = mapaJog[p.id_jogador];
+    return j ? (j.apelido || j.nome) : `Jogador ${p.id_jogador}`;
+  }
+
+  async function salvarCampo(p, campo, valor) {
+    setSalvandoId(p.id_participacao + campo);
+    try {
+      await api.patch(`participacao?id_participacao=eq.${p.id_participacao}`, { [campo]: Number(valor)||0 });
+      if (onMudou) onMudou();
+      reloadZero();
+    } catch (e) { show("Erro ao salvar: " + e.message, "error"); }
+    finally { setSalvandoId(null); }
+  }
+
+  // "Adicionar gol contra a nosso favor": só revela a linha (a participação já existe).
+  function adicionarGolContra() {
+    if (!partZero) { show("A linha de gol contra não está disponível para este jogo.", "error"); return; }
+    setMostrarZero(true);
+  }
+  async function removerGolContra() {
+    if (!partZero) return;
+    if (!confirm("Zerar e ocultar a linha de gol contra a nosso favor?")) return;
+    try {
+      await api.patch(`participacao?id_participacao=eq.${partZero.id_participacao}`, { gols_contra: 0 });
+      setMostrarZero(false);
+      reloadZero();
+      if (onMudou) onMudou();
+    } catch (e) { show("Erro: " + e.message, "error"); }
+  }
+
+  const NumInput = ({ p, campo, valor }) => (
+    <input type="number" min="0" step="1" disabled={readOnly} defaultValue={valor || 0}
+      key={`${p.id_participacao}-${campo}-${valor}`}
+      onBlur={e => { const n = Number(e.target.value)||0; if (n !== (Number(valor)||0)) salvarCampo(p, campo, n); }}
+      style={{ width:54, textAlign:"center", background: readOnly?C.bg:C.surf2, border:`1px solid ${C.border}`,
+        borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"6px 4px", outline:"none" }}/>
+  );
+
+  return (
+    <Card style={{ padding:"20px 24px" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:8 }}>
+        <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700 }}>
+          Gols e assistências
+        </div>
+        {!readOnly && partZero && !mostrarZero && (
+          <Btn variant="secondary" onClick={adicionarGolContra} style={{ fontSize:12 }}>
+            + Adicionar gol contra a nosso favor
+          </Btn>
+        )}
+      </div>
+
+      {reais.length === 0 ? (
+        <div style={{ color:C.dim, fontSize:13 }}>Escale os jogadores acima para lançar gols e assistências.</div>
+      ) : (
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
+            <thead><tr style={{ background:C.surf2 }}>
+              <th style={{ padding:"8px 12px", textAlign:"left", fontSize:11, textTransform:"uppercase", color:C.dim, fontWeight:700 }}>Jogador</th>
+              <th style={{ padding:"8px 12px", textAlign:"center", fontSize:11, textTransform:"uppercase", color:C.dim, fontWeight:700 }}>Gols</th>
+              <th style={{ padding:"8px 12px", textAlign:"center", fontSize:11, textTransform:"uppercase", color:C.dim, fontWeight:700 }}>Assist.</th>
+            </tr></thead>
+            <tbody>
+              {reais.map((p, i) => (
+                <tr key={p.id_participacao} style={{ background: i%2===0?C.surface:C.bg }}>
+                  <td style={{ padding:"8px 12px", color:C.cream, fontWeight:600 }}>
+                    {nomeDe(p)}{mapaJog[p.id_jogador]?.camisa ? <span style={{ color:C.dim, fontWeight:400 }}> · #{mapaJog[p.id_jogador].camisa}</span> : ""}
+                  </td>
+                  <td style={{ padding:"8px 12px", textAlign:"center" }}><NumInput p={p} campo="gols" valor={p.gols} /></td>
+                  <td style={{ padding:"8px 12px", textAlign:"center" }}><NumInput p={p} campo="assistencias" valor={p.assistencias} /></td>
+                </tr>
+              ))}
+              {/* Linha do gol contra a nosso favor (jogador 0), só a coluna de gol contra */}
+              {partZero && mostrarZero && (
+                <tr style={{ background: C.gold+"11" }}>
+                  <td style={{ padding:"8px 12px", color:C.win, fontWeight:700 }}>
+                    Gol contra a nosso favor
+                    {!readOnly && <button onClick={removerGolContra} style={{ marginLeft:8, background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:13 }}>✕</button>}
+                  </td>
+                  <td style={{ padding:"8px 12px", textAlign:"center" }}><NumInput p={partZero} campo="gols_contra" valor={partZero.gols_contra} /></td>
+                  <td style={{ padding:"8px 12px", textAlign:"center", color:C.dim }}>—</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div style={{ fontSize:11, color:C.dim, marginTop:10 }}>
+        O total digitado aqui alimenta a artilharia e o ranking de assistências. O placar do jogo é informado à parte, acima.
+      </div>
+    </Card>
+  );
+}
+
+
 function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
   const [partida, setPartida] = useState(p0);
   const [editDados, setEditDados] = useState(null); // {data, hora, id_campo, link_local} quando editando
@@ -2077,7 +2195,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
 
   const { data: jogadores }     = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=*,posicao(nome)&order=camisa.asc`) : Promise.resolve([]), [idTime]);
   // Meu time: tipo, raio padrão e coordenadas da cidade-sede — declarado ANTES das queries que usam meuTipoTime (evita TDZ no bundle de produção)
-  const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,id_tipo_time,id_subtipo,raio_busca_km,numero_titulares,quantidade_periodos,minutos_padrao_periodo,permite_acrescimos,cidade:id_cidade_sede(nome,estado,latitude,longitude)&limit=1`) : Promise.resolve([]), [idTime]);
+  const { data: meuTimeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,id_tipo_time,id_subtipo,modo_gol,raio_busca_km,numero_titulares,quantidade_periodos,minutos_padrao_periodo,permite_acrescimos,cidade:id_cidade_sede(nome,estado,latitude,longitude)&limit=1`) : Promise.resolve([]), [idTime]);
   const meuTime = meuTimeData?.[0];
   const meuTipoTime = meuTime?.id_tipo_time;
   const meuTipoPosicoes = meuTime?.id_subtipo || meuTime?.id_tipo_time; // posições vêm do subtipo na turma
@@ -2363,7 +2481,24 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
       )}
 
       {/* Gols */}
-      {!cancelada && (
+      {!cancelada && (() => {
+        // Modo implícito do jogo: se já há gols detalhados, é detalhado.
+        // Senão, segue o modo do time. Turma fechada e modo nulo caem no detalhado (comportamento atual).
+        const temGolDetalhado = (gols || []).length > 0;
+        const modoSimples = meuTime?.modo_gol === "simples" && !temGolDetalhado;
+        if (modoSimples) {
+          return (
+            <GolsSimples
+              partida={partida}
+              participacoes={participacoes || []}
+              jogadores={jogadores || []}
+              readOnly={readOnly}
+              show={show}
+              onMudou={() => reloadPart()}
+            />
+          );
+        }
+        return (
         <Card style={{ padding: "20px 24px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <div style={{ fontSize: 13, color: C.gold, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700 }}>
@@ -2399,7 +2534,8 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
             )
           }
         </Card>
-      )}
+        );
+      })()}
 
       {/* Times disponíveis nesta data (quando procurando adversário OU quando o admin clica em "ver times procurando") */}
       {mostrarDisponiveis && partida.cancelada !== "S" && (() => {
@@ -2989,6 +3125,53 @@ function TourBoasVindas({ ehTurmaFechada, onFechar, onIr }) {
   );
 }
 
+// ── Escolha do modo de registro de gols (simples × detalhado) ──
+// Aparece quando o time ainda não definiu o modo (modo_gol nulo).
+// Neutro entre as opções; avisa que pode ser alterado depois.
+function EscolherModoGol({ idTime, time, show, onDefinido, compacto }) {
+  const [salvando, setSalvando] = useState(false);
+  async function definir(modo) {
+    setSalvando(true);
+    try {
+      await api.patch(`time?id_time=eq.${idTime}`, { modo_gol: modo });
+      show(`Modo de registro definido: ${modo === "simples" ? "Simples" : "Detalhado"}.`);
+      if (onDefinido) onDefinido(modo);
+    } catch (e) {
+      show("Não foi possível salvar agora. Tente de novo.", "error");
+    } finally { setSalvando(false); }
+  }
+
+  const Opcao = ({ modo, titulo, desc }) => (
+    <button onClick={() => definir(modo)} disabled={salvando}
+      style={{ flex:1, minWidth:200, textAlign:"left", padding:"16px 18px", borderRadius:12,
+        border:`1px solid ${C.border}`, background:C.surf2, color:C.cream, cursor: salvando?"wait":"pointer",
+        fontFamily:"inherit", transition:"all 0.15s" }}
+      onMouseEnter={e=>{ if(!salvando){ e.currentTarget.style.borderColor=C.gold; e.currentTarget.style.background=C.gold+"15"; }}}
+      onMouseLeave={e=>{ e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background=C.surf2; }}>
+      <div style={{ fontSize:15, fontWeight:800, color:C.gold, marginBottom:6 }}>{titulo}</div>
+      <div style={{ fontSize:13, color:C.dim, lineHeight:1.5 }}>{desc}</div>
+    </button>
+  );
+
+  return (
+    <Card style={{ padding: compacto?18:24, marginBottom:20, border:`1px solid ${C.gold}55` }}>
+      <div style={{ fontSize: compacto?15:17, fontWeight:800, color:C.cream, marginBottom:6 }}>
+        ⚽ Antes de começar: como seu time vai registrar os gols?
+      </div>
+      <div style={{ fontSize:13, color:C.dim, marginBottom:16, lineHeight:1.5 }}>
+        Escolha como prefere lançar gols e assistências. Você pode mudar isso depois a qualquer momento, sem perder nem afetar as estatísticas já registradas.
+      </div>
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+        <Opcao modo="simples" titulo="Simples"
+          desc="Informe o total de gols e assistências de cada jogador por jogo. Mais rápido de preencher." />
+        <Opcao modo="detalhado" titulo="Detalhado"
+          desc="Registre cada gol com minuto, período, pênalti e assistência. Mais informação por jogo." />
+      </div>
+    </Card>
+  );
+}
+
+
 // ── Aniversariantes do mês (e do próximo, nos últimos 5 dias) ──
 function AniversariantesDoMes({ idTime }) {
   const { data: jogadores } = useQuery(
@@ -3052,7 +3235,7 @@ function AniversariantesDoMes({ idTime }) {
   );
 }
 
-function PaginaInicio({ dados, onNavegar, idTime }) {
+function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
   const { cidades, campos, posicoes, adversarios, jogadores, temporadas, partidas, ehTurmaFechada, timesInternos, encontros } = dados;
 
   const etapas = ehTurmaFechada ? [
@@ -3166,6 +3349,11 @@ function PaginaInicio({ dados, onNavegar, idTime }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+      {/* Escolha do modo de registro de gols (só para times normais que ainda não definiram) */}
+      {!ehTurmaFechada && time && !time.modo_gol && (
+        <EscolherModoGol idTime={idTime} time={time} show={show} />
+      )}
 
       {/* Header de boas-vindas */}
       <Card style={{ padding:"24px 28px", background:"linear-gradient(135deg,#103D2A,#174D36)" }}>
@@ -5796,6 +5984,8 @@ export default function AdminAppCompleto() {
               dados={{ cidades:_cidades, campos:_campos, posicoes:_posicoes, adversarios:_adversarios, jogadores:_jogadores, temporadas, partidas:_partidas, ehTurmaFechada, timesInternos:_timesInternos, encontros:_encontros }}
               onNavegar={setMenu}
               idTime={idTime}
+              time={time}
+              show={show}
             />)}
           {mostrarTour && <TourBoasVindas ehTurmaFechada={ehTurmaFechada} onFechar={fecharTour} onIr={setMenu} />}
           {menu === "app" && (
@@ -5845,7 +6035,7 @@ export default function AdminAppCompleto() {
           {menu === "campos"      && (<>{secTitle("Campos")}<CrudCampos idTime={idTime} show={show} readOnly={!canEdit("campos")} /></>)}
           {menu === "posicoes"    && (<>{secTitle("Posições")}<CrudPosicoes idTime={idTime} show={show} readOnly={!canEdit("posicoes")} /></>)}
           {menu === "times_internos" && (<>{secTitle("Times Internos")}<CrudTimesInternos idTime={idTime} show={show} readOnly={!canEdit("times_internos")} /></>)}
-          {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas idTime={idTime} show={show} readOnly={!canEdit("temporadas")} /></>)}
+          {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas idTime={idTime} show={show} readOnly={!canEdit("temporadas")} ehTurmaFechada={ehTurmaFechada} /></>)}
           {menu === "mensalidades" && (<CrudMensalidades idTime={idTime} show={show} readOnly={!canEdit("mensalidades")}/>)}
           {menu === "caixa"         && (<CrudCaixa idTime={idTime} show={show} readOnly={!canEdit("caixa")}/>)}
           {menu === "relatorio"     && (canVer("caixa") ? <RelatorioFinanceiro idTime={idTime} show={show}/> : <EstadoVazio icone="🔒" titulo="Sem acesso" texto="Você não tem permissão para ver o relatório financeiro. Fale com o responsável pelo time."/>)}
@@ -6682,7 +6872,7 @@ function LinkConfirmacao({ tipo, idRef, idTime, dataRef, show }) {
     setGerando(true);
     try {
       const token = (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g,"") : (Math.random().toString(36).slice(2)+Date.now().toString(36)+Math.random().toString(36).slice(2)));
-      const expira = dataRef ? new Date(new Date(dataRef).getTime() + 24*60*60*1000).toISOString() : null; // expira 1 dia após a data
+      const expira = dataRef ? new Date(new Date(dataRef).getTime() + 16*24*60*60*1000).toISOString() : null; // 16 dias após a data (1 dia original + 15 dias para ajustes pós-jogo)
       await api.post("link_confirmacao", { token, tipo, id_ref: idRef, id_time: idTime, expira_em: expira });
       show("Link de confirmação gerado!"); reload();
     } catch (e) { show(e.message, "error"); } finally { setGerando(false); }
@@ -7265,7 +7455,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
 }
 
 // ── CRUD TEMPORADAS ───────────────────────────────────────────
-function CrudTemporadas({ idTime, show, readOnly }) {
+function CrudTemporadas({ idTime, show, readOnly, ehTurmaFechada }) {
   const { data: temporadas, loading, reload } = useQuery(() =>
     idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*,time(nome)&order=data_inicio.desc`) : Promise.resolve([]),
     [idTime]
@@ -7294,6 +7484,11 @@ function CrudTemporadas({ idTime, show, readOnly }) {
 
   function abrirNovo() {
     const t = times?.[0];
+    // Trava: time normal precisa definir o modo de registro de gols antes de criar temporada.
+    if (!ehTurmaFechada && t && !t.modo_gol) {
+      show("Antes de criar uma temporada, escolha como o time vai registrar os gols (no aviso acima).", "error");
+      return;
+    }
     const ultima = temporadas?.[0]; // mais recente (ordenado por data_inicio desc)
     setForm({ nome:"", id_time: t ? String(t.id_time) : "", data_inicio:"", data_fim:"", publico: true,
       escudo_url: ultima?.escudo_url || t?.escudo_url || null,
@@ -7321,6 +7516,10 @@ function CrudTemporadas({ idTime, show, readOnly }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {/* Modo de gols pendente: o admin resolve aqui mesmo antes de criar temporada */}
+      {!ehTurmaFechada && times?.[0] && !times[0].modo_gol && !readOnly && (
+        <EscolherModoGol idTime={idTime} time={times[0]} show={show} onDefinido={()=>reload()} compacto />
+      )}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
         <BotoesImportExport
           onExportar={() => exportarExcel(
@@ -7628,6 +7827,11 @@ function ConfigTime({ idTime, show, readOnly }) {
         raio_busca_km: form.raio_busca_km ? Number(form.raio_busca_km) : 50,
         observacoes: form.observacoes||null, publico: form.publico !== false
       };
+      // Modo de registro de gols: só para time normal e nunca grava nulo
+      // (regra: depois de definido, não volta a ficar indefinido).
+      if (!ehTurmaFechada && (form.modo_gol === "simples" || form.modo_gol === "detalhado")) {
+        body.modo_gol = form.modo_gol;
+      }
       await api.patch(`time?id_time=eq.${form.id_time}`, body);
       // Se trocou o tipo de time: zera a posição dos jogadores (cadastro atual),
       // preservando o histórico das partidas (participacao não é tocada).
@@ -7693,6 +7897,13 @@ function ConfigTime({ idTime, show, readOnly }) {
             </Select>
             <Input label="Valor Mensalidade (R$)" type="number" min="0" step="0.01" value={form.valor_mensalidade||""} onChange={e => set("valor_mensalidade", e.target.value)}/>
             <Input label="Raio de busca de adversários (km)" type="number" min="1" step="1" value={form.raio_busca_km ?? 50} onChange={e => set("raio_busca_km", e.target.value)}/>
+            {!ehTurmaFechada && (
+              <Select label="Registro de gols" value={form.modo_gol||""} onChange={e => set("modo_gol", e.target.value)}>
+                <option value="" disabled>Selecione…</option>
+                <option value="simples">Simples — total de gols e assistências por jogador</option>
+                <option value="detalhado">Detalhado — cada gol com minuto, assistência, etc.</option>
+              </Select>
+            )}
             <Input label="Saldo Inicial do Caixa (R$)" type="number" step="0.01" value={form.saldo_inicial||""} onChange={e => set("saldo_inicial", e.target.value)}/>
           </div>
         </div>
