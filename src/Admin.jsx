@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.19.5";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.19.6";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -2400,9 +2400,6 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
             {!cancelada && (
               <CompartilharResultado partida={partida} gols={gols} jogadores={jogadores} time={meuTimeData?.[0]} temporada={temporada} idTime={idTime} show={show}/>
             )}
-            {!cancelada && (
-              <ConvocarPartida partida={partida} time={meuTimeData?.[0]} idTime={idTime} show={show}/>
-            )}
             {!cancelada && !readOnly && (
               <Btn variant="secondary" style={{ fontSize: 11, padding: "6px 12px" }} onClick={()=>setEditDados({ data: dataDeTS(partida.data), hora: horaDeTS(partida.data), id_campo: partida.id_campo ? String(partida.id_campo) : "", link_local: partida.link_local || "" })}>📅 Editar dados</Btn>
             )}
@@ -2421,8 +2418,13 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
         </button>
       )}
 
-      {/* Link de confirmação de presença */}
-      {!readOnly && !cancelada && <LinkConfirmacao tipo="partida" idRef={partida.id_partida} idTime={idTime} dataRef={partida.data} show={show} />}
+      {/* Link de confirmação de presença + convite para o WhatsApp */}
+      {!readOnly && !cancelada && (
+        <Card style={{ background:C.surf2, display:"flex", flexDirection:"column", gap:14 }}>
+          <LinkConfirmacao tipo="partida" idRef={partida.id_partida} idTime={idTime} dataRef={partida.data} show={show} embutido />
+          <ConvocarPartida partida={partida} time={meuTimeData?.[0]} idTime={idTime} show={show}/>
+        </Card>
+      )}
 
       {/* Placar */}
       {!cancelada && (
@@ -6868,7 +6870,7 @@ function ListaEncontros({ idTime, temporada, show, readOnly }) {
 
 // Gera/exibe o link público de confirmação de presença (encontro/evento/partida).
 // Reutilizável: recebe tipo, idRef, idTime e a data (para definir expiração).
-function LinkConfirmacao({ tipo, idRef, idTime, dataRef, show }) {
+function LinkConfirmacao({ tipo, idRef, idTime, dataRef, show, embutido }) {
   const { data: links, reload } = useQuery(
     () => (tipo && idRef) ? api.get(`link_confirmacao?tipo=eq.${tipo}&id_ref=eq.${idRef}&select=*&limit=1`) : Promise.resolve([]),
     [tipo, idRef]
@@ -6891,8 +6893,9 @@ function LinkConfirmacao({ tipo, idRef, idTime, dataRef, show }) {
     if (navigator?.clipboard) navigator.clipboard.writeText(url).then(() => show("Link copiado!")).catch(() => {});
   }
 
+  const Wrap = embutido ? "div" : Card;
   return (
-    <Card style={{ background:C.surf2 }}>
+    <Wrap style={embutido ? {} : { background:C.surf2 }}>
       <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginBottom:10 }}>📲 Link de confirmação de presença</div>
       {!link ? (
         <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
@@ -6911,7 +6914,7 @@ function LinkConfirmacao({ tipo, idRef, idTime, dataRef, show }) {
           </div>
         </div>
       )}
-    </Card>
+    </Wrap>
   );
 }
 
