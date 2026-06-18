@@ -127,6 +127,7 @@ function SeletorTimes({ onSelect }) {
   const [cidadeRef, setCidadeRef] = useState(""); // id da cidade de referência
   const [raioRef, setRaioRef] = useState("");   // raio em km (vazio = sem filtro)
   const [modalCadastro, setModalCadastro] = useState(false);
+  const [imgAmpliada, setImgAmpliada] = useState(null); // {src, titulo} da imagem de recurso ampliada
 
   const { data: allTimes, loading } = useQuery(() => sb(`time?select=*,temporada(id_temporada,nome,data_inicio,data_fim,publico)&publico=eq.true&order=nome.asc`));
   // resolve apenas as cidades que os times realmente usam (poucas — evita o limite de 1000 do Brasil inteiro)
@@ -240,6 +241,48 @@ function SeletorTimes({ onSelect }) {
           </div>
           <div style={{ fontSize:15, color:C.dim }}>Selecione um time para ver as estatísticas da temporada</div>
         </div>
+
+        {/* Hero de apresentação / captação — só quando o cadastro está ativo */}
+        {cadastroAtivo && (
+          <div style={{ marginBottom:48, background:`linear-gradient(135deg, ${C.surface}, ${C.surf2})`, border:`1px solid ${C.border}`, borderRadius:16, padding:"32px 28px", textAlign:"center" }}>
+            <div style={{ fontSize:22, fontWeight:800, color:C.cream, marginBottom:10, lineHeight:1.3 }}>
+              O sistema completo para o seu time amador
+            </div>
+            <div style={{ fontSize:14, color:C.dim, marginBottom:28, maxWidth:560, margin:"0 auto 28px", lineHeight:1.6 }}>
+              Organize estatísticas, finanças e presença num só lugar — e mostre os números do seu time numa página como as que você vê abaixo.
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(125px, 1fr))", gap:14, marginBottom:30, maxWidth:760, marginLeft:"auto", marginRight:"auto" }}>
+              {[
+                ["📊", "Estatísticas e artilharia", "Gols, assistências, rankings e visão geral da temporada.", "/recurso-estatisticas.png"],
+                ["💰", "Controle financeiro", "Caixa, mensalidades, eventos e relatórios do time.", "/recurso-financeiro.png"],
+                ["✅", "Confirmação de presença", "Os jogadores confirmam pelo link, sem precisar de login.", "/recurso-presenca.png"],
+                ["📲", "Cards para o WhatsApp", "Imagens prontas e bonitas para compartilhar no grupo.", "/recurso-whatsapp.png"],
+              ].map(([ic, tit, desc, img]) => (
+                <div key={tit} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"18px 16px", textAlign:"left" }}>
+                  <div style={{ fontSize:26, marginBottom:8 }}>{ic}</div>
+                  <div style={{ fontSize:14, fontWeight:800, color:C.gold, marginBottom:6 }}>{tit}</div>
+                  <div style={{ fontSize:12, color:C.dim, lineHeight:1.5, marginBottom:12 }}>{desc}</div>
+                  {/* Miniatura clicável: mostra o print quando existir; senão, um placeholder */}
+                  <div onClick={() => setImgAmpliada({ src: img, titulo: tit })}
+                    style={{ position:"relative", borderRadius:8, overflow:"hidden", cursor:"pointer", border:`1px solid ${C.border}`, aspectRatio:"16/10", background:C.surf2 }}>
+                    <img src={img} alt={tit}
+                      onError={e => { e.currentTarget.style.display="none"; e.currentTarget.nextSibling.style.display="flex"; }}
+                      style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>
+                    <div style={{ display:"none", width:"100%", height:"100%", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:4, color:C.dim, fontSize:11, textAlign:"center", padding:8 }}>
+                      <span style={{ fontSize:22, opacity:0.6 }}>{ic}</span>
+                      <span>Imagem em breve</span>
+                    </div>
+                    <div style={{ position:"absolute", bottom:6, right:6, background:"#000000aa", color:C.cream, fontSize:10, padding:"2px 7px", borderRadius:6 }}>🔍 ampliar</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setModalCadastro(true)}
+              style={{ background:C.gold, border:"none", borderRadius:10, color:"#0B3D2E", fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"13px 32px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em", boxShadow:`0 6px 20px ${C.gold}44` }}>
+              🏆 Quero o meu time aqui
+            </button>
+          </div>
+        )}
 
         {/* Filtro de tipo de time */}
         {(tiposAtivos||[]).length > 0 && (
@@ -366,12 +409,14 @@ function SeletorTimes({ onSelect }) {
 
       {/* CTA cadastro — controlado por config_sistema */}
       {cadastroAtivo && (
-        <div style={{ textAlign:"center", padding:"24px 16px 8px", borderTop:`1px solid ${C.border}`, marginTop:32 }}>
-          <div style={{ fontSize:13, color:C.dim, marginBottom:12 }}>Quer ter seu time aqui?</div>
+        <div style={{ textAlign:"center", padding:"32px 16px 8px", borderTop:`1px solid ${C.border}`, marginTop:32 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:C.cream, marginBottom:6 }}>Gostou do que viu?</div>
+          <div style={{ fontSize:13, color:C.dim, marginBottom:16 }}>Coloque o seu time aqui também — é rápido para começar.</div>
           <button onClick={() => setModalCadastro(true)}
-            style={{ background:"none", border:`2px solid ${C.gold}`, borderRadius:10,
-              color:C.gold, fontFamily:"inherit", fontWeight:800, fontSize:13,
-              padding:"11px 28px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em" }}>
+            style={{ background:C.gold, border:"none", borderRadius:10,
+              color:"#0B3D2E", fontFamily:"inherit", fontWeight:800, fontSize:13,
+              padding:"12px 30px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em",
+              boxShadow:`0 6px 20px ${C.gold}44` }}>
             🏆 Cadastrar meu Time
           </button>
         </div>
@@ -385,6 +430,23 @@ function SeletorTimes({ onSelect }) {
       </footer>
 
       {modalCadastro && <ModalSolicitacao onClose={() => setModalCadastro(false)}/>}
+
+      {/* Lightbox: imagem do recurso ampliada */}
+      {imgAmpliada && (
+        <div onClick={() => setImgAmpliada(null)}
+          style={{ position:"fixed", inset:0, background:"#000000dd", zIndex:200, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24, cursor:"zoom-out" }}>
+          <div style={{ color:C.gold, fontSize:14, fontWeight:800, marginBottom:14, textAlign:"center" }}>{imgAmpliada.titulo}</div>
+          <img src={imgAmpliada.src} alt={imgAmpliada.titulo}
+            onError={e => { e.currentTarget.style.display="none"; e.currentTarget.nextSibling.style.display="flex"; }}
+            style={{ maxWidth:"92%", maxHeight:"78vh", borderRadius:12, border:`2px solid ${C.gold}`, objectFit:"contain" }}
+            onClick={e => e.stopPropagation()}/>
+          <div style={{ display:"none", flexDirection:"column", alignItems:"center", gap:10, color:C.dim, background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:"48px 40px" }} onClick={e => e.stopPropagation()}>
+            <span style={{ fontSize:40, opacity:0.5 }}>🖼️</span>
+            <span style={{ fontSize:14 }}>Imagem em breve</span>
+          </div>
+          <div style={{ color:C.dim, fontSize:12, marginTop:14 }}>Toque fora da imagem para fechar</div>
+        </div>
+      )}
     </div>
   );
 }
