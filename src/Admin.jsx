@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.19.1";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.19.4";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1547,6 +1547,12 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  // Ao escolher/trocar o campo, traz o link de localização do campo (trocar campo sobrescreve o link).
+  function selecionarCampo(idc) {
+    const c = (campos || []).find(x => String(x.id_campo) === String(idc));
+    setForm(f => ({ ...f, id_campo: idc, link_local: c?.link_local || "" }));
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <Toast {...(toast || { msg: null })} />
@@ -1562,7 +1568,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
         <option value="S">🏠 Em Casa</option>
         <option value="N">✈️ Fora</option>
       </Select>
-      <Select label="Campo *" value={form.id_campo} onChange={e => set("id_campo", e.target.value)}>
+      <Select label="Campo *" value={form.id_campo} onChange={e => selecionarCampo(e.target.value)}>
         <option value="">Selecione...</option>
         {(campos || []).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
       </Select>
@@ -2202,7 +2208,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
   const minhaCidade = meuTime?.cidade; // {nome, estado, latitude, longitude}
   const { data: posicoes }      = useQuery(() => meuTipoPosicoes ? api.get(`posicao?id_tipo_time=eq.${meuTipoPosicoes}&select=*&order=ordem.asc`) : Promise.resolve([]), [meuTipoPosicoes]);
   const { data: advsFicha } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
-  const { data: camposFicha } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=id_campo,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
+  const { data: camposFicha } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=id_campo,nome,link_local&order=nome.asc`) : Promise.resolve([]), [idTime]);
   // Raio ajustável na tela (inicia com o padrão do time; ajuste é temporário, não salva)
   const [raioKm, setRaioKm] = useState(null);
   useEffect(() => { if (meuTime?.raio_busca_km != null && raioKm === null) setRaioKm(meuTime.raio_busca_km); }, [meuTime]);
@@ -2303,11 +2309,11 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
           // 2) deletar as participações
           await api.delete(`participacao?id_partida=eq.${partida.id_partida}`);
         }
-        // 3) zerar adversário, placar e campo da partida
+        // 3) zerar adversário, placar, campo e link da partida (o link vem do campo)
         await api.patch(`partida?id_partida=eq.${partida.id_partida}`, {
-          id_adversario: null, id_campo: null, gols_marcados: null, gols_sofridos: null,
+          id_adversario: null, id_campo: null, gols_marcados: null, gols_sofridos: null, link_local: null,
         });
-        setPartida(u => ({ ...u, id_adversario: null, adversario: null, id_campo: null, gols_marcados: null, gols_sofridos: null }));
+        setPartida(u => ({ ...u, id_adversario: null, adversario: null, id_campo: null, gols_marcados: null, gols_sofridos: null, link_local: null }));
         setPlacar({ gols_marcados: "", gols_sofridos: "" });
         show("Adversário removido — partida procurando jogo.");
       }
@@ -2667,7 +2673,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
               <Input label="Data" type="date" value={editDados.data} onChange={e=>setEditDados(d=>({...d, data:e.target.value}))}/>
               <Input label="Horário" type="time" value={editDados.hora} onChange={e=>setEditDados(d=>({...d, hora:e.target.value}))}/>
             </div>
-            <Select label="Campo" value={editDados.id_campo} onChange={e=>setEditDados(d=>({...d, id_campo:e.target.value}))}>
+            <Select label="Campo" value={editDados.id_campo} onChange={e=>{ const c=(camposFicha||[]).find(x=>String(x.id_campo)===String(e.target.value)); setEditDados(d=>({...d, id_campo:e.target.value, link_local: c?.link_local || ""})); }}>
               <option value="">Sem campo definido</option>
               {(camposFicha||[]).map(c=><option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
             </Select>
@@ -6497,9 +6503,10 @@ function CrudCampos({ idTime, show, readOnly }) {
 
   async function salvar() {
     if (!form.nome) { show("Nome obrigatório.", "error"); return; }
+    if (form.link_local && !linkLocalValido(form.link_local)) { show("Link de localização inválido. Cole um link de mapa (ex: Google Maps).", "error"); return; }
     setSaving(true);
     try {
-      const body = { nome: form.nome, endereco: form.endereco||null, id_cidade: form.id_cidade?Number(form.id_cidade):null, observacoes: form.observacoes||null, id_time: idTime||null };
+      const body = { nome: form.nome, endereco: form.endereco||null, id_cidade: form.id_cidade?Number(form.id_cidade):null, link_local: form.link_local ? normalizarLink(form.link_local) : null, observacoes: form.observacoes||null, id_time: idTime||null };
       if (modal === "novo") await api.post("campo", body);
       else await api.patch(`campo?id_campo=eq.${form.id_campo}`, body);
       show("Salvo!"); setModal(null); reload();
@@ -6589,6 +6596,8 @@ function CrudCampos({ idTime, show, readOnly }) {
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} />
             <Input label="Endereço" value={form.endereco||""} onChange={e => set("endereco", e.target.value)} />
+            <Input label="Link de localização (opcional)" value={form.link_local||""} onChange={e => set("link_local", e.target.value)} placeholder="https://maps.google.com/..." />
+            <div style={{ fontSize:11, color:C.dim, marginTop:-4 }}>Quando o campo é usado numa partida ou encontro, este link é trazido automaticamente.</div>
             <Select label="Estado (UF)" value={ufCampo} onChange={e => { setUfCampo(e.target.value); set("id_cidade", ""); }}>
               {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
             </Select>
@@ -6922,7 +6931,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
   // Times internos ativos (sem data_fim) + campos + jogadores ativos
   const { data: timesInternos } = useQuery(() => idTime ? api.get(`time_interno?id_time=eq.${idTime}&data_fim=is.null&select=id_time_interno,nome,cor&order=nome.asc`) : Promise.resolve([]), [idTime]);
   const { data: _timeEnc } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,cidade:id_cidade_sede(nome,estado)&limit=1`) : Promise.resolve([]), [idTime]);
-  const { data: campos } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=id_campo,nome&order=nome.asc`) : Promise.resolve([]), [idTime]);
+  const { data: campos } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=id_campo,nome,link_local&order=nome.asc`) : Promise.resolve([]), [idTime]);
   const { data: jogadores } = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=id_jogador,nome,apelido,camisa&order=camisa.asc`) : Promise.resolve([]), [idTime]);
 
   // Jogos e participações do encontro (quando já existe)
@@ -6966,7 +6975,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
         <div className="campos-encontro">
           <Input label="Data *" type="date" value={cabecalho.data} onChange={e => setCabecalho(c => ({ ...c, data: e.target.value }))} />
           <Input label="Hora" type="time" value={cabecalho.hora} onChange={e => setCabecalho(c => ({ ...c, hora: e.target.value }))} />
-          <Select label="Local" value={cabecalho.id_campo} onChange={e => setCabecalho(c => ({ ...c, id_campo: e.target.value }))}>
+          <Select label="Local" value={cabecalho.id_campo} onChange={e => { const cp=(campos||[]).find(x=>String(x.id_campo)===String(e.target.value)); setCabecalho(c => ({ ...c, id_campo: e.target.value, link_local: cp?.link_local || "" })); }}>
             <option value="">—</option>
             {(campos||[]).map(c => <option key={c.id_campo} value={c.id_campo}>{c.nome}</option>)}
           </Select>
