@@ -251,7 +251,7 @@ function SeletorTimes({ onSelect }) {
             <div style={{ fontSize:14, color:C.dim, marginBottom:28, maxWidth:560, margin:"0 auto 28px", lineHeight:1.6 }}>
               Organize estatísticas, finanças e presença num só lugar — e mostre os números do seu time numa página como as que você vê abaixo.
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:16, marginBottom:30, maxWidth:640, marginLeft:"auto", marginRight:"auto" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(125px, 1fr))", gap:14, marginBottom:30, maxWidth:760, marginLeft:"auto", marginRight:"auto" }}>
               {[
                 ["📊", "Estatísticas e artilharia", "Gols, assistências, rankings e visão geral da temporada.", "/recurso-estatisticas.png"],
                 ["💰", "Controle financeiro", "Caixa, mensalidades, eventos e relatórios do time.", "/recurso-financeiro.png"],
