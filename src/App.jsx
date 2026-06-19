@@ -283,7 +283,7 @@ function SeletorTimes({ onSelect }) {
             <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, marginBottom:8, flexWrap:"wrap" }}>
               <span style={{ fontSize:15, color:C.dim, marginRight:6 }}>E quanto custa?</span>
               <span style={{ fontSize:30, fontWeight:900, color:C.cream }}>R$</span>
-              <img src="/logo.png" alt="zero" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover" }}/>
+              <span style={{ fontSize:38, lineHeight:1 }} role="img" aria-label="zero">⚽</span>
               <span style={{ fontSize:30, fontWeight:900, color:C.cream }}>,00</span>
               <span style={{ fontSize:15, color:C.gold, fontWeight:800, marginLeft:6 }}>(ZERO)</span>
             </div>

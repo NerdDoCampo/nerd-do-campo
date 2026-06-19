@@ -151,13 +151,25 @@ export default function Conheca() {
           <div style={{ fontSize:15, color:C.dim, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, marginBottom:14 }}>E quanto custa tudo isso?</div>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, marginBottom:10, flexWrap:"wrap" }}>
             <span style={{ fontSize:44, fontWeight:900, color:C.cream }}>R$</span>
-            <img src="/logo.png" alt="zero" style={{ width:58, height:58, borderRadius:"50%", objectFit:"cover", verticalAlign:"middle" }}/>
+            <span style={{ fontSize:58, lineHeight:1 }} role="img" aria-label="zero">⚽</span>
             <span style={{ fontSize:44, fontWeight:900, color:C.cream }}>,00</span>
           </div>
           <div style={{ fontSize:20, fontWeight:800, color:C.gold, marginBottom:8 }}>ZERO reais.</div>
           <div style={{ fontSize:14, color:C.dim, maxWidth:440, margin:"0 auto", lineHeight:1.6 }}>
             Isso mesmo — aquela bola ali no lugar do número. Tudo que você viu acima, sem custo nenhum pro seu time.
           </div>
+        </div>
+
+        {/* Manual do usuário — disponível para quem quer se aprofundar antes */}
+        <div style={{ textAlign:"center", marginBottom:40 }}>
+          <a href={`/manual.pdf?v=1.20.1`} target="_blank" rel="noopener noreferrer"
+            style={{ display:"inline-flex", alignItems:"center", gap:10, background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 24px", color:C.cream, textDecoration:"none", fontSize:14, fontWeight:700 }}>
+            <span style={{ fontSize:24 }}>📖</span>
+            <span style={{ textAlign:"left" }}>
+              <span style={{ display:"block", color:C.gold }}>Quer ver tudo em detalhes?</span>
+              <span style={{ display:"block", fontSize:12, color:C.dim, fontWeight:400 }}>Abra o manual completo do usuário (PDF)</span>
+            </span>
+          </a>
         </div>
 
         {/* CTA final */}
