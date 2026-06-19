@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.20.4";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.20.5";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1795,6 +1795,7 @@ function CompartilharResultado({ partida, gols, jogadores, time, temporada, idTi
 // ── Convocar para a próxima partida: card de convocação + link de presença ──
 function ConvocarPartida({ partida, time, idTime, show }) {
   const [gerando, setGerando] = useState(false);
+  const [pronto, setPronto] = useState(null); // { arquivo, texto, url, copiou } quando pronto p/ compartilhar
 
   // busca o link de confirmação desta partida (se já existir)
   const { data: links, reload } = useQuery(
@@ -1919,17 +1920,13 @@ function ConvocarPartida({ partida, time, idTime, show }) {
       const arquivo = new File([blob], "convocacao-nerd-do-campo.png", { type: "image/png" });
       const texto = `📣 Confirme sua presença no próximo jogo:\n${url}` + (partida.link_local && partida.link_local.trim() ? `\n\n📍 Local: ${partida.link_local.trim()}` : "");
 
-      // tenta compartilhar imagem + texto (com o link) juntos
-      if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
-        // O WhatsApp descarta o texto quando há imagem junto; copiamos o link para colar.
+      const podeShare = navigator.canShare && navigator.canShare({ files: [arquivo] });
+      if (podeShare) {
+        // Copia o link agora (o WhatsApp descarta o texto quando há imagem junto).
         let copiou = false;
         if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
-        // Aviso ANTES do share: depois do share o usuário vai pro WhatsApp e não volta,
-        // então o toast precisa já estar visível quando a tela de compartilhar abre.
-        if (show) show(copiou
-          ? "Link copiado! Cole no grupo logo após a imagem. 👇"
-          : "Lembre de mandar o link de confirmação no grupo, junto da imagem.", "success");
-        await navigator.share({ files: [arquivo], text: texto });
+        // Abre o modal de confirmação: o usuário lê com calma e dispara o share quando quiser.
+        setPronto({ arquivo, texto, url, copiou });
       } else {
         // fallback: baixa a imagem e copia o link
         const u = URL.createObjectURL(blob);
@@ -1945,20 +1942,51 @@ function ConvocarPartida({ partida, time, idTime, show }) {
     } finally { setGerando(false); }
   }
 
+  // Compartilhamento real, disparado pelo botão do modal (no gesto do usuário).
+  async function compartilharAgora() {
+    if (!pronto) return;
+    try {
+      await navigator.share({ files: [pronto.arquivo], text: pronto.texto });
+    } catch (e) { /* usuário cancelou: tudo bem */ }
+    setPronto(null);
+  }
+
   // só faz sentido para partida futura (sem placar) e com adversário definido
   if (partida.gols_marcados !== null && partida.gols_marcados !== undefined) return null;
   if (!partida.id_adversario) return null;
 
   return (
-    <Btn onClick={convocar} disabled={gerando} style={{ fontSize:13, padding:"8px 16px" }}>
-      {gerando ? "Gerando..." : "📣 Convocar para o jogo"}
-    </Btn>
+    <>
+      <Btn onClick={convocar} disabled={gerando} style={{ fontSize:13, padding:"8px 16px" }}>
+        {gerando ? "Gerando..." : "📣 Convocar para o jogo"}
+      </Btn>
+      {pronto && (
+        <Modal title="Convite pronto!" onClose={() => setPronto(null)}>
+          <div style={{ fontSize:14, color:C.cream, lineHeight:1.6, marginBottom:8 }}>
+            A imagem do convite está pronta para compartilhar.
+          </div>
+          <div style={{ background:C.surf2, border:`1px solid ${C.gold}55`, borderRadius:10, padding:"14px 16px", marginBottom:18 }}>
+            <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:6 }}>📌 Importante</div>
+            <div style={{ fontSize:13, color:C.cream, lineHeight:1.6 }}>
+              {pronto.copiou
+                ? "O link de confirmação já foi copiado. Depois de enviar a imagem no grupo, cole o link (toque e segure → Colar) numa mensagem logo abaixo."
+                : "Depois de enviar a imagem, lembre de mandar também o link de confirmação no grupo."}
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:10 }}>
+            <Btn variant="secondary" onClick={() => setPronto(null)} style={{ flex:1 }}>Cancelar</Btn>
+            <Btn onClick={compartilharAgora} style={{ flex:2 }}>📲 Compartilhar agora</Btn>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
 // ── Card de presença genérico (evento ou encontro): imagem + link ──
 function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLocal, time, show }) {
   const [gerando, setGerando] = useState(false);
+  const [pronto, setPronto] = useState(null);
   const { data: links, reload } = useQuery(
     () => (tipo && idRef) ? api.get(`link_confirmacao?tipo=eq.${tipo}&id_ref=eq.${idRef}&select=*&limit=1`) : Promise.resolve([]),
     [tipo, idRef]
@@ -2068,15 +2096,11 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
       if (!blob) throw new Error("Falha ao gerar imagem");
       const arquivo = new File([blob], "convite-nerd-do-campo.png", { type: "image/png" });
       const texto = `📣 Confirme sua presença:\n${url}` + (linkLocal && linkLocal.trim() ? `\n\n📍 Local: ${linkLocal.trim()}` : "");
-      if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
-        // O WhatsApp descarta o texto quando há imagem junto. Copiamos o link para colar.
+      const podeShare = navigator.canShare && navigator.canShare({ files: [arquivo] });
+      if (podeShare) {
         let copiou = false;
         if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
-        // Aviso ANTES do share (depois o usuário vai pro WhatsApp e não volta ao app).
-        if (show) show(copiou
-          ? "Link copiado! Cole no grupo logo após a imagem. 👇"
-          : "Lembre de mandar o link de confirmação no grupo, junto da imagem.", "success");
-        await navigator.share({ files: [arquivo], text: texto });
+        setPronto({ arquivo, texto, url, copiou });
       } else {
         const u = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -2091,10 +2115,38 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
     } finally { setGerando(false); }
   }
 
+  async function compartilharAgora() {
+    if (!pronto) return;
+    try { await navigator.share({ files: [pronto.arquivo], text: pronto.texto }); }
+    catch (e) { /* cancelou: ok */ }
+    setPronto(null);
+  }
+
   return (
-    <Btn onClick={compartilhar} disabled={gerando} style={{ fontSize:13, padding:"8px 16px" }}>
-      {gerando ? "Gerando..." : "📣 Compartilhar convite"}
-    </Btn>
+    <>
+      <Btn onClick={compartilhar} disabled={gerando} style={{ fontSize:13, padding:"8px 16px" }}>
+        {gerando ? "Gerando..." : "📣 Compartilhar convite"}
+      </Btn>
+      {pronto && (
+        <Modal title="Convite pronto!" onClose={() => setPronto(null)}>
+          <div style={{ fontSize:14, color:C.cream, lineHeight:1.6, marginBottom:8 }}>
+            A imagem do convite está pronta para compartilhar.
+          </div>
+          <div style={{ background:C.surf2, border:`1px solid ${C.gold}55`, borderRadius:10, padding:"14px 16px", marginBottom:18 }}>
+            <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:6 }}>📌 Importante</div>
+            <div style={{ fontSize:13, color:C.cream, lineHeight:1.6 }}>
+              {pronto.copiou
+                ? "O link de confirmação já foi copiado. Depois de enviar a imagem no grupo, cole o link (toque e segure → Colar) numa mensagem logo abaixo."
+                : "Depois de enviar a imagem, lembre de mandar também o link de confirmação no grupo."}
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:10 }}>
+            <Btn variant="secondary" onClick={() => setPronto(null)} style={{ flex:1 }}>Cancelar</Btn>
+            <Btn onClick={compartilharAgora} style={{ flex:2 }}>📲 Compartilhar agora</Btn>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
