@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.20.3";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.20.4";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1924,12 +1924,12 @@ function ConvocarPartida({ partida, time, idTime, show }) {
         // O WhatsApp descarta o texto quando há imagem junto; copiamos o link para colar.
         let copiou = false;
         if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
-        await navigator.share({ files: [arquivo], text: texto });
-        // tenta copiar de novo após o share (caso a primeira tentativa tenha sido bloqueada)
-        if (!copiou && navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
+        // Aviso ANTES do share: depois do share o usuário vai pro WhatsApp e não volta,
+        // então o toast precisa já estar visível quando a tela de compartilhar abre.
         if (show) show(copiou
-          ? "Convite enviado! O link foi copiado — cole no grupo logo após a imagem."
-          : "Convite enviado! Lembre de mandar o link de confirmação no grupo também.", "success");
+          ? "Link copiado! Cole no grupo logo após a imagem. 👇"
+          : "Lembre de mandar o link de confirmação no grupo, junto da imagem.", "success");
+        await navigator.share({ files: [arquivo], text: texto });
       } else {
         // fallback: baixa a imagem e copia o link
         const u = URL.createObjectURL(blob);
@@ -2069,15 +2069,14 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
       const arquivo = new File([blob], "convite-nerd-do-campo.png", { type: "image/png" });
       const texto = `📣 Confirme sua presença:\n${url}` + (linkLocal && linkLocal.trim() ? `\n\n📍 Local: ${linkLocal.trim()}` : "");
       if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
-        // O WhatsApp descarta o texto quando há imagem junto. Por isso copiamos o
-        // link para a área de transferência, para o admin colar junto da imagem.
+        // O WhatsApp descarta o texto quando há imagem junto. Copiamos o link para colar.
         let copiou = false;
         if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
-        await navigator.share({ files: [arquivo], text: texto });
-        if (!copiou && navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
+        // Aviso ANTES do share (depois o usuário vai pro WhatsApp e não volta ao app).
         if (show) show(copiou
-          ? "Convite enviado! O link foi copiado — cole no grupo logo após a imagem."
-          : "Convite enviado! Lembre de mandar o link de confirmação no grupo também.", "success");
+          ? "Link copiado! Cole no grupo logo após a imagem. 👇"
+          : "Lembre de mandar o link de confirmação no grupo, junto da imagem.", "success");
+        await navigator.share({ files: [arquivo], text: texto });
       } else {
         const u = URL.createObjectURL(blob);
         const a = document.createElement("a");
