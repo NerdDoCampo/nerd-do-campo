@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.19.6";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.19.8";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1908,7 +1908,11 @@ function ConvocarPartida({ partida, time, idTime, show }) {
 
       // tenta compartilhar imagem + texto (com o link) juntos
       if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+        // O WhatsApp descarta o texto quando há imagem junto; copiamos o link antes para colar.
+        let copiou = false;
+        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
         await navigator.share({ files: [arquivo], text: texto });
+        if (copiou) show && show("Convite compartilhado! O link foi copiado — cole no grupo logo após a imagem.", "success");
       } else {
         // fallback: baixa a imagem e copia o link
         const u = URL.createObjectURL(blob);
@@ -2038,7 +2042,12 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
       const arquivo = new File([blob], "convite-nerd-do-campo.png", { type: "image/png" });
       const texto = `📣 Confirme sua presença:\n${url}` + (linkLocal && linkLocal.trim() ? `\n\n📍 Local: ${linkLocal.trim()}` : "");
       if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+        // O WhatsApp descarta o texto quando há imagem junto. Por isso copiamos o
+        // link para a área de transferência ANTES, para o admin colar junto da imagem.
+        let copiou = false;
+        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
         await navigator.share({ files: [arquivo], text: texto });
+        if (copiou) show && show("Convite compartilhado! O link foi copiado — cole no grupo logo após a imagem.", "success");
       } else {
         const u = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -5646,8 +5655,11 @@ export default function AdminAppCompleto() {
           const sa = data.find(ut => ut.role === 'superadmin');
           if (sa) {
             setIsSuperadmin(true);
-            setIdTime(null); // superadmin vê tudo
-            try { sessionStorage.removeItem("ndc_id_time"); } catch(e) {}
+            // Mantém o time que o super estava observando se a página foi atualizada.
+            // Sem time salvo, começa vendo tudo (null).
+            let timeSalvo = null;
+            try { const v = sessionStorage.getItem("ndc_id_time"); timeSalvo = v ? Number(v) : null; } catch(e) {}
+            setIdTime(timeSalvo || null);
             return;
           }
           // Admin comum: pode ter vínculo com VÁRIOS times.
