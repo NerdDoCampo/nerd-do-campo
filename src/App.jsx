@@ -126,7 +126,9 @@ function SeletorTimes({ onSelect }) {
   const [ufRef, setUfRef] = useState("");       // estado de referência do filtro de raio
   const [cidadeRef, setCidadeRef] = useState(""); // id da cidade de referência
   const [raioRef, setRaioRef] = useState("");   // raio em km (vazio = sem filtro)
-  const [modalCadastro, setModalCadastro] = useState(false);
+  const [modalCadastro, setModalCadastro] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get("cadastro") === "1"; } catch(e) { return false; }
+  });
   const [imgAmpliada, setImgAmpliada] = useState(null); // {src, titulo} da imagem de recurso ampliada
 
   const { data: allTimes, loading } = useQuery(() => sb(`time?select=*,temporada(id_temporada,nome,data_inicio,data_fim,publico)&publico=eq.true&order=nome.asc`));
@@ -259,10 +261,10 @@ function SeletorTimes({ onSelect }) {
                 ["🎟️", "Eventos e venda de cartões", "Do churras à arrecadação, com venda por atleta e convidado.", "/recurso-whatsapp.png"],
                 ["🔒", "Seus dados, suas regras", "Temporada ruim? Deixe as informações privadas.", "/recurso-privacidade.png"],
               ].map(([ic, tit, desc, img]) => (
-                <div key={tit} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"18px 16px", textAlign:"left" }}>
+                <div key={tit} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"18px 16px", textAlign:"left", display:"flex", flexDirection:"column", height:"100%" }}>
                   <div style={{ fontSize:26, marginBottom:8 }}>{ic}</div>
                   <div style={{ fontSize:14, fontWeight:800, color:C.gold, marginBottom:6 }}>{tit}</div>
-                  <div style={{ fontSize:12, color:C.dim, lineHeight:1.5, marginBottom:12 }}>{desc}</div>
+                  <div style={{ fontSize:12, color:C.dim, lineHeight:1.5, marginBottom:12, flex:1 }}>{desc}</div>
                   {/* Miniatura clicável: mostra o print quando existir; senão, um placeholder */}
                   <div onClick={() => setImgAmpliada({ src: img, titulo: tit })}
                     style={{ position:"relative", borderRadius:8, overflow:"hidden", cursor:"pointer", border:`1px solid ${C.border}`, aspectRatio:"16/10", background:C.surf2 }}>
