@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.20.2";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.20.3";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1806,9 +1806,22 @@ function ConvocarPartida({ partida, time, idTime, show }) {
   // garante que existe um link; se não, cria e retorna o token
   async function garantirLink() {
     if (links?.[0]?.token) return links[0].token;
+    // Pode haver um link criado por outro componente (ex: seção do link) que esta
+    // query ainda não recarregou. Buscamos direto antes de tentar criar.
+    try {
+      const existentes = await api.get(`link_confirmacao?tipo=eq.partida&id_ref=eq.${partida.id_partida}&select=token&limit=1`);
+      if (existentes?.[0]?.token) { reload(); return existentes[0].token; }
+    } catch(e) {}
     const token = (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g,"") : (Math.random().toString(36).slice(2)+Date.now().toString(36)));
     const expira = partida.data ? new Date(new Date(partida.data).getTime() + 16*24*60*60*1000).toISOString() : null; // 16 dias após a data (regra original de 1 dia + 15 dias para ajustes pós-jogo)
-    await api.post("link_confirmacao", { token, tipo:"partida", id_ref: partida.id_partida, id_time: idTime, expira_em: expira });
+    try {
+      await api.post("link_confirmacao", { token, tipo:"partida", id_ref: partida.id_partida, id_time: idTime, expira_em: expira });
+    } catch(e) {
+      // corrida: alguém criou nesse meio tempo. Busca o que existe.
+      const existentes = await api.get(`link_confirmacao?tipo=eq.partida&id_ref=eq.${partida.id_partida}&select=token&limit=1`);
+      if (existentes?.[0]?.token) { reload(); return existentes[0].token; }
+      throw e;
+    }
     reload();
     return token;
   }
@@ -1908,11 +1921,15 @@ function ConvocarPartida({ partida, time, idTime, show }) {
 
       // tenta compartilhar imagem + texto (com o link) juntos
       if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
-        // O WhatsApp descarta o texto quando há imagem junto; copiamos o link antes para colar.
+        // O WhatsApp descarta o texto quando há imagem junto; copiamos o link para colar.
         let copiou = false;
         if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
         await navigator.share({ files: [arquivo], text: texto });
-        if (copiou) show && show("Convite compartilhado! O link foi copiado — cole no grupo logo após a imagem.", "success");
+        // tenta copiar de novo após o share (caso a primeira tentativa tenha sido bloqueada)
+        if (!copiou && navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
+        if (show) show(copiou
+          ? "Convite enviado! O link foi copiado — cole no grupo logo após a imagem."
+          : "Convite enviado! Lembre de mandar o link de confirmação no grupo também.", "success");
       } else {
         // fallback: baixa a imagem e copia o link
         const u = URL.createObjectURL(blob);
@@ -1950,9 +1967,19 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
 
   async function garantirLink() {
     if (links?.[0]?.token) return links[0].token;
+    try {
+      const existentes = await api.get(`link_confirmacao?tipo=eq.${tipo}&id_ref=eq.${idRef}&select=token&limit=1`);
+      if (existentes?.[0]?.token) { reload(); return existentes[0].token; }
+    } catch(e) {}
     const token = (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g,"") : (Math.random().toString(36).slice(2)+Date.now().toString(36)));
     const expira = data ? new Date(new Date(data).getTime() + 16*24*60*60*1000).toISOString() : null; // 16 dias após a data (1 dia original + 15 dias para ajustes pós-jogo)
-    await api.post("link_confirmacao", { token, tipo, id_ref: idRef, id_time: idTime, expira_em: expira });
+    try {
+      await api.post("link_confirmacao", { token, tipo, id_ref: idRef, id_time: idTime, expira_em: expira });
+    } catch(e) {
+      const existentes = await api.get(`link_confirmacao?tipo=eq.${tipo}&id_ref=eq.${idRef}&select=token&limit=1`);
+      if (existentes?.[0]?.token) { reload(); return existentes[0].token; }
+      throw e;
+    }
     reload();
     return token;
   }
@@ -2043,11 +2070,14 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
       const texto = `📣 Confirme sua presença:\n${url}` + (linkLocal && linkLocal.trim() ? `\n\n📍 Local: ${linkLocal.trim()}` : "");
       if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
         // O WhatsApp descarta o texto quando há imagem junto. Por isso copiamos o
-        // link para a área de transferência ANTES, para o admin colar junto da imagem.
+        // link para a área de transferência, para o admin colar junto da imagem.
         let copiou = false;
         if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
         await navigator.share({ files: [arquivo], text: texto });
-        if (copiou) show && show("Convite compartilhado! O link foi copiado — cole no grupo logo após a imagem.", "success");
+        if (!copiou && navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
+        if (show) show(copiou
+          ? "Convite enviado! O link foi copiado — cole no grupo logo após a imagem."
+          : "Convite enviado! Lembre de mandar o link de confirmação no grupo também.", "success");
       } else {
         const u = URL.createObjectURL(blob);
         const a = document.createElement("a");

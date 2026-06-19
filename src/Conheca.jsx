@@ -1,7 +1,3 @@
-import { useState } from "react";
-
-const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
-const SUPABASE_ANON = process.env.REACT_APP_SUPABASE_ANON_KEY || "";
 
 const C = {
   bg: "#0B3D2E", surface: "#103D2A", surf2: "#174D36",
@@ -48,71 +44,15 @@ const SECOES = [
   },
 ];
 
-function ModalSolic({ onClose }) {
-  const [form, setForm] = useState({ nome_time: "", nome_responsavel: "", email: "", telefone: "", cidade: "" });
-  const [enviando, setEnviando] = useState(false);
-  const [enviado, setEnviado] = useState(false);
-  const [erro, setErro] = useState("");
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  async function enviar() {
-    if (!form.nome_time || !form.nome_responsavel || !form.email) { setErro("Preencha time, responsável e e-mail."); return; }
-    setEnviando(true); setErro("");
-    try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/solicitacao_time`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}`, Prefer: "return=minimal" },
-        body: JSON.stringify({ nome_time: form.nome_time, nome_responsavel: form.nome_responsavel, email: form.email.trim().toLowerCase(), telefone: form.telefone || null, cidade: form.cidade || null, status: "pendente" }),
-      });
-      if (!res.ok) throw new Error("Falha ao enviar");
-      setEnviado(true);
-    } catch (e) { setErro("Não consegui enviar agora. Tente de novo em instantes."); }
-    finally { setEnviando(false); }
-  }
-
-  const inp = { width:"100%", padding:"11px 13px", borderRadius:8, border:`1px solid ${C.border}`, background:C.bg, color:C.cream, fontFamily:"inherit", fontSize:14, marginBottom:12, boxSizing:"border-box" };
-
-  return (
-    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"#000000cc", zIndex:300, display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:28, maxWidth:440, width:"100%", maxHeight:"90vh", overflowY:"auto" }}>
-        {enviado ? (
-          <div style={{ textAlign:"center" }}>
-            <div style={{ fontSize:44, marginBottom:12 }}>🎉</div>
-            <div style={{ fontSize:19, fontWeight:800, color:C.cream, marginBottom:10 }}>Solicitação enviada!</div>
-            <div style={{ fontSize:14, color:C.dim, lineHeight:1.6, marginBottom:22 }}>Vamos analisar e entrar em contato pelo e-mail informado com os próximos passos. Fica de olho na caixa de entrada (e no spam).</div>
-            <button onClick={onClose} style={{ background:C.gold, border:"none", borderRadius:10, color:"#0B3D2E", fontWeight:800, fontSize:14, padding:"12px 28px", cursor:"pointer", fontFamily:"inherit" }}>Fechar</button>
-          </div>
-        ) : (
-          <>
-            <div style={{ fontSize:19, fontWeight:800, color:C.cream, marginBottom:6 }}>🏆 Quero o meu time aqui</div>
-            <div style={{ fontSize:13, color:C.dim, marginBottom:20, lineHeight:1.5 }}>Preencha os dados e a gente entra em contato pra liberar seu acesso.</div>
-            <input style={inp} placeholder="Nome do time *" value={form.nome_time} onChange={e => set("nome_time", e.target.value)} />
-            <input style={inp} placeholder="Seu nome *" value={form.nome_responsavel} onChange={e => set("nome_responsavel", e.target.value)} />
-            <input style={inp} placeholder="E-mail *" type="email" value={form.email} onChange={e => set("email", e.target.value)} />
-            <input style={inp} placeholder="Telefone / WhatsApp" value={form.telefone} onChange={e => set("telefone", e.target.value)} />
-            <input style={inp} placeholder="Cidade" value={form.cidade} onChange={e => set("cidade", e.target.value)} />
-            {erro && <div style={{ color:C.loss, fontSize:13, marginBottom:12 }}>{erro}</div>}
-            <div style={{ display:"flex", gap:10, marginTop:6 }}>
-              <button onClick={onClose} style={{ flex:1, background:"none", border:`1px solid ${C.border}`, borderRadius:10, color:C.dim, fontWeight:700, fontSize:14, padding:"12px", cursor:"pointer", fontFamily:"inherit" }}>Cancelar</button>
-              <button onClick={enviar} disabled={enviando} style={{ flex:2, background:C.gold, border:"none", borderRadius:10, color:"#0B3D2E", fontWeight:800, fontSize:14, padding:"12px", cursor:enviando?"wait":"pointer", fontFamily:"inherit" }}>{enviando ? "Enviando..." : "Enviar solicitação"}</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function Conheca() {
-  const [modal, setModal] = useState(false);
 
   const BtnQuero = ({ grande }) => (
-    <button onClick={() => setModal(true)}
+    <a href="/?cadastro=1"
       style={{ background:C.gold, border:"none", borderRadius:10, color:"#0B3D2E", fontFamily:"inherit", fontWeight:800,
         fontSize: grande?16:14, padding: grande?"15px 38px":"12px 28px", cursor:"pointer", textTransform:"uppercase",
-        letterSpacing:"0.06em", boxShadow:`0 6px 20px ${C.gold}44` }}>
+        letterSpacing:"0.06em", boxShadow:`0 6px 20px ${C.gold}44`, textDecoration:"none", display:"inline-block" }}>
       🏆 Quero o meu time aqui
-    </button>
+    </a>
   );
 
   return (
@@ -180,7 +120,6 @@ export default function Conheca() {
         </div>
 
       </div>
-      {modal && <ModalSolic onClose={() => setModal(false)} />}
     </div>
   );
 }
