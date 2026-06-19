@@ -253,10 +253,11 @@ function SeletorTimes({ onSelect }) {
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(125px, 1fr))", gap:14, marginBottom:30, maxWidth:760, marginLeft:"auto", marginRight:"auto" }}>
               {[
-                ["📊", "Estatísticas e artilharia", "Gols, assistências, rankings e visão geral da temporada.", "/recurso-estatisticas.png"],
-                ["💰", "Controle financeiro", "Caixa, mensalidades, eventos e relatórios do time.", "/recurso-financeiro.png"],
-                ["✅", "Confirmação de presença", "Os jogadores confirmam pelo link, sem precisar de login.", "/recurso-presenca.png"],
-                ["📲", "Cards para o WhatsApp", "Imagens prontas e bonitas para compartilhar no grupo.", "/recurso-whatsapp.png"],
+                ["📅", "Calendário e adversários", "Agenda da temporada e busca de adversários pelo app.", "/recurso-estatisticas.png"],
+                ["📋", "Ficha completa da partida", "Tático, confirmação pré-jogo e estatísticas pós-jogo.", "/recurso-financeiro.png"],
+                ["💰", "Financeiro robusto", "Mensalidades, gastos e receitas num fluxo de caixa só.", "/recurso-presenca.png"],
+                ["🎟️", "Eventos e venda de cartões", "Do churras à arrecadação, com venda por atleta e convidado.", "/recurso-whatsapp.png"],
+                ["🔒", "Seus dados, suas regras", "Temporada ruim? Deixe as informações privadas.", "/recurso-privacidade.png"],
               ].map(([ic, tit, desc, img]) => (
                 <div key={tit} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"18px 16px", textAlign:"left" }}>
                   <div style={{ fontSize:26, marginBottom:8 }}>{ic}</div>
@@ -277,10 +278,26 @@ function SeletorTimes({ onSelect }) {
                 </div>
               ))}
             </div>
-            <button onClick={() => setModalCadastro(true)}
-              style={{ background:C.gold, border:"none", borderRadius:10, color:"#0B3D2E", fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"13px 32px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em", boxShadow:`0 6px 20px ${C.gold}44` }}>
-              🏆 Quero o meu time aqui
-            </button>
+
+            {/* Destaque do preço — a bola no lugar do zero */}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, marginBottom:8, flexWrap:"wrap" }}>
+              <span style={{ fontSize:15, color:C.dim, marginRight:6 }}>E quanto custa?</span>
+              <span style={{ fontSize:30, fontWeight:900, color:C.cream }}>R$</span>
+              <span style={{ fontSize:38, lineHeight:1 }} role="img" aria-label="zero">⚽</span>
+              <span style={{ fontSize:30, fontWeight:900, color:C.cream }}>,00</span>
+              <span style={{ fontSize:15, color:C.gold, fontWeight:800, marginLeft:6 }}>(ZERO)</span>
+            </div>
+            <div style={{ fontSize:12, color:C.dim, marginBottom:24 }}>Sim, de graça. Aquela bola ali no lugar do zero.</div>
+
+            <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+              <button onClick={() => setModalCadastro(true)}
+                style={{ background:C.gold, border:"none", borderRadius:10, color:"#0B3D2E", fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"13px 28px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em", boxShadow:`0 6px 20px ${C.gold}44` }}>
+                🏆 Quero o meu time aqui
+              </button>
+              <a href="/conheca" style={{ background:"none", border:`1px solid ${C.gold}`, borderRadius:10, color:C.gold, fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"13px 28px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em", textDecoration:"none", display:"inline-block" }}>
+                Ver tudo que o app faz
+              </a>
+            </div>
           </div>
         )}
 
