@@ -119,6 +119,12 @@ export default function Conheca() {
           <BtnQuero grande />
         </div>
 
+        {/* contato */}
+        <div style={{ textAlign:"center", marginTop:44, paddingTop:24, borderTop:`1px solid ${C.border}`, fontSize:13, color:C.dim }}>
+          Dúvidas ou sugestões? Fale com a gente pelo e-mail{" "}
+          <a href="mailto:nerddocampo10@gmail.com" style={{ color:C.gold, textDecoration:"none", fontWeight:700 }}>nerddocampo10@gmail.com</a>
+        </div>
+
       </div>
     </div>
   );

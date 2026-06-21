@@ -443,6 +443,10 @@ function SeletorTimes({ onSelect }) {
 
       <footer style={{ textAlign:"center", padding:"24px 20px", color:C.dim, fontSize:12, borderTop:`1px solid ${C.border}`, marginTop:20 }}>
         <div style={{ marginBottom:8 }}>⚽ Nerd do Campo — Estatísticas de Futebol Amador</div>
+        <div style={{ marginBottom:10, fontSize:13 }}>
+          Dúvidas ou sugestões? Fale com a gente pelo e-mail{" "}
+          <a href="mailto:nerddocampo10@gmail.com" style={{ color:C.gold, textDecoration:"none", fontWeight:700 }}>nerddocampo10@gmail.com</a>
+        </div>
         <div style={{ fontSize:11, color:C.gold, letterSpacing:"0.08em", opacity:0.85 }}>
           ⚽ Designed by Caxpa Augsten
         </div>
