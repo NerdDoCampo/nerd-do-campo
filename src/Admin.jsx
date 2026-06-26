@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.20.8";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.21.0";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -6236,14 +6236,14 @@ function CrudJogadores({ idTime, show, readOnly }) {
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  function abrirNovo() { setForm({ nome:"", apelido:"", camisa:"", id_posicao:"", telefone:"", email:"", data_nascimento:"", data_inicio:"", observacoes:"" }); setModal("novo"); }
-  function abrirEditar(j) { setForm({ ...j, id_posicao: j.id_posicao ? String(j.id_posicao) : "" }); setModal(j); }
+  function abrirNovo() { setForm({ nome:"", apelido:"", camisa:"", id_posicao:"", forca:2, telefone:"", email:"", data_nascimento:"", data_inicio:"", observacoes:"" }); setModal("novo"); }
+  function abrirEditar(j) { setForm({ ...j, id_posicao: j.id_posicao ? String(j.id_posicao) : "", forca: j.forca || 2 }); setModal(j); }
 
   async function salvar() {
     if (!form.nome) { show("Nome obrigatório.", "error"); return; }
     setSaving(true);
     try {
-      const body = { nome: form.nome, apelido: form.apelido||null, camisa: form.camisa||null, id_posicao: form.id_posicao ? Number(form.id_posicao) : null, telefone: form.telefone||null, email: form.email||null, data_nascimento: form.data_nascimento||null, data_inicio: form.data_inicio||null, observacoes: form.observacoes||null, foto_url: form.foto_url||null, id_time: idTime||null };
+      const body = { nome: form.nome, apelido: form.apelido||null, camisa: form.camisa||null, id_posicao: form.id_posicao ? Number(form.id_posicao) : null, forca: Number(form.forca)||2, telefone: form.telefone||null, email: form.email||null, data_nascimento: form.data_nascimento||null, data_inicio: form.data_inicio||null, observacoes: form.observacoes||null, foto_url: form.foto_url||null, id_time: idTime||null };
       if (modal === "novo") await api.post("jogador", body);
       else await api.patch(`jogador?id_jogador=eq.${form.id_jogador}`, body);
       show(modal === "novo" ? "Jogador criado!" : "Jogador atualizado!"); setModal(null); reload();
@@ -6385,6 +6385,12 @@ function CrudJogadores({ idTime, show, readOnly }) {
                     .filter(p => p.id_posicao_pai || !idsComFilhas.has(p.id_posicao))
                     .map(p => <option key={p.id_posicao} value={p.id_posicao}>{p.nome}</option>);
                 })()}
+              </Select>
+              <Select label="Força (para o sorteio de times)" value={form.forca||2} onChange={e => set("forca", e.target.value)}>
+                <option value={1}>⭐ Iniciante</option>
+                <option value={2}>⭐⭐ Mediano</option>
+                <option value={3}>⭐⭐⭐ Bom</option>
+                <option value={4}>⭐⭐⭐⭐ Craque</option>
               </Select>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
@@ -7011,6 +7017,252 @@ function LinkConfirmacao({ tipo, idRef, idTime, dataRef, show, embutido }) {
   );
 }
 
+// ── SORTEIO DE TIMES (turma fechada) ──────────────────────────
+// Distribui jogadores entre os times internos escolhidos, equilibrando
+// POSIÇÃO e FORÇA juntas. Posição/força podem ser ajustadas só para o
+// encontro (sem alterar o cadastro). Algoritmo validado em testes.
+const NIVEIS_FORCA = { 1:{nome:"Iniciante", estrelas:"⭐"}, 2:{nome:"Mediano", estrelas:"⭐⭐"}, 3:{nome:"Bom", estrelas:"⭐⭐⭐"}, 4:{nome:"Craque", estrelas:"⭐⭐⭐⭐"} };
+
+// Resolve o grupo de posição (id do pai, ou o próprio) e a ordem do grupo.
+function grupoDaPosicao(idPosicao, mapaPos) {
+  const p = mapaPos[idPosicao];
+  if (!p) return { grupo: 0, ordem: 999 };
+  const temPai = !!p.id_posicao_pai;
+  const grupo = temPai ? p.id_posicao_pai : idPosicao;
+  let ordem;
+  if (temPai) ordem = (mapaPos[p.id_posicao_pai]?.ordem != null) ? mapaPos[p.id_posicao_pai].ordem : 999;
+  else ordem = (p.ordem != null) ? p.ordem : 999;
+  return { grupo, ordem };
+}
+
+// jogadores: [{id_jogador, nome, grupo, forca}] já resolvidos
+// nTimes: quantidade de times. Retorna array de arrays de id_jogador.
+function sortearTimes(jogadores, nTimes) {
+  const times = Array.from({ length: nTimes }, () => []);
+  // ordena por grupo (ordem) e dentro do grupo por força desc, com embaralhamento
+  const baralhado = [...jogadores].sort(() => Math.random() - 0.5);
+  baralhado.sort((a, b) => (a.ordemGrupo - b.ordemGrupo) || (b.forca - a.forca));
+  for (const jog of baralhado) {
+    // custo ponderado: posição (peso 3) + força (peso 1) + total (peso 0.5)
+    let alvo = 0, menor = Infinity;
+    for (let i = 0; i < nTimes; i++) {
+      const qtdGrupo = times[i].filter(x => x.grupo === jog.grupo).length;
+      const somaForca = times[i].reduce((s, x) => s + x.forca, 0);
+      const custo = qtdGrupo * 3 + somaForca * 1.0 + times[i].length * 0.5;
+      if (custo < menor) { menor = custo; alvo = i; }
+    }
+    times[alvo].push(jog);
+  }
+  // ajuste fino: trocas que reduzem a diferença de força mantendo a posição
+  for (let iter = 0; iter < 50; iter++) {
+    const forcas = times.map(t => t.reduce((s, x) => s + x.forca, 0));
+    let maxi = 0, mini = 0;
+    forcas.forEach((f, i) => { if (f > forcas[maxi]) maxi = i; if (f < forcas[mini]) mini = i; });
+    if (forcas[maxi] - forcas[mini] <= 1) break;
+    let troca = null, melhorDif = forcas[maxi] - forcas[mini];
+    for (const a of times[maxi]) for (const b of times[mini]) {
+      if (a.grupo === b.grupo && a.forca > b.forca) {
+        const nd = Math.abs((forcas[maxi] - a.forca + b.forca) - (forcas[mini] - b.forca + a.forca));
+        if (nd < melhorDif) { melhorDif = nd; troca = [a, b]; }
+      }
+    }
+    if (!troca) break;
+    const [a, b] = troca;
+    times[maxi] = times[maxi].filter(x => x !== a); times[maxi].push(b);
+    times[mini] = times[mini].filter(x => x !== b); times[mini].push(a);
+  }
+  return times;
+}
+
+function SorteioTimes({ idEncontro, idTime, timesInternos, jogadores, posicoes, parts, reloadParts, encontro, reloadEncontro, show, readOnly }) {
+  const [aberto, setAberto] = useState(false);
+  const [passo, setPasso] = useState("config"); // config | ajuste | resultado
+  const [fonte, setFonte] = useState("presenca"); // presenca | todos
+  const [timesEscolhidos, setTimesEscolhidos] = useState([]); // ids de time_interno
+  const [selecionados, setSelecionados] = useState({}); // id_jogador -> bool
+  const [ajustes, setAjustes] = useState({}); // id_jogador -> {forca, id_posicao}
+  const [resultado, setResultado] = useState(null); // [{id_time_interno, jogadores:[...]}]
+  const [salvando, setSalvando] = useState(false);
+
+  const mapaPos = useMemo(() => { const m = {}; (posicoes||[]).forEach(p => { m[p.id_posicao] = p; }); return m; }, [posicoes]);
+  const mapaJog = useMemo(() => { const m = {}; (jogadores||[]).forEach(j => { m[j.id_jogador] = j; }); return m; }, [jogadores]);
+  const mapaTI = useMemo(() => { const m = {}; (timesInternos||[]).forEach(t => { m[t.id_time_interno] = t; }); return m; }, [timesInternos]);
+
+  // jogadores candidatos conforme a fonte
+  const candidatos = useMemo(() => {
+    if (fonte === "presenca") {
+      return (parts || []).map(p => mapaJog[p.id_jogador]).filter(Boolean);
+    }
+    return jogadores || [];
+  }, [fonte, parts, jogadores, mapaJog]);
+
+  // inicia seleção: todos marcados por padrão
+  function abrir() {
+    const sel = {};
+    candidatos.forEach(j => { sel[j.id_jogador] = true; });
+    setSelecionados(sel);
+    setTimesEscolhidos((timesInternos || []).slice(0, 2).map(t => t.id_time_interno));
+    setAjustes({});
+    setResultado(null);
+    setPasso("config");
+    setAberto(true);
+  }
+
+  function forcaDe(idJog) {
+    if (ajustes[idJog]?.forca != null) return ajustes[idJog].forca;
+    return mapaJog[idJog]?.forca || 2;
+  }
+  function posicaoDe(idJog) {
+    if (ajustes[idJog]?.id_posicao != null) return ajustes[idJog].id_posicao;
+    return mapaJog[idJog]?.id_posicao || null;
+  }
+
+  function executarSorteio() {
+    const ativos = candidatos.filter(j => selecionados[j.id_jogador]);
+    if (ativos.length < timesEscolhidos.length) { show("Poucos jogadores para a quantidade de times.", "error"); return; }
+    if (timesEscolhidos.length < 2) { show("Escolha pelo menos 2 times.", "error"); return; }
+    const prep = ativos.map(j => {
+      const idPos = posicaoDe(j.id_jogador);
+      const g = grupoDaPosicao(idPos, mapaPos);
+      return { id_jogador: j.id_jogador, nome: j.apelido || j.nome, grupo: g.grupo, ordemGrupo: g.ordem, forca: forcaDe(j.id_jogador) };
+    });
+    const sorteado = sortearTimes(prep, timesEscolhidos.length);
+    setResultado(timesEscolhidos.map((idTI, i) => ({ id_time_interno: idTI, jogadores: sorteado[i] })));
+    setPasso("resultado");
+  }
+
+  // troca manual: move um jogador de um time para outro
+  function moverJogador(idJog, deTI, paraTI) {
+    setResultado(prev => prev.map(t => {
+      if (t.id_time_interno === deTI) return { ...t, jogadores: t.jogadores.filter(j => j.id_jogador !== idJog) };
+      if (t.id_time_interno === paraTI) { const j = prev.find(x => x.id_time_interno === deTI).jogadores.find(x => x.id_jogador === idJog); return { ...t, jogadores: [...t.jogadores, j] }; }
+      return t;
+    }));
+  }
+
+  // grava: preenche id_time_interno em cada encontro_participacao; cria participações que faltam
+  async function salvar(ajustadoManual) {
+    setSalvando(true);
+    try {
+      const partPorJog = {}; (parts || []).forEach(p => { partPorJog[p.id_jogador] = p; });
+      for (const time of resultado) {
+        for (const jog of time.jogadores) {
+          const existente = partPorJog[jog.id_jogador];
+          if (existente) {
+            await api.patch(`encontro_participacao?id_encontro_part=eq.${existente.id_encontro_part}`, { id_time_interno: time.id_time_interno });
+          } else {
+            await api.post("encontro_participacao", { id_encontro: idEncontro, id_jogador: jog.id_jogador, id_time_interno: time.id_time_interno, gols:0, assistencias:0, gols_contra:0, cartao_amarelo:0, cartao_vermelho:0 });
+          }
+        }
+      }
+      await api.patch(`encontro?id_encontro=eq.${idEncontro}`, { times_ajustados_manual: !!ajustadoManual });
+      show(ajustadoManual ? "Times salvos (com ajuste manual)." : "Times sorteados e salvos!", "success");
+      reloadParts && reloadParts();
+      reloadEncontro && reloadEncontro();
+      setAberto(false);
+    } catch (e) { show("Erro ao salvar times: " + (e.message||e), "error"); }
+    finally { setSalvando(false); }
+  }
+
+  if (readOnly) return null;
+
+  return (
+    <>
+      <Btn onClick={abrir} disabled={!(timesInternos||[]).length} style={{ fontSize:13, padding:"8px 16px" }}>🎲 Sortear times</Btn>
+      {aberto && (
+        <Modal title="🎲 Sortear times" onClose={() => setAberto(false)}>
+          {passo === "config" && (
+            <div>
+              <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:8 }}>De onde vêm os jogadores?</div>
+              <div style={{ display:"flex", gap:8, marginBottom:18 }}>
+                <Btn variant={fonte==="presenca"?"primary":"secondary"} onClick={() => { setFonte("presenca"); }} style={{ flex:1, fontSize:13 }}>Lista de presença</Btn>
+                <Btn variant={fonte==="todos"?"primary":"secondary"} onClick={() => { setFonte("todos"); }} style={{ flex:1, fontSize:13 }}>Todos os jogadores</Btn>
+              </div>
+
+              <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:8 }}>Quais times vão jogar?</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:18 }}>
+                {(timesInternos||[]).map(t => {
+                  const on = timesEscolhidos.includes(t.id_time_interno);
+                  return <button key={t.id_time_interno} onClick={() => setTimesEscolhidos(prev => on ? prev.filter(x=>x!==t.id_time_interno) : [...prev, t.id_time_interno])}
+                    style={{ padding:"8px 14px", borderRadius:8, border:`2px solid ${on?(t.cor||C.gold):C.border}`, background: on?(t.cor||C.gold):"transparent", color: on?"#0B3D2E":C.dim, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>{t.nome}</button>;
+                })}
+              </div>
+
+              <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:8 }}>Quem entra ({candidatos.filter(j=>selecionados[j.id_jogador]).length}/{candidatos.length})</div>
+              <div style={{ maxHeight:220, overflowY:"auto", border:`1px solid ${C.border}`, borderRadius:8, padding:8, marginBottom:16 }}>
+                {candidatos.length === 0 && <div style={{ color:C.dim, fontSize:13, padding:8 }}>Nenhum jogador {fonte==="presenca"?"na lista de presença":"cadastrado"}.</div>}
+                {candidatos.map(j => (
+                  <div key={j.id_jogador} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 4px", borderBottom:`1px solid ${C.border}33` }}>
+                    <input type="checkbox" checked={!!selecionados[j.id_jogador]} onChange={e => setSelecionados(s => ({ ...s, [j.id_jogador]: e.target.checked }))} />
+                    <span style={{ flex:1, fontSize:13, color:C.cream }}>{j.apelido || j.nome}</span>
+                    <span style={{ fontSize:12, color:C.dim }}>{NIVEIS_FORCA[forcaDe(j.id_jogador)]?.estrelas}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <Btn variant="secondary" onClick={() => setPasso("ajuste")} style={{ flex:1, fontSize:13 }}>Ajustar força/posição</Btn>
+                <Btn onClick={executarSorteio} style={{ flex:1 }}>🎲 Sortear</Btn>
+              </div>
+            </div>
+          )}
+
+          {passo === "ajuste" && (
+            <div>
+              <div style={{ fontSize:13, color:C.dim, marginBottom:12, lineHeight:1.5 }}>Ajuste força e posição <b>só para este encontro</b>. Não altera o cadastro do jogador.</div>
+              <div style={{ maxHeight:340, overflowY:"auto" }}>
+                {candidatos.filter(j=>selecionados[j.id_jogador]).map(j => (
+                  <div key={j.id_jogador} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 4px", borderBottom:`1px solid ${C.border}33` }}>
+                    <span style={{ flex:1, fontSize:13, color:C.cream }}>{j.apelido || j.nome}</span>
+                    <select value={forcaDe(j.id_jogador)} onChange={e => setAjustes(a => ({ ...a, [j.id_jogador]: { ...a[j.id_jogador], forca: Number(e.target.value) } }))}
+                      style={{ background:C.bg, color:C.cream, border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 6px", fontSize:12, fontFamily:"inherit" }}>
+                      {[1,2,3,4].map(n => <option key={n} value={n}>{NIVEIS_FORCA[n].nome}</option>)}
+                    </select>
+                    <select value={posicaoDe(j.id_jogador)||""} onChange={e => setAjustes(a => ({ ...a, [j.id_jogador]: { ...a[j.id_jogador], id_posicao: e.target.value?Number(e.target.value):null } }))}
+                      style={{ background:C.bg, color:C.cream, border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 6px", fontSize:12, fontFamily:"inherit", maxWidth:120 }}>
+                      <option value="">— posição —</option>
+                      {(posicoes||[]).map(p => <option key={p.id_posicao} value={p.id_posicao}>{p.nome}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:"flex", gap:10, marginTop:14 }}>
+                <Btn variant="secondary" onClick={() => setPasso("config")} style={{ flex:1, fontSize:13 }}>Voltar</Btn>
+                <Btn onClick={executarSorteio} style={{ flex:1 }}>🎲 Sortear</Btn>
+              </div>
+            </div>
+          )}
+
+          {passo === "resultado" && resultado && (
+            <div>
+              <div style={{ display:"grid", gridTemplateColumns:`repeat(${Math.min(resultado.length,2)}, 1fr)`, gap:12, marginBottom:14 }}>
+                {resultado.map(time => {
+                  const ti = mapaTI[time.id_time_interno];
+                  return (
+                    <div key={time.id_time_interno} style={{ background:C.surf2, border:`2px solid ${ti?.cor||C.border}`, borderRadius:10, padding:12 }}>
+                      <div style={{ fontWeight:800, color:ti?.cor||C.gold, fontSize:15, marginBottom:8, textAlign:"center" }}>{ti?.nome || "Time"}</div>
+                      {time.jogadores.map(j => (
+                        <div key={j.id_jogador} style={{ fontSize:13, color:C.cream, padding:"3px 0", display:"flex", justifyContent:"space-between" }}>
+                          <span>{j.nome}</span><span style={{ color:C.dim, fontSize:11 }}>{NIVEIS_FORCA[j.forca]?.estrelas}</span>
+                        </div>
+                      ))}
+                      <div style={{ fontSize:11, color:C.dim, marginTop:8, textAlign:"center", borderTop:`1px solid ${C.border}`, paddingTop:6 }}>{time.jogadores.length} jogadores</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                <Btn variant="secondary" onClick={executarSorteio} style={{ flex:1, fontSize:13 }}>🎲 Sortear de novo</Btn>
+                <Btn onClick={() => salvar(false)} disabled={salvando} style={{ flex:1 }}>{salvando?"Salvando...":"✓ Confirmar times"}</Btn>
+              </div>
+              <div style={{ fontSize:11, color:C.dim, marginTop:10, textAlign:"center" }}>Dica: para ajustar na mão, confirme e edite os jogadores na lista de presença.</div>
+            </div>
+          )}
+        </Modal>
+      )}
+    </>
+  );
+}
+
 function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }) {
   const ehNovo = !encontro;
   const [idEncontro, setIdEncontro] = useState(encontro?.id_encontro || null);
@@ -7026,9 +7278,12 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
 
   // Times internos ativos (sem data_fim) + campos + jogadores ativos
   const { data: timesInternos } = useQuery(() => idTime ? api.get(`time_interno?id_time=eq.${idTime}&data_fim=is.null&select=id_time_interno,nome,cor&order=nome.asc`) : Promise.resolve([]), [idTime]);
-  const { data: _timeEnc } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,cidade:id_cidade_sede(nome,estado)&limit=1`) : Promise.resolve([]), [idTime]);
+  const { data: _timeEnc } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,id_tipo_time,id_subtipo,cidade:id_cidade_sede(nome,estado)&limit=1`) : Promise.resolve([]), [idTime]);
   const { data: campos } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=id_campo,nome,link_local&order=nome.asc`) : Promise.resolve([]), [idTime]);
-  const { data: jogadores } = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=id_jogador,nome,apelido,camisa&order=camisa.asc`) : Promise.resolve([]), [idTime]);
+  const { data: jogadores } = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=id_jogador,nome,apelido,camisa,id_posicao,forca&order=camisa.asc`) : Promise.resolve([]), [idTime]);
+  // Posições do tipo do time (com hierarquia pai) para agrupar GOL/DEF/MEI/ATA no sorteio
+  const _tipoEnc = _timeEnc?.[0]?.id_subtipo || _timeEnc?.[0]?.id_tipo_time;
+  const { data: posicoesEnc } = useQuery(() => _tipoEnc ? api.get(`posicao?id_tipo_time=eq.${_tipoEnc}&select=id_posicao,nome,id_posicao_pai,ordem&order=ordem.asc`) : Promise.resolve([]), [_tipoEnc]);
 
   // Jogos e participações do encontro (quando já existe)
   const { data: jogos, reload: reloadJogos } = useQuery(() => idEncontro ? api.get(`encontro_jogo?id_encontro=eq.${idEncontro}&select=*&order=ordem.asc.nullslast,id_encontro_jogo.asc`) : Promise.resolve([]), [idEncontro]);
@@ -7093,6 +7348,11 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
           {!readOnly && idEncontro && (
             <div style={{ marginTop:14, display:"flex", justifyContent:"flex-end" }}>
               <CompartilharPresenca tipo="encontro" idRef={idEncontro} idTime={idTime} titulo="" data={cabecalho.data ? `${cabecalho.data}T${cabecalho.hora || "12:00"}` : null} linkLocal={cabecalho.link_local} time={_timeEnc?.[0]} show={show} />
+            </div>
+          )}
+          {!readOnly && idEncontro && (timesInternos||[]).length >= 2 && (
+            <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
+              <SorteioTimes idEncontro={idEncontro} idTime={idTime} timesInternos={timesInternos||[]} jogadores={jogadores||[]} posicoes={posicoesEnc||[]} parts={parts||[]} reloadParts={reloadParts} encontro={encontro} reloadEncontro={reloadParts} show={show} readOnly={readOnly} />
             </div>
           )}
           <JogosEncontro idEncontro={idEncontro} jogos={jogos||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadJogos} show={show} readOnly={readOnly} totalPlacares={totalPlacares} />
