@@ -28,6 +28,7 @@ const SECOES = [
     itens: [
       ["🔒", "Seus dados, suas regras", "Está tendo uma temporada de altos e baixos e não quer compartilhar aqui? Deixe os dados privados. A escolha é sua."],
       ["🔁", "É turma fechada? Tem também", "Times internos, rodízio, controle por total — o sistema entende quem joga entre amigos toda semana."],
+      ["🎲", "Sorteio de times que acaba com a treta", "Cansou de ouvir que você montou o time pra ganhar? Deixe o sistema sortear, equilibrando posição e nível dos jogadores. Foi o sistema, não você. 😎"],
       ["👥", "Vários times, um login só", "Quer controlar mais de um time com o mesmo acesso? Sem problemas. Troque de time num clique."],
       ["👤", "Ficha cadastral completa dos jogadores", "Apelidos, contatos, aniversários — acompanhe tudo do elenco, e nunca mais esqueça o niver de ninguém."],
     ],
