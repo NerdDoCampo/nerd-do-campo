@@ -109,7 +109,7 @@ export default function Confirmar() {
     <div style={wrap}>
       <div style={card}>
         <div style={{ textAlign:"center", marginBottom:18 }}>
-          <img src="/logo.png" alt="" style={{ width:54, height:54, borderRadius:"50%", objectFit:"cover" }} onError={e => { e.target.style.display="none"; }} />
+          <img src="/logo.png" alt="" style={{ width:88, height:88, borderRadius:"50%", objectFit:"cover", border:`3px solid ${C.gold}`, boxShadow:"0 6px 24px rgba(0,0,0,0.45)", background:C.surface }} onError={e => { e.target.style.display="none"; }} />
           <h1 style={{ fontSize:20, margin:"10px 0 4px" }}>Confirmar presença</h1>
           <div style={{ fontSize:13, color:C.dim }}>Toque no seu nome e diga se vai.</div>
         </div>

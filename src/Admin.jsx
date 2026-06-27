@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.21.2";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.21.3";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -12,6 +12,43 @@ const C = {
 
 // Níveis de força do jogador (para o sorteio de times da turma fechada)
 const NIVEIS_FORCA = { 1:{nome:"Iniciante", estrelas:"⭐"}, 2:{nome:"Mediano", estrelas:"⭐⭐"}, 3:{nome:"Bom", estrelas:"⭐⭐⭐"}, 4:{nome:"Craque", estrelas:"⭐⭐⭐⭐"} };
+
+// Carrega a logo do sistema uma única vez (cache em memória) para uso nos cards.
+let _logoCache = undefined; // undefined = não tentou; null = falhou; Image = ok
+function carregarLogo() {
+  if (_logoCache !== undefined) return Promise.resolve(_logoCache);
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => { _logoCache = img; resolve(img); };
+    img.onerror = () => { _logoCache = null; resolve(null); };
+    img.src = "/logo.png";
+  });
+}
+
+// Desenha a logo redonda com borda dourada e sombra no centro (cx,cy), raio r.
+// Se a logo não carregou, faz fallback: círculo + emoji (o visual antigo).
+function desenharLogoCard(ctx, logo, cx, cy, r, emojiFallback) {
+  const GOLD = "#E8A020", SURF = "#174D36", CREAM = "#F0E8D0";
+  ctx.save();
+  // sombra
+  ctx.shadowColor = "rgba(0,0,0,0.45)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
+  ctx.fillStyle = SURF; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  if (logo) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r - 4, 0, Math.PI*2); ctx.clip();
+    ctx.drawImage(logo, cx - (r-4), cy - (r-4), (r-4)*2, (r-4)*2);
+    ctx.restore();
+  } else {
+    ctx.font = (r*0.9) + "px Arial"; ctx.textAlign = "center"; ctx.fillStyle = CREAM;
+    ctx.fillText(emojiFallback || "⚽", cx, cy + r*0.32);
+  }
+  // borda dourada
+  ctx.strokeStyle = GOLD; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+  ctx.textAlign = "left";
+}
+
 
 // Calcula o esquema tático (ex: "4-4-2") a partir das participações de uma partida.
 // Usa a posição cadastrada NA PARTIDA. Considera só titulares (titular = 'S') com posição.
@@ -1625,8 +1662,9 @@ function CompartilharResultado({ partida, gols, jogadores, time, temporada, idTi
     return Object.entries(cont).map(([n,q]) => q>1 ? `${n} (${q})` : n).join(", ");
   }
 
-  function desenharCard() {
+  async function desenharCard() {
     const W = 1080, H = 1350;
+    await carregarLogo(); // garante a logo carregada para o card
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
@@ -1651,9 +1689,7 @@ function CompartilharResultado({ partida, gols, jogadores, time, temporada, idTi
     let y = 56;
 
     // header: escudo + nome
-    ctx.fillStyle = SURF; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = GOLD; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.stroke();
-    ctx.font = "54px Arial"; ctx.textAlign = "center"; ctx.fillStyle = CREAM; ctx.fillText("⚽", PAD+58, y+76);
+    desenharLogoCard(ctx, _logoCache, PAD+58, y+58, 58, "⚽");
     ctx.textAlign = "left";
     ctx.fillStyle = CREAM; ctx.font = "800 44px Arial";
     ctx.fillText((time?.nome || "MEU TIME").toUpperCase().slice(0,22), PAD+140, y+50);
@@ -1763,7 +1799,7 @@ function CompartilharResultado({ partida, gols, jogadores, time, temporada, idTi
   async function compartilhar() {
     setGerando(true);
     try {
-      const canvas = desenharCard();
+      const canvas = await desenharCard();
       const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
       if (!blob) throw new Error("Falha ao gerar imagem");
       const arquivo = new File([blob], "resultado-nerd-do-campo.png", { type: "image/png" });
@@ -1830,8 +1866,9 @@ function ConvocarPartida({ partida, time, idTime, show }) {
     return token;
   }
 
-  function desenharCard() {
+  async function desenharCard() {
     const W = 1080, H = 1350;
+    await carregarLogo(); // garante a logo carregada para o card
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
@@ -1844,9 +1881,7 @@ function ConvocarPartida({ partida, time, idTime, show }) {
 
     const PAD = 56; let y = 56;
     // header
-    ctx.fillStyle = SURF; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = GOLD; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.stroke();
-    ctx.font = "54px Arial"; ctx.textAlign = "center"; ctx.fillStyle = CREAM; ctx.fillText("⚽", PAD+58, y+76);
+    desenharLogoCard(ctx, _logoCache, PAD+58, y+58, 58, "⚽");
     ctx.textAlign = "left"; ctx.fillStyle = CREAM; ctx.font = "800 44px Arial";
     ctx.fillText((time?.nome||"MEU TIME").toUpperCase().slice(0,22), PAD+140, y+50);
     ctx.fillStyle = DIM; ctx.font = "22px Arial";
@@ -1917,7 +1952,7 @@ function ConvocarPartida({ partida, time, idTime, show }) {
     try {
       const token = await garantirLink();
       const url = urlBase + token;
-      const canvas = desenharCard();
+      const canvas = await desenharCard();
       const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
       if (!blob) throw new Error("Falha ao gerar imagem");
       const arquivo = new File([blob], "convocacao-nerd-do-campo.png", { type: "image/png" });
@@ -2015,8 +2050,9 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
     return token;
   }
 
-  function desenharCard() {
+  async function desenharCard() {
     const W = 1080, H = 1350;
+    await carregarLogo(); // garante a logo carregada para o card
     const canvas = document.createElement("canvas");
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext("2d");
@@ -2029,9 +2065,7 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
     const ehEvento = tipo === "evento";
     const PAD = 56; let y = 56;
     // header
-    ctx.fillStyle = SURF; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = GOLD; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(PAD+58, y+58, 58, 0, Math.PI*2); ctx.stroke();
-    ctx.font = "54px Arial"; ctx.textAlign = "center"; ctx.fillStyle = CREAM; ctx.fillText(ehEvento?"🎉":"⚽", PAD+58, y+76);
+    desenharLogoCard(ctx, _logoCache, PAD+58, y+58, 58, ehEvento?"🎉":"⚽");
     ctx.textAlign = "left"; ctx.fillStyle = CREAM; ctx.font = "800 44px Arial";
     ctx.fillText((time?.nome||"MEU TIME").toUpperCase().slice(0,22), PAD+140, y+50);
     ctx.fillStyle = DIM; ctx.font = "22px Arial";
@@ -2094,7 +2128,7 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
     try {
       const token = await garantirLink();
       const url = urlBase + token;
-      const canvas = desenharCard();
+      const canvas = await desenharCard();
       const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
       if (!blob) throw new Error("Falha ao gerar imagem");
       const arquivo = new File([blob], "convite-nerd-do-campo.png", { type: "image/png" });
@@ -7194,24 +7228,26 @@ function SorteioTimes({ idEncontro, idTime, timesInternos, jogadores, posicoes, 
   async function prepararCard(timesParaCard) {
     try {
       const W = 1080, H = 1350;
-      const canvas = document.createElement("canvas");
+      await carregarLogo(); // garante a logo carregada para o card
+    const canvas = document.createElement("canvas");
       canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext("2d");
       const BG="#0B3D2E", SURF="#174D36", GOLD="#E8A020", CREAM="#F0E8D0", DIM="#8FAF9A", BORDER="#1F5C3E";
       const grad = ctx.createLinearGradient(0,0,0,H);
       grad.addColorStop(0,"#0B3D2E"); grad.addColorStop(1,"#15402C");
       ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
-      // título
+      // logo no topo (com borda dourada e sombra) + título
+      desenharLogoCard(ctx, _logoCache, W/2, 110, 64, "⚽");
       ctx.textAlign = "center";
-      ctx.fillStyle = GOLD; ctx.font = "900 64px Arial";
-      ctx.fillText("⚽ TIMES DO DIA", W/2, 110);
+      ctx.fillStyle = GOLD; ctx.font = "900 60px Arial";
+      ctx.fillText("⚽ TIMES DO DIA", W/2, 245);
       ctx.fillStyle = DIM; ctx.font = "28px Arial";
-      ctx.fillText("Sorteio Nerd do Campo", W/2, 156);
+      ctx.fillText("Sorteio Nerd do Campo", W/2, 288);
       // colunas dos times (até 2 lado a lado; se 3+, empilha)
       const times = timesParaCard || resultado || [];
       const nCols = Math.min(times.length, 2);
       const colW = (W - 120) / nCols;
-      const startY = 230;
+      const startY = 350;
       times.forEach((time, idx) => {
         const ti = mapaTI[time.id_time_interno];
         const col = idx % nCols;
