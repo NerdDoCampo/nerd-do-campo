@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.21.3";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.22.3";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1253,6 +1253,80 @@ function Badge({ label, cor }) {
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────
+// Vitrine de captação — CÓPIA FIEL da seção do app público (mesmos 5 recursos
+// com miniaturas clicáveis, lightbox, preço e botões). Usada na tela de login
+// do admin, para quem cai no /admin sem ter visto o público.
+function VitrineCaptacao() {
+  const [imgAmpliada, setImgAmpliada] = useState(null);
+  return (
+    <div style={{ width:"100%", maxWidth:820, margin:"32px auto 0" }}>
+      <div style={{ marginBottom:24, background:`linear-gradient(135deg, ${C.surface}, ${C.surf2})`, border:`1px solid ${C.border}`, borderRadius:16, padding:"32px 28px", textAlign:"center" }}>
+        <div style={{ fontSize:22, fontWeight:800, color:C.cream, marginBottom:10, lineHeight:1.3 }}>
+          O sistema completo para o seu time amador
+        </div>
+        <div style={{ fontSize:14, color:C.dim, marginBottom:28, maxWidth:560, margin:"0 auto 28px", lineHeight:1.6 }}>
+          Organize estatísticas, finanças e presença num só lugar — e mostre os números do seu time numa página como as que você vê no app.
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(125px, 1fr))", gap:14, marginBottom:30, maxWidth:760, marginLeft:"auto", marginRight:"auto" }}>
+          {[
+            ["📅", "Calendário e adversários", "Agenda da temporada e busca de adversários pelo app.", "/recurso-estatisticas.png"],
+            ["📋", "Ficha completa da partida", "Tático, confirmação pré-jogo e estatísticas pós-jogo.", "/recurso-financeiro.png"],
+            ["💰", "Financeiro robusto", "Mensalidades, gastos e receitas num fluxo de caixa só.", "/recurso-presenca.png"],
+            ["🎟️", "Eventos e venda de cartões", "Do churras à arrecadação, com venda por atleta e convidado.", "/recurso-whatsapp.png"],
+            ["🔒", "Seus dados, suas regras", "Temporada ruim? Deixe as informações privadas.", "/recurso-privacidade.png"],
+          ].map(([ic, tit, desc, img]) => (
+            <div key={tit} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"18px 16px", textAlign:"left", display:"flex", flexDirection:"column", height:"100%" }}>
+              <div style={{ fontSize:26, marginBottom:8 }}>{ic}</div>
+              <div style={{ fontSize:14, fontWeight:800, color:C.gold, marginBottom:6 }}>{tit}</div>
+              <div style={{ fontSize:12, color:C.dim, lineHeight:1.5, marginBottom:12, flex:1 }}>{desc}</div>
+              <div onClick={() => setImgAmpliada({ src: img, titulo: tit })}
+                style={{ position:"relative", borderRadius:8, overflow:"hidden", cursor:"pointer", border:`1px solid ${C.border}`, aspectRatio:"16/10", background:C.surf2 }}>
+                <img src={img} alt={tit}
+                  onError={e => { e.currentTarget.style.display="none"; e.currentTarget.nextSibling.style.display="flex"; }}
+                  style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>
+                <div style={{ display:"none", width:"100%", height:"100%", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:4, color:C.dim, fontSize:11, textAlign:"center", padding:8 }}>
+                  <span style={{ fontSize:22, opacity:0.6 }}>{ic}</span>
+                  <span>Imagem em breve</span>
+                </div>
+                <div style={{ position:"absolute", bottom:6, right:6, background:"#000000aa", color:C.cream, fontSize:10, padding:"2px 7px", borderRadius:6 }}>🔍 ampliar</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, marginBottom:8, flexWrap:"wrap" }}>
+          <span style={{ fontSize:15, color:C.dim, marginRight:6 }}>E quanto custa?</span>
+          <span style={{ fontSize:30, fontWeight:900, color:C.cream }}>R$</span>
+          <span style={{ fontSize:38, lineHeight:1 }} role="img" aria-label="zero">⚽</span>
+          <span style={{ fontSize:30, fontWeight:900, color:C.cream }}>,00</span>
+          <span style={{ fontSize:15, color:C.gold, fontWeight:800, marginLeft:6 }}>(ZERO)</span>
+        </div>
+        <div style={{ fontSize:12, color:C.dim, marginBottom:24 }}>Sim, de graça. Aquela bola ali no lugar do zero.</div>
+
+        <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+          <a href="/?cadastro=1" style={{ background:C.gold, border:"none", borderRadius:10, color:"#0B3D2E", fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"13px 28px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em", boxShadow:`0 6px 20px ${C.gold}44`, textDecoration:"none", display:"inline-block" }}>
+            🏆 Quero o meu time aqui
+          </a>
+          <a href="/conheca" style={{ background:"none", border:`1px solid ${C.gold}`, borderRadius:10, color:C.gold, fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"13px 28px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em", textDecoration:"none", display:"inline-block" }}>
+            Ver tudo que o app faz
+          </a>
+        </div>
+      </div>
+
+      {imgAmpliada && (
+        <div onClick={() => setImgAmpliada(null)}
+          style={{ position:"fixed", inset:0, background:"#000000dd", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:20, cursor:"zoom-out" }}>
+          <div style={{ maxWidth:"100%", maxHeight:"100%", textAlign:"center" }}>
+            <div style={{ color:C.gold, fontSize:15, fontWeight:800, marginBottom:10 }}>{imgAmpliada.titulo}</div>
+            <img src={imgAmpliada.src} alt={imgAmpliada.titulo} style={{ maxWidth:"100%", maxHeight:"80vh", borderRadius:10, border:`2px solid ${C.gold}` }}/>
+            <div style={{ color:C.dim, fontSize:12, marginTop:10 }}>Toque para fechar</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Login({ onLogin, aviso }) {
   const [email, setEmail]   = useState("");
   const [senha, setSenha]   = useState("");
@@ -1294,7 +1368,7 @@ function Login({ onLogin, aviso }) {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, fontFamily: "'Oswald','Arial Narrow',Arial,sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", flexDirection:"column", alignItems: "center", justifyContent: "flex-start", padding: 16, paddingTop:48, fontFamily: "'Oswald','Arial Narrow',Arial,sans-serif" }}>
       <Card style={{ width: "100%", maxWidth: 380, padding: "32px 24px" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ display:"inline-block", position:"relative", marginBottom:16 }}>
@@ -1326,6 +1400,11 @@ function Login({ onLogin, aviso }) {
           ⚽ Designed by Caxpa Augsten
         </div>
       </Card>
+
+      <VitrineCaptacao />
+      <div style={{ textAlign:"center", marginTop:20, marginBottom:8 }}>
+        <a href="/" style={{ color:C.gold, textDecoration:"none", fontWeight:700, fontSize:14, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 22px", display:"inline-block" }}>🌐 Ver os times no app público</a>
+      </div>
 
       {modalRecuperar && (
         <Modal title="Recuperar senha" onClose={() => setModalRecuperar(false)}>
@@ -3214,6 +3293,7 @@ const MENU_BASE = [
   { id:"relatorio",   label:"Relatório",    icon:"📊", grupo:"Financeiro" },
   { id:"app",         label:"Visão App",   icon:"👁️", grupo:"Acompanhar" },
   { id:"dicas",       label:"Dicas",       icon:"💡", grupo:"Acompanhar" },
+  { id:"indique",     label:"Indique o app", icon:"🎁", grupo:"Acompanhar" },
   { id:"ajuda",       label:"Ajuda",        icon:"❓", grupo:"Acompanhar" },
 ];
 
@@ -4102,6 +4182,73 @@ function CrudMensalidades({ idTime, show, readOnly }) {
 // ══════════════════════════════════════════════════════════════
 // PÁGINA DE AJUDA
 // ══════════════════════════════════════════════════════════════
+function PaginaIndique({ show }) {
+  const recursos = [
+    ["📅", "Calendário e adversários", "Agenda da temporada e busca de adversários pelo app."],
+    ["📋", "Ficha completa da partida", "Tático, confirmação pré-jogo e estatísticas pós-jogo."],
+    ["📊", "Estatísticas e artilharia", "Gols, assistências e o histórico de cada jogo."],
+    ["💰", "Financeiro robusto", "Mensalidades, gastos e receitas num fluxo de caixa só."],
+    ["🧾", "Mensalidades", "Quem pagou, quem deve — direto no caixa."],
+    ["🎟️", "Eventos e venda de cartões", "Do churras à arrecadação, com venda por atleta e convidado."],
+    ["✅", "Presença pelo link", "A galera confirma sem precisar baixar nada."],
+    ["🎲", "Sorteio de times", "Pra turma fechada: divide os times e acaba com a treta."],
+    ["🔒", "Seus dados, suas regras", "Temporada ruim? Deixe as informações privadas."],
+  ];
+  function copiarLink() {
+    try { navigator.clipboard.writeText("https://nerddocampo.com.br"); show && show("Link copiado! Manda pra galera. 👊", "success"); }
+    catch { show && show("nerddocampo.com.br", "success"); }
+  }
+  async function compartilhar() {
+    const texto = "Conhece o Nerd do Campo? Gestão completa do time amador — estatísticas, financeiro, presença e mais. E de graça! ⚽\n\nTestou e gostou? Compartilha com a galera! Não gostou? Compartilha também!\n\nnerddocampo.com.br";
+    try { if (navigator.share) { await navigator.share({ text: texto }); return; } } catch { /* cancelou */ }
+    copiarLink();
+  }
+  return (
+    <Card>
+      <div style={{ textAlign:"center", marginBottom:24 }}>
+        <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:8 }}>Gostou do Nerd do Campo? Indica pra geral! 🎁</div>
+        <div style={{ fontSize:14, color:C.dim, maxWidth:560, margin:"0 auto", lineHeight:1.6 }}>
+          Tem amigo com time que ainda anota gol no guardanapo e cobra mensalidade no grito? Mostra o que o app faz e manda ele criar o time dele. Quanto mais times, melhor pra todo mundo.
+        </div>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))", gap:12, marginBottom:28 }}>
+        {recursos.map(([ic, tit, desc]) => (
+          <div key={tit} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 14px", textAlign:"left" }}>
+            <div style={{ fontSize:24, marginBottom:6 }}>{ic}</div>
+            <div style={{ fontSize:13, fontWeight:800, color:C.gold, marginBottom:4 }}>{tit}</div>
+            <div style={{ fontSize:12, color:C.dim, lineHeight:1.5 }}>{desc}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ textAlign:"center", marginBottom:24 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, marginBottom:6, flexWrap:"wrap" }}>
+          <span style={{ fontSize:14, color:C.dim, marginRight:6 }}>E quanto custa?</span>
+          <span style={{ fontSize:26, fontWeight:900, color:C.cream }}>R$</span>
+          <span style={{ fontSize:32, lineHeight:1 }} role="img" aria-label="zero">⚽</span>
+          <span style={{ fontSize:26, fontWeight:900, color:C.cream }}>,00</span>
+          <span style={{ fontSize:14, color:C.gold, fontWeight:800, marginLeft:6 }}>(ZERO)</span>
+        </div>
+        <div style={{ fontSize:12, color:C.dim }}>Sim, de graça. Aquela bola ali no lugar do zero.</div>
+      </div>
+
+      <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+        <Btn onClick={compartilhar} style={{ fontSize:14 }}>📲 Compartilhar com a galera</Btn>
+        <a href="/conheca" target="_blank" rel="noopener noreferrer" style={{ background:"none", border:`1px solid ${C.gold}`, borderRadius:10, color:C.gold, fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"12px 24px", cursor:"pointer", textDecoration:"none", display:"inline-block" }}>
+          Ver a página de apresentação
+        </a>
+        <a href="/?cadastro=1" target="_blank" rel="noopener noreferrer" style={{ background:C.gold, border:"none", borderRadius:10, color:"#0B3D2E", fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"12px 24px", cursor:"pointer", textDecoration:"none", display:"inline-block" }}>
+          🏆 Solicitar um time novo
+        </a>
+      </div>
+      <div style={{ textAlign:"center", marginTop:18, fontSize:12, color:C.dim, fontStyle:"italic" }}>
+        Testou e gostou? Compartilha com a galera! Não gostou? Compartilha também!
+      </div>
+    </Card>
+  );
+}
+
 function PaginaDicas({ ehTurmaFechada }) {
   const DICAS = [
     { ic:"📅", t:"Use só o que precisar", d:"Você não é obrigado a usar tudo. Dá pra controlar só o calendário, só a presença, ou ir até o controle financeiro completo. Comece simples e ative o resto quando quiser." },
@@ -6043,6 +6190,7 @@ export default function AdminAppCompleto() {
               {(temporadas||[]).map(t=><option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
             </select>
           )}
+          <a href="/" target="_blank" rel="noopener noreferrer" title="Abrir o site público" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:11, fontWeight:700, padding:"6px 12px", textDecoration:"none", whiteSpace:"nowrap" }}>🌐 Ver site público</a>
           <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>Sair</Btn>
         </div>
       </header>
@@ -6180,6 +6328,7 @@ export default function AdminAppCompleto() {
           {menu === "eventos"       && (<CrudEventos idTime={idTime} show={show} readOnly={!canEdit("eventos")}/>)}
           {menu === "tiposmov"      && (<CrudTiposMov idTime={idTime} show={show} readOnly={!canEdit("tiposmov")}/>)}
           {menu === "dicas"         && (<PaginaDicas ehTurmaFechada={ehTurmaFechada}/>)}
+          {menu === "indique"       && (<PaginaIndique show={show}/>)}
           {menu === "ajuda"         && (<PaginaAjuda/>)}
           {menu === "time"        && (<>{secTitle("Configurações do Time")}<ConfigTime idTime={idTime} show={show} readOnly={!canEdit("time")} /></>)}
           </>)}
