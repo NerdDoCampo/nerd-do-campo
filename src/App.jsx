@@ -221,6 +221,7 @@ function SeletorTimes({ onSelect }) {
           <div style={{ fontSize:20, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream, lineHeight:1 }}>Nerd do Campo</div>
           <div style={{ fontSize:11, color:C.gold, letterSpacing:"0.1em", textTransform:"uppercase" }}>Estatísticas de Futebol Amador</div>
         </div>
+        <a href="/admin" style={{ marginLeft:"auto", background:"none", border:`1px solid ${C.gold}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontWeight:700, fontSize:13, padding:"9px 18px", cursor:"pointer", textDecoration:"none", whiteSpace:"nowrap" }}>🔑 Área do gestor</a>
       </header>
 
       <main style={{ maxWidth:900, margin:"0 auto", padding:"48px 24px 60px" }}>
@@ -446,6 +447,9 @@ function SeletorTimes({ onSelect }) {
         <div style={{ marginBottom:10, fontSize:13 }}>
           Dúvidas ou sugestões? Fale com a gente pelo e-mail{" "}
           <a href="mailto:nerddocampo10@gmail.com" style={{ color:C.gold, textDecoration:"none", fontWeight:700 }}>nerddocampo10@gmail.com</a>
+        </div>
+        <div style={{ marginBottom:10 }}>
+          <a href="/admin" style={{ color:C.gold, textDecoration:"none", fontWeight:700, fontSize:13, border:`1px solid ${C.gold}`, borderRadius:8, padding:"8px 18px", display:"inline-block" }}>🔑 Área do gestor — acessar o painel</a>
         </div>
         <div style={{ fontSize:11, color:C.gold, letterSpacing:"0.08em", opacity:0.85 }}>
           ⚽ Designed by Caxpa Augsten
