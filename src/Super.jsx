@@ -1140,6 +1140,7 @@ function CrudSolicitacoes({ show, onMudou }) {
   const [saving, setSaving] = useState(false);
   const [filtro, setFiltro] = useState("pendente");
   const [senhaInicial, setSenhaInicial] = useState("");
+  const [emailPronto, setEmailPronto] = useState(null); // {assunto, corpo} após aprovar
 
   function abrirAprovar(s) {
     // Permissões padrão — tudo liberado
@@ -1259,8 +1260,39 @@ function CrudSolicitacoes({ show, onMudou }) {
         status: "aprovado", observacoes_admin: obs || null,
       });
 
-      show(`✅ Time "${modalSol.nome_time}" aprovado! Acesso criado — e-mail: ${modalSol.email_responsavel} | senha: ${senhaInicial}`);
-      setModalSol(null); reload(); if (onMudou) onMudou();
+      show(`✅ Time "${modalSol.nome_time}" aprovado! Acesso criado.`);
+
+      // Monta o e-mail de boas-vindas pronto para copiar
+      const primeiroNome = (modalSol.nome_responsavel || "").trim().split(/\s+/)[0] || "gestor";
+      const timeMaiusculo = (modalSol.nome_time || "").toUpperCase();
+      const assunto = "Seu time tá no ar! Bem-vindo ao Nerd do Campo ⚽";
+      const corpo =
+`E aí, ${primeiroNome}!
+
+Deu tudo certo com a solicitação do ${timeMaiusculo} — o cadastro foi aprovado e o time já tá no ar no Nerd do Campo. 🎉
+
+Pra começar a mexer, é só entrar no painel de administração com os dados abaixo:
+
+🔗 Acesso: https://nerddocampo.com.br/admin
+📧 Login: ${modalSol.email_responsavel}
+🔑 Senha provisória: ${senhaInicial}
+
+No primeiro acesso, recomendo trocar a senha por uma sua.
+
+Uma dica: a plataforma é bem completa, mas você não precisa usar tudo de uma vez. Dá pra começar simples — só com o calendário de jogos, ou só com a presença — e ir ativando o resto (estatísticas, mensalidades, financeiro) conforme a necessidade do time. O sistema se adapta ao que você quiser controlar.
+
+Pra te ajudar nos primeiros passos, preparei um manual completo no módulo de Ajuda do sistema.
+Qualquer dúvida, é só responder este e-mail que a gente te dá uma força.
+
+Bom jogo e bons números! ⚽
+
+Abraço,
+Nerd do Campo
+nerddocampo.com.br/admin`;
+
+      setEmailPronto({ assunto, corpo });
+      setModalSol(null);
+      reload(); if (onMudou) onMudou();
     } catch(e) { show("Erro: " + e.message, "error"); }
     finally { setSaving(false); }
   }
@@ -1458,6 +1490,27 @@ function CrudSolicitacoes({ show, onMudou }) {
                 {saving ? "Processando..." : "✅ Aprovar e Criar Admin"}
               </Btn>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* E-mail de boas-vindas pronto (após aprovar) */}
+      {emailPronto && (
+        <Modal title="📧 E-mail de boas-vindas pronto" onClose={() => setEmailPronto(null)}>
+          <div style={{ fontSize:13, color:C.dim, marginBottom:18, lineHeight:1.5 }}>
+            Time aprovado e acesso criado! Copie o assunto e o corpo abaixo e mande pro responsável. Já vem tudo preenchido — confira antes de enviar.
+          </div>
+          <div style={{ fontSize:12, color:C.gold, fontWeight:700, marginBottom:6 }}>Assunto</div>
+          <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+            <div style={{ flex:1, background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 12px", fontSize:13, color:C.cream }}>{emailPronto.assunto}</div>
+            <Btn variant="secondary" onClick={() => { navigator.clipboard.writeText(emailPronto.assunto); show("Assunto copiado!"); }} style={{ fontSize:12, whiteSpace:"nowrap" }}>📋 Copiar</Btn>
+          </div>
+          <div style={{ fontSize:12, color:C.gold, fontWeight:700, marginBottom:6 }}>Corpo do e-mail</div>
+          <textarea readOnly value={emailPronto.corpo}
+            style={{ width:"100%", height:240, background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:12.5, padding:"12px 14px", boxSizing:"border-box", lineHeight:1.5, resize:"vertical", marginBottom:8 }}/>
+          <Btn onClick={() => { navigator.clipboard.writeText(emailPronto.corpo); show("Corpo do e-mail copiado!"); }} style={{ width:"100%", marginBottom:14 }}>📋 Copiar corpo do e-mail</Btn>
+          <div style={{ display:"flex", justifyContent:"flex-end" }}>
+            <Btn variant="secondary" onClick={() => setEmailPronto(null)} style={{ fontSize:13 }}>Fechar</Btn>
           </div>
         </Modal>
       )}
@@ -2869,7 +2922,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.22.5";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.22.6";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
