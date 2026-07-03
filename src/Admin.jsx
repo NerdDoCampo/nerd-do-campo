@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.22.3";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.22.6";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1253,6 +1253,69 @@ function Badge({ label, cor }) {
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────
+// Bloco de avaliações no login do admin (mesmo conceito do público).
+// Só aparece com 3+ aprovadas. Reutiliza o padrão de exibição.
+function BlocoAvaliacoesLogin() {
+  const { data: avals } = useQuery(
+    () => api.get(`avaliacao?status=eq.aprovado&select=id,nota,texto,publicar_identidade,nome_exibicao,nome_time,criado_em,time(nome,escudo_url)&order=criado_em.desc`),
+    []
+  );
+  const [verTodas, setVerTodas] = useState(false);
+  const lista = avals || [];
+  if (lista.length < 3) return null;
+
+  const media = (lista.reduce((s, a) => s + a.nota, 0) / lista.length).toFixed(1);
+  const mostrar = verTodas ? lista.slice(0, 30) : lista.slice(0, 3);
+  const estrelas = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+  function tempoRel(iso) {
+    const d = new Date(iso), dias = Math.floor((new Date() - d) / 86400000);
+    if (dias === 0) return "hoje";
+    if (dias === 1) return "há 1 dia";
+    if (dias < 30) return `há ${dias} dias`;
+    return d.toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+  }
+
+  return (
+    <div style={{ width:"100%", maxWidth:760, margin:"26px auto 0", background:`linear-gradient(135deg, ${C.surface}, ${C.surf2})`, border:`1px solid ${C.border}`, borderRadius:16, padding:"28px 24px" }}>
+      <div style={{ fontSize:21, fontWeight:800, color:C.cream, textAlign:"center", marginBottom:18 }}>O que os gestores estão achando 💬</div>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginBottom:22, paddingBottom:18, borderBottom:`1px solid ${C.border}` }}>
+        <div style={{ fontSize:52, fontWeight:900, color:C.gold, lineHeight:1 }}>{media}</div>
+        <div>
+          <div style={{ fontSize:24, color:C.gold, letterSpacing:2 }}>{estrelas(Math.round(media))}</div>
+          <div style={{ fontSize:13, color:C.dim, marginTop:3 }}>{lista.length} avaliações</div>
+        </div>
+      </div>
+      {mostrar.map(av => {
+        const escudo = av.time?.escudo_url;
+        return (
+          <div key={av.id} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 18px", marginBottom:12 }}>
+            <div style={{ fontSize:16, color:C.gold, letterSpacing:1, marginBottom:9 }}>{estrelas(av.nota)}</div>
+            <div style={{ fontSize:14, color:C.cream, lineHeight:1.55, marginBottom:12 }}>"{av.texto}"</div>
+            <div style={{ display:"flex", alignItems:"center", gap:11 }}>
+              {av.publicar_identidade && escudo
+                ? <img src={escudo} alt="" style={{ width:40, height:40, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }} onError={e=>{e.currentTarget.style.display="none";}}/>
+                : <div style={{ width:40, height:40, borderRadius:"50%", background:C.surf2, border:`2px solid ${C.dim}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:900, color:C.cream, flexShrink:0 }}>{av.publicar_identidade ? (av.nome_time?.[0]||"?").toUpperCase() : "?"}</div>}
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:800, color:C.cream }}>{av.publicar_identidade ? (av.nome_exibicao || "Gestor") : "Gestor de time amador"}</div>
+                <div style={{ fontSize:13, color:C.dim }}>{av.publicar_identidade ? (av.nome_time || av.time?.nome || "") : "identidade não divulgada"}</div>
+              </div>
+              <div style={{ fontSize:12, color:C.dim, whiteSpace:"nowrap" }}>{tempoRel(av.criado_em)}</div>
+            </div>
+          </div>
+        );
+      })}
+      {lista.length > 3 && !verTodas && (
+        <div style={{ textAlign:"center", marginTop:8 }}>
+          <button onClick={() => setVerTodas(true)}
+            style={{ background:"none", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:10, fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"12px 28px", cursor:"pointer" }}>
+            Ver todas as {lista.length} avaliações
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Vitrine de captação — CÓPIA FIEL da seção do app público (mesmos 5 recursos
 // com miniaturas clicáveis, lightbox, preço e botões). Usada na tela de login
 // do admin, para quem cai no /admin sem ter visto o público.
@@ -1402,6 +1465,7 @@ function Login({ onLogin, aviso }) {
       </Card>
 
       <VitrineCaptacao />
+      <BlocoAvaliacoesLogin />
       <div style={{ textAlign:"center", marginTop:20, marginBottom:8 }}>
         <a href="/" style={{ color:C.gold, textDecoration:"none", fontWeight:700, fontSize:14, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 22px", display:"inline-block" }}>🌐 Ver os times no app público</a>
       </div>
@@ -3294,6 +3358,7 @@ const MENU_BASE = [
   { id:"app",         label:"Visão App",   icon:"👁️", grupo:"Acompanhar" },
   { id:"dicas",       label:"Dicas",       icon:"💡", grupo:"Acompanhar" },
   { id:"indique",     label:"Indique o app", icon:"🎁", grupo:"Acompanhar" },
+  { id:"avaliar",     label:"Avaliar o app", icon:"⭐", grupo:"Acompanhar" },
   { id:"ajuda",       label:"Ajuda",        icon:"❓", grupo:"Acompanhar" },
 ];
 
@@ -3690,6 +3755,18 @@ function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
           </div>
         </Card>
       )}
+
+      {/* Convite para avaliar o app */}
+      <Card style={{ padding:"20px 24px", background:`linear-gradient(135deg, ${C.surface}, ${C.surf2})`, border:`1px solid ${C.gold}55` }}>
+        <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+          <div style={{ fontSize:34 }}>⭐</div>
+          <div style={{ flex:1, minWidth:200 }}>
+            <div style={{ fontWeight:800, fontSize:16, color:C.cream, marginBottom:4 }}>Tá gostando do Nerd do Campo?</div>
+            <div style={{ fontSize:13, color:C.dim, lineHeight:1.5 }}>Deixe sua avaliação! Ela pode aparecer na página inicial e ajudar outros times a conhecerem o app.</div>
+          </div>
+          <Btn onClick={() => onNavegar("avaliar")} style={{ fontSize:13, whiteSpace:"nowrap" }}>⭐ Avaliar o app</Btn>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -4182,6 +4259,108 @@ function CrudMensalidades({ idTime, show, readOnly }) {
 // ══════════════════════════════════════════════════════════════
 // PÁGINA DE AJUDA
 // ══════════════════════════════════════════════════════════════
+function PaginaAvaliar({ idTime, meusTimes, session, show, onEnviado }) {
+  const [nota, setNota] = useState(5);
+  const [hover, setHover] = useState(0);
+  const [texto, setTexto] = useState("");
+  const [publicar, setPublicar] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+
+  // Time atual do admin (para snapshot de nome do time e preview do escudo)
+  const vinculo = (meusTimes || []).find(t => t.id_time === idTime) || (meusTimes || [])[0];
+  const nomeTime = vinculo?.time?.nome || "Meu time";
+  const escudoUrl = vinculo?.time?.escudo_url || null;
+  const meuNome = (typeof emailUsuarioLogado === "function" ? emailUsuarioLogado() : null) || "Gestor";
+  // nome de exibição: usa a parte antes do @ do email como fallback amigável
+  const nomeExib = meuNome.includes("@") ? meuNome.split("@")[0] : meuNome;
+
+  async function enviar() {
+    if (!texto.trim()) { show("Escreva um comentário antes de enviar.", "error"); return; }
+    if (texto.trim().length > 500) { show("O texto passou de 500 caracteres.", "error"); return; }
+    setEnviando(true);
+    try {
+      await api.post("avaliacao", {
+        user_id: session?.user?.id,
+        id_time: idTime || vinculo?.id_time || null,
+        nota,
+        texto: texto.trim(),
+        publicar_identidade: publicar,
+        nome_exibicao: publicar ? nomeExib : null,
+        nome_time: publicar ? nomeTime : null,
+        status: "pendente",
+      });
+      setEnviado(true);
+      onEnviado && onEnviado();
+    } catch (e) {
+      show("Erro ao enviar avaliação: " + (e.message || e), "error");
+    } finally { setEnviando(false); }
+  }
+
+  if (enviado) {
+    return (
+      <Card>
+        <div style={{ textAlign:"center", padding:"30px 20px" }}>
+          <div style={{ fontSize:52, marginBottom:16 }}>🎉</div>
+          <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:10 }}>Avaliação enviada!</div>
+          <div style={{ fontSize:14, color:C.dim, maxWidth:440, margin:"0 auto", lineHeight:1.6 }}>
+            Obrigado pelo retorno! Ela passará por uma análise rápida antes de aparecer na página inicial. 💚
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  const estrelaAtiva = hover || nota;
+  return (
+    <Card>
+      <div style={{ fontSize:22, fontWeight:800, color:C.cream, marginBottom:6 }}>Avaliar o Nerd do Campo ⭐</div>
+      <div style={{ fontSize:14, color:C.dim, marginBottom:26, lineHeight:1.5 }}>
+        Tá gostando do app? Conta pra gente! Sua avaliação pode aparecer na página inicial e ajudar outros times a conhecerem o sistema.
+      </div>
+
+      <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:10 }}>Que nota você dá?</div>
+      <div style={{ marginBottom:6 }}>
+        {[1,2,3,4,5].map(n => (
+          <span key={n} onClick={() => setNota(n)} onMouseEnter={() => setHover(n)} onMouseLeave={() => setHover(0)}
+            style={{ fontSize:44, cursor:"pointer", color: n <= estrelaAtiva ? C.gold : C.border, letterSpacing:6, transition:"color .1s" }}>★</span>
+        ))}
+      </div>
+      <div style={{ fontSize:12, color:C.dim, marginBottom:24 }}>Toque nas estrelas — você deu {nota} de 5</div>
+
+      <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:10 }}>Conta como tem sido sua experiência</div>
+      <textarea value={texto} onChange={e => setTexto(e.target.value.slice(0,500))} rows={4}
+        placeholder="O que você mais gostou? O que faz diferença no dia a dia do seu time?"
+        style={{ width:"100%", background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"14px 16px", resize:"vertical", boxSizing:"border-box", outline:"none", lineHeight:1.5 }}/>
+      <div style={{ fontSize:11, color:C.dim, textAlign:"right", marginTop:4, marginBottom:22 }}>{texto.length} / 500</div>
+
+      <label style={{ display:"flex", alignItems:"flex-start", gap:12, background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:16, marginBottom:14, cursor:"pointer" }}>
+        <input type="checkbox" checked={publicar} onChange={e => setPublicar(e.target.checked)} style={{ width:20, height:20, marginTop:2, flexShrink:0, accentColor:C.gold }}/>
+        <div style={{ fontSize:13, color:C.cream, lineHeight:1.5 }}>
+          <b style={{ color:C.gold }}>Publicar meu nome e time junto</b><br/>
+          Se marcado, seu depoimento aparece com seu nome, o nome e o escudo do seu time. Se desmarcar, aparece como "Gestor de time amador", sem identificação.
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:10, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
+            {publicar && escudoUrl
+              ? <img src={escudoUrl} alt="" style={{ width:32, height:32, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }} onError={e => { e.currentTarget.style.display="none"; }}/>
+              : <div style={{ width:32, height:32, borderRadius:"50%", background:C.surf2, border:`2px solid ${C.dim}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:900, color:C.cream }}>{publicar ? (nomeTime[0]||"?").toUpperCase() : "?"}</div>}
+            <div style={{ fontSize:12, color:C.dim }}>
+              Vai aparecer como: <b style={{ color:C.cream }}>{publicar ? `${nomeExib} · ${nomeTime}` : "Gestor de time amador"}</b>
+            </div>
+          </div>
+        </div>
+      </label>
+
+      <div style={{ background:`${C.gold}1F`, border:`1px solid ${C.gold}`, borderRadius:10, padding:"14px 16px", fontSize:13, color:C.cream, lineHeight:1.5, marginBottom:22 }}>
+        📋 Sua avaliação passa por uma análise rápida antes de ser publicada. Depois de enviada, não dá pra editar — então capricha! 😉
+      </div>
+
+      <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+        <Btn onClick={enviar} disabled={enviando || !texto.trim()}>{enviando ? "Enviando..." : "Enviar avaliação"}</Btn>
+      </div>
+    </Card>
+  );
+}
+
 function PaginaIndique({ show }) {
   const recursos = [
     ["📅", "Calendário e adversários", "Agenda da temporada e busca de adversários pelo app."],
@@ -6329,6 +6508,7 @@ export default function AdminAppCompleto() {
           {menu === "tiposmov"      && (<CrudTiposMov idTime={idTime} show={show} readOnly={!canEdit("tiposmov")}/>)}
           {menu === "dicas"         && (<PaginaDicas ehTurmaFechada={ehTurmaFechada}/>)}
           {menu === "indique"       && (<PaginaIndique show={show}/>)}
+          {menu === "avaliar"       && (<PaginaAvaliar idTime={idTime} meusTimes={meusTimes} session={session} show={show} onEnviado={() => {}}/>)}
           {menu === "ajuda"         && (<PaginaAjuda/>)}
           {menu === "time"        && (<>{secTitle("Configurações do Time")}<ConfigTime idTime={idTime} show={show} readOnly={!canEdit("time")} /></>)}
           </>)}

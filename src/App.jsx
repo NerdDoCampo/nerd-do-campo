@@ -304,6 +304,8 @@ function SeletorTimes({ onSelect }) {
           </div>
         )}
 
+        <BlocoAvaliacoes />
+
         {/* Filtro de tipo de time */}
         {(tiposAtivos||[]).length > 0 && (
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", justifyContent:"center", marginBottom:8 }}>
@@ -1232,6 +1234,74 @@ function TimeApp({ time, onVoltar }) {
 // MODAL DE SOLICITAÇÃO DE CADASTRO
 // ══════════════════════════════════════════════════════════════
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+
+// Bloco de avaliações/depoimentos — exibe as aprovadas (média + 3 recentes + ver todas).
+// Só aparece com 3+ aprovadas. Escudo em tempo real via join com time.
+function BlocoAvaliacoes() {
+  const { data: avals } = useQuery(
+    () => sb(`avaliacao?status=eq.aprovado&select=id,nota,texto,publicar_identidade,nome_exibicao,nome_time,criado_em,time(nome,escudo_url)&order=criado_em.desc`),
+    []
+  );
+  const [verTodas, setVerTodas] = useState(false);
+
+  const lista = avals || [];
+  if (lista.length < 3) return null; // esconde até ter 3 aprovadas
+
+  const media = (lista.reduce((s, a) => s + a.nota, 0) / lista.length).toFixed(1);
+  const mostrar = verTodas ? lista.slice(0, 30) : lista.slice(0, 3);
+  const estrelas = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+
+  function tempoRelativo(iso) {
+    const d = new Date(iso), agora = new Date();
+    const dias = Math.floor((agora - d) / 86400000);
+    if (dias === 0) return "hoje";
+    if (dias === 1) return "há 1 dia";
+    if (dias < 30) return `há ${dias} dias`;
+    return d.toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+  }
+
+  return (
+    <div style={{ maxWidth:760, margin:"0 auto 40px", background:`linear-gradient(135deg, ${C.surface}, ${C.surf2})`, border:`1px solid ${C.border}`, borderRadius:16, padding:"32px 24px" }}>
+      <div style={{ fontSize:22, fontWeight:800, color:C.cream, textAlign:"center", marginBottom:20 }}>O que os gestores estão achando 💬</div>
+      {/* resumo média */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginBottom:24, paddingBottom:20, borderBottom:`1px solid ${C.border}` }}>
+        <div style={{ fontSize:56, fontWeight:900, color:C.gold, lineHeight:1 }}>{media}</div>
+        <div>
+          <div style={{ fontSize:26, color:C.gold, letterSpacing:2 }}>{estrelas(Math.round(media))}</div>
+          <div style={{ fontSize:14, color:C.dim, marginTop:3 }}>{lista.length} avaliações</div>
+        </div>
+      </div>
+      {/* depoimentos */}
+      {mostrar.map(av => {
+        const escudo = av.time?.escudo_url;
+        return (
+          <div key={av.id} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 18px", marginBottom:12 }}>
+            <div style={{ fontSize:16, color:C.gold, letterSpacing:1, marginBottom:9 }}>{estrelas(av.nota)}</div>
+            <div style={{ fontSize:14, color:C.cream, lineHeight:1.55, marginBottom:12 }}>"{av.texto}"</div>
+            <div style={{ display:"flex", alignItems:"center", gap:11 }}>
+              {av.publicar_identidade && escudo
+                ? <img src={escudo} alt="" style={{ width:40, height:40, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }} onError={e=>{e.currentTarget.style.display="none";}}/>
+                : <div style={{ width:40, height:40, borderRadius:"50%", background:C.surf2, border:`2px solid ${C.dim}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:900, color:C.cream, flexShrink:0 }}>{av.publicar_identidade ? (av.nome_time?.[0]||"?").toUpperCase() : "?"}</div>}
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:800, color:C.cream }}>{av.publicar_identidade ? (av.nome_exibicao || "Gestor") : "Gestor de time amador"}</div>
+                <div style={{ fontSize:13, color:C.dim }}>{av.publicar_identidade ? (av.nome_time || av.time?.nome || "") : "identidade não divulgada"}</div>
+              </div>
+              <div style={{ fontSize:12, color:C.dim, whiteSpace:"nowrap" }}>{tempoRelativo(av.criado_em)}</div>
+            </div>
+          </div>
+        );
+      })}
+      {lista.length > 3 && !verTodas && (
+        <div style={{ textAlign:"center", marginTop:8 }}>
+          <button onClick={() => setVerTodas(true)}
+            style={{ background:"none", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:10, fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"12px 28px", cursor:"pointer" }}>
+            Ver todas as {lista.length} avaliações
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ModalSolicitacao({ onClose }) {
   const [form, setForm] = useState({
