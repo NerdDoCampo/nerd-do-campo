@@ -383,6 +383,7 @@ function DashboardSuper() {
   const { data: totalTimesData } = useQuery(() => api.get(`time?select=id_time&limit=100000`), []);
   const { data: usuarios } = useQuery(() => api.get(`usuario_time?select=*&order=criado_em.desc`));
   const { data: solPendentes, reload: reloadPendentes } = useQuery(() => api.get(`solicitacao_time?select=id&status=eq.pendente`));
+  const { data: avalPendentes, reload: reloadAvalPend } = useQuery(() => api.get(`avaliacao?select=id&status=eq.pendente`));
   const { toast, show } = useToast();
   const [modalNovoTime, setModalNovoTime]     = useState(false);
   const [modalNovoUser, setModalNovoUser]     = useState(false);
@@ -434,12 +435,14 @@ function DashboardSuper() {
           { id:"times",        label:"🏆 Times" },
           { id:"mensalidades", label:"💵 Mensalidades" },
           { id:"solicitacoes", label:`📋 Solicitações${(solPendentes||[]).length > 0 ? ` (${(solPendentes||[]).length})` : ""}` },
+          { id:"avaliacoes",   label:`⭐ Avaliações${(avalPendentes||[]).length > 0 ? ` (${(avalPendentes||[]).length})` : ""}` },
           { id:"tipos",        label:"⚽ Tipos de Time" },
           { id:"cidades",      label:"📍 Cidades" },
           { id:"config",       label:"⚙️ Configurações" },
           { id:"ajuda",        label:"❓ Ajuda" },
         ].map(a => {
-          const temPendentes = a.id === "solicitacoes" && (solPendentes||[]).length > 0;
+          const temPendentes = (a.id === "solicitacoes" && (solPendentes||[]).length > 0)
+                            || (a.id === "avaliacoes" && (avalPendentes||[]).length > 0);
           const corFundo = aba===a.id ? (temPendentes ? C.loss : C.gold)
                                        : (temPendentes ? C.loss+"22" : C.surface);
           const corTexto = aba===a.id ? (temPendentes ? "#fff" : "#0B3D2E")
@@ -463,6 +466,7 @@ function DashboardSuper() {
       {aba === "ajuda"        && <AjudaSuper/>}
       {aba === "mensalidades" && <CrudMensalidadeTimes show={show}/>}
       {aba === "solicitacoes" && <CrudSolicitacoes show={show} onMudou={reloadPendentes}/>}
+      {aba === "avaliacoes"   && <GestaoAvaliacoes show={show} onMudou={reloadAvalPend}/>}
       {aba === "times" && <>
 
       {/* Stats */}
@@ -1028,6 +1032,103 @@ function ModalPermissoes({ user_id, id_time, nomeUsuario, onClose, show }) {
 // ══════════════════════════════════════════════════════════════
 // APROVAÇÃO DE SOLICITAÇÕES DE TIMES
 // ══════════════════════════════════════════════════════════════
+function GestaoAvaliacoes({ show, onMudou }) {
+  const [filtro, setFiltro] = useState("pendente");
+  const { data: avaliacoes, reload } = useQuery(
+    () => api.get(`avaliacao?select=*,time(nome,escudo_url)&order=criado_em.desc`),
+    []
+  );
+  const [saving, setSaving] = useState(null);
+
+  const lista = (avaliacoes || []).filter(a => filtro === "todas" ? true : a.status === filtro);
+
+  async function mudarStatus(av, novoStatus) {
+    setSaving(av.id);
+    try {
+      await api.patch(`avaliacao?id=eq.${av.id}`, { status: novoStatus, moderado_em: new Date().toISOString() });
+      const msg = novoStatus === "aprovado" ? "Avaliação aprovada e publicada! ✅"
+                : novoStatus === "recusado" ? "Avaliação recusada."
+                : "Avaliação revogada (saiu do ar).";
+      show(msg, "success");
+      reload(); onMudou && onMudou();
+    } catch (e) { show("Erro: " + (e.message || e), "error"); }
+    finally { setSaving(null); }
+  }
+
+  const estrelas = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+  const statusCfg = {
+    pendente: { label: "Pendente", cor: C.gold },
+    aprovado: { label: "Publicada", cor: C.win },
+    recusado: { label: "Recusada/Revogada", cor: C.loss },
+  };
+
+  return (
+    <Card>
+      <div style={{ fontSize:18, fontWeight:800, color:C.cream, marginBottom:16 }}>⭐ Moderação de Avaliações</div>
+
+      {/* filtros */}
+      <div style={{ display:"flex", gap:8, marginBottom:20, flexWrap:"wrap" }}>
+        {[["pendente","Pendentes"],["aprovado","Publicadas"],["recusado","Recusadas"],["todas","Todas"]].map(([id,lbl]) => (
+          <button key={id} onClick={() => setFiltro(id)}
+            style={{ background: filtro===id ? C.gold : C.surface, color: filtro===id ? "#0B3D2E" : C.dim,
+              border:`1px solid ${filtro===id ? C.gold : C.border}`, borderRadius:8, padding:"7px 16px",
+              fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer" }}>{lbl}</button>
+        ))}
+      </div>
+
+      {lista.length === 0 && (
+        <div style={{ textAlign:"center", padding:"40px 20px", color:C.dim }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>💬</div>
+          <div style={{ fontSize:14 }}>Nenhuma avaliação {filtro !== "todas" ? statusCfg[filtro]?.label.toLowerCase() : ""} por aqui.</div>
+        </div>
+      )}
+
+      {lista.map(av => {
+        const cfg = statusCfg[av.status] || statusCfg.pendente;
+        const escudo = av.time?.escudo_url;
+        const identidade = av.publicar_identidade
+          ? `${av.nome_exibicao || "—"} · ${av.nome_time || av.time?.nome || "—"}`
+          : "Anônimo (Gestor de time amador)";
+        return (
+          <div key={av.id} style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:12, padding:16, marginBottom:12 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8, flexWrap:"wrap", gap:8 }}>
+              <span style={{ fontSize:20, color:C.gold, letterSpacing:2 }}>{estrelas(av.nota)}</span>
+              <span style={{ fontSize:11, fontWeight:800, color:cfg.cor, border:`1px solid ${cfg.cor}`, borderRadius:6, padding:"3px 10px" }}>{cfg.label}</span>
+            </div>
+            <div style={{ fontSize:14, color:C.cream, lineHeight:1.55, marginBottom:12 }}>"{av.texto}"</div>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12, paddingBottom:12, borderBottom:`1px solid ${C.border}` }}>
+              {av.publicar_identidade && escudo
+                ? <img src={escudo} alt="" style={{ width:32, height:32, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }} onError={e=>{e.currentTarget.style.display="none";}}/>
+                : <div style={{ width:32, height:32, borderRadius:"50%", background:C.surface, border:`2px solid ${C.dim}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, color:C.dim }}>?</div>}
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:12, color:C.cream, fontWeight:700 }}>{identidade}</div>
+                <div style={{ fontSize:11, color:C.dim }}>
+                  {av.publicar_identidade ? "🌐 identidade pública" : "🔒 identidade oculta"} · enviada {new Date(av.criado_em).toLocaleDateString("pt-BR")}
+                </div>
+              </div>
+            </div>
+            {/* ações conforme o status */}
+            <div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>
+              {av.status === "pendente" && (
+                <>
+                  <Btn variant="danger" disabled={saving===av.id} onClick={() => mudarStatus(av, "recusado")} style={{ fontSize:12 }}>❌ Recusar</Btn>
+                  <Btn disabled={saving===av.id} onClick={() => mudarStatus(av, "aprovado")} style={{ fontSize:12 }}>✅ Aprovar e publicar</Btn>
+                </>
+              )}
+              {av.status === "aprovado" && (
+                <Btn variant="danger" disabled={saving===av.id} onClick={() => mudarStatus(av, "recusado")} style={{ fontSize:12 }}>🚫 Revogar (tirar do ar)</Btn>
+              )}
+              {av.status === "recusado" && (
+                <Btn disabled={saving===av.id} onClick={() => mudarStatus(av, "aprovado")} style={{ fontSize:12 }}>✅ Publicar</Btn>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </Card>
+  );
+}
+
 function CrudSolicitacoes({ show, onMudou }) {
   const { data: solicitacoes, reload } = useQuery(() =>
     api.get(`solicitacao_time?select=*&order=criado_em.desc`)
@@ -1038,6 +1139,7 @@ function CrudSolicitacoes({ show, onMudou }) {
   const [obs, setObs]   = useState("");
   const [saving, setSaving] = useState(false);
   const [filtro, setFiltro] = useState("pendente");
+  const [senhaInicial, setSenhaInicial] = useState("");
 
   function abrirAprovar(s) {
     // Permissões padrão — tudo liberado
@@ -1045,6 +1147,8 @@ function CrudSolicitacoes({ show, onMudou }) {
     MODULOS_ADMIN.forEach(m => { p[m.id] = { ver: true, editar: true }; });
     setPermsForm(p);
     setObs("");
+    // Sugere uma senha inicial fácil (o superadmin pode trocar). Ex: nerd + 4 dígitos
+    setSenhaInicial("nerd" + Math.floor(1000 + Math.random() * 9000));
     setModalSol(s);
   }
 
@@ -1113,19 +1217,32 @@ function CrudSolicitacoes({ show, onMudou }) {
         try { await api.patch(`solicitacao_time?id=eq.${modalSol.id}`, { id_time_criado: id_time }); } catch {}
       }
 
-      // 3. Criar usuário admin via RPC
-      const rpcRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/criar_admin_time`, {
+      // 3. Criar o USUÁRIO no Auth com a senha definida (via Edge Function segura).
+      //    A Edge Function usa a service_role no servidor — cria o usuário já
+      //    confirmado com a senha escolhida e retorna o user_id.
+      const efRes = await fetch(`${SUPABASE_URL}/functions/v1/criar-usuario-time`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SESSION_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ email: modalSol.email_responsavel, senha: senhaInicial }),
+      });
+      const efData = await efRes.json();
+      if (!efData || efData.success === false || !efData.user_id) {
+        const motivo = efData?.error || "não foi possível criar o usuário.";
+        throw new Error(`Time criado, mas o acesso do admin não foi criado: ${motivo}`);
+      }
+      const user_id = efData.user_id;
+
+      // 3b. Vincular o usuário ao time (role admin) via RPC existente.
+      const vincRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/criar_admin_time`, {
         method: "POST",
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SESSION_TOKEN}`, "Content-Type": "application/json" },
         body: JSON.stringify({ p_email: modalSol.email_responsavel, p_id_time: id_time, p_role: "admin" }),
       });
-      const rpcData = await rpcRes.json();
-      // O RPC retorna { success, user_id, error }. Se falhou, PARA aqui (não marca como aprovado).
-      if (!rpcData || rpcData.success === false || !rpcData.user_id) {
-        const motivo = rpcData?.error || "não foi possível criar o vínculo do usuário.";
-        throw new Error(`Time criado, mas o acesso do admin não foi vinculado: ${motivo} Verifique se o e-mail ${modalSol.email_responsavel} já existe em Authentication → Users no Supabase, e tente aprovar novamente.`);
+      const vincData = await vincRes.json();
+      if (!vincData || vincData.success === false || !vincData.user_id) {
+        const motivo = vincData?.error || "não foi possível vincular o usuário ao time.";
+        throw new Error(`Usuário criado, mas o vínculo com o time falhou: ${motivo}`);
       }
-      const user_id = rpcData.user_id;
 
       // 4. Salvar permissões (limpa antes, caso seja uma retentativa)
       try { await api.delete(`usuario_permissao?user_id=eq.${user_id}&id_time=eq.${id_time}`); } catch {}
@@ -1142,7 +1259,7 @@ function CrudSolicitacoes({ show, onMudou }) {
         status: "aprovado", observacoes_admin: obs || null,
       });
 
-      show(`✅ Time "${modalSol.nome_time}" aprovado! Admin criado para ${modalSol.email_responsavel}.`);
+      show(`✅ Time "${modalSol.nome_time}" aprovado! Acesso criado — e-mail: ${modalSol.email_responsavel} | senha: ${senhaInicial}`);
       setModalSol(null); reload(); if (onMudou) onMudou();
     } catch(e) { show("Erro: " + e.message, "error"); }
     finally { setSaving(false); }
@@ -1306,6 +1423,20 @@ function CrudSolicitacoes({ show, onMudou }) {
                   })}
                 </tbody>
               </table></div>
+            </div>
+
+            {/* Senha inicial do admin do time */}
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Senha inicial do acesso (você define — passe ao responsável)</div>
+              <div style={{ display:"flex", gap:8 }}>
+                <input value={senhaInicial} onChange={e => setSenhaInicial(e.target.value)}
+                  placeholder="Senha inicial"
+                  style={{ flex:1, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8,
+                    color:C.cream, fontFamily:"inherit", fontSize:13, padding:"10px 12px",
+                    boxSizing:"border-box", outline:"none" }}/>
+                <Btn variant="secondary" onClick={() => setSenhaInicial("nerd" + Math.floor(1000 + Math.random() * 9000))} style={{ fontSize:11, whiteSpace:"nowrap" }}>🎲 Gerar</Btn>
+              </div>
+              <div style={{ fontSize:10, color:C.dim, marginTop:4 }}>Mínimo 6 caracteres. Anote antes de aprovar — a mensagem de sucesso também mostra e-mail e senha.</div>
             </div>
 
             {/* Observações */}
@@ -2738,7 +2869,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.22.3";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.22.5";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
