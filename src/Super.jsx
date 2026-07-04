@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, useId } from "react";
 
 // ── Supabase ──────────────────────────────────────────────────
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
@@ -75,60 +75,147 @@ const api = {
 const C = {
   bg:"#0B1A2E", surface:"#0F2340", surf2:"#163060",
   border:"#1E3A5F", gold:"#E8A020", cream:"#F0E8D0",
-  dim:"#7A9ABF", win:"#4CAF50", loss:"#E53935",
+  dim:"#7A9ABF",
+  // win passa AA sobre os fundos azuis (5,7:1); loss não passava (3,7:1) →
+  // loss é cor de TEXTO (AA), lossBg guarda o vermelho saturado para FUNDOS.
+  win:"#4CAF50", loss:"#FF8A80", lossBg:"#E53935",
 };
 
-// ── Atoms ─────────────────────────────────────────────────────
-function Card({ children, style: s = {} }) {
-  return <div style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, ...s }}>{children}</div>;
+// ── Atoms (acessíveis — mesmo padrão do Admin v1.23.0, paleta azul) ──
+function Card({ children, style: s = {}, className }) {
+  return <div className={className} style={{ background:C.surface, borderRadius:12, border:`1px solid ${C.border}`, ...s }}>{children}</div>;
 }
 function Btn({ children, variant="primary", onClick, disabled, style:s={} }) {
-  const bg = disabled?C.surf2:variant==="primary"?C.gold:variant==="danger"?C.loss:C.surf2;
-  const color = disabled?C.dim:variant==="primary"?"#0B1A2E":C.cream;
+  const bg = disabled?C.surf2:variant==="primary"?C.gold:variant==="danger"?C.lossBg:C.surf2;
+  const color = disabled?C.dim:variant==="primary"?"#0B1A2E":variant==="danger"?"#FFFFFF":C.cream;
   return <button onClick={onClick} disabled={disabled} style={{ background:bg, color, border:"none", borderRadius:8, padding:"9px 18px", fontFamily:"inherit", fontWeight:700, fontSize:13, cursor:disabled?"not-allowed":"pointer", textTransform:"uppercase", letterSpacing:"0.06em", ...s }}>{children}</button>;
 }
 function Input({ label, error, style:s={}, ...p }) {
+  const id = useId();
+  const errId = `${id}-err`;
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:5, ...s }}>
-      {label && <label style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>{label}</label>}
-      <input {...p} style={{ background:C.surf2, border:`1px solid ${error?C.loss:C.border}`, borderRadius:8, padding:"9px 12px", color:C.cream, fontFamily:"inherit", fontSize:14, outline:"none", width:"100%" }}/>
-      {error && <span style={{ color:C.loss, fontSize:12 }}>{error}</span>}
+    <div style={{ display:"flex", flexDirection:"column", gap:5, minWidth:0, ...s }}>
+      {label && <label htmlFor={id} style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>{label}</label>}
+      <input id={id} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} {...p}
+        style={{ background:C.surf2, border:`1px solid ${error?C.loss:C.border}`, borderRadius:8, padding:"9px 12px", color:C.cream, fontFamily:"inherit", fontSize:14, width:"100%", boxSizing:"border-box" }}/>
+      {error && <span id={errId} role="alert" style={{ color:C.loss, fontSize:12 }}>{error}</span>}
     </div>
   );
 }
 function Select({ label, children, style:s={}, ...p }) {
+  const id = useId();
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:5, ...s }}>
-      {label && <label style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>{label}</label>}
-      <select {...p} style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px", color:C.cream, fontFamily:"inherit", fontSize:14, outline:"none", width:"100%" }}>{children}</select>
+    <div style={{ display:"flex", flexDirection:"column", gap:5, minWidth:0, ...s }}>
+      {label && <label htmlFor={id} style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>{label}</label>}
+      <select id={id} {...p} style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 12px", color:C.cream, fontFamily:"inherit", fontSize:14, width:"100%", boxSizing:"border-box" }}>{children}</select>
     </div>
   );
 }
 function Spinner() {
   return (
-    <div style={{ display:"flex", justifyContent:"center", padding:60 }}>
+    <div role="status" aria-label="Carregando" style={{ display:"flex", justifyContent:"center", padding:60 }}>
       <div style={{ width:36, height:36, border:`3px solid ${C.border}`, borderTop:`3px solid ${C.gold}`, borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
-function Toast({ msg, type }) {
+function Toast({ msg, type, onClose }) {
   if (!msg) return null;
   const cor = type==="error"?C.loss:C.win;
-  return <div style={{ position:"fixed", bottom:24, right:24, background:C.surf2, border:`1px solid ${cor}`, borderRadius:10, padding:"12px 20px", color:cor, fontWeight:700, fontSize:14, zIndex:9999 }}>{type==="error"?"❌":"✅"} {msg}</div>;
-}
-function Modal({ title, children, onClose }) {
   return (
-    <div style={{ position:"fixed", inset:0, background:"#00000088", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:24 }}>
-      <Card style={{ width:"100%", maxWidth:560, maxHeight:"90vh", overflowY:"auto" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:`1px solid ${C.border}` }}>
-          <span style={{ fontWeight:700, fontSize:16, textTransform:"uppercase", letterSpacing:"0.06em", color:C.cream }}>{title}</span>
-          <button onClick={onClose} style={{ background:"none", border:"none", color:C.dim, fontSize:20, cursor:"pointer" }}>✕</button>
+    <div role={type==="error"?"alert":"status"} aria-live={type==="error"?"assertive":"polite"}
+      style={{ position:"fixed", bottom:24, right:16, left:16, margin:"0 0 0 auto", maxWidth:480, width:"fit-content",
+        background:C.surf2, border:`1px solid ${cor}`, borderRadius:10, padding:"12px 16px", color:cor,
+        fontWeight:700, fontSize:14, zIndex:9999, boxShadow:"0 4px 20px #00000088", display:"flex", alignItems:"center", gap:12 }}>
+      <span>{type==="error"?"❌":"✅"} {msg}</span>
+      {onClose && (
+        <button onClick={onClose} aria-label="Fechar aviso"
+          style={{ background:"none", border:"none", color:C.dim, fontSize:16, cursor:"pointer", padding:4, lineHeight:1, flexShrink:0 }}>✕</button>
+      )}
+    </div>
+  );
+}
+// Pilha de modais: Escape fecha só o de cima (confirmação dentro de modal)
+const _modalStack = [];
+function Modal({ title, children, onClose, size="md" }) {
+  const ref = useRef(null);
+  const titleId = useId();
+  const larguras = { sm:420, md:560, lg:760 };
+
+  useEffect(() => {
+    const meuId = {};
+    _modalStack.push(meuId);
+    const anterior = document.activeElement;
+    const overflowOriginal = document.body.style.overflow;
+    document.body.style.overflow = "hidden"; // trava o scroll do fundo (iOS)
+    ref.current?.focus();
+    const onKey = (e) => { if (e.key === "Escape" && _modalStack[_modalStack.length-1] === meuId) onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      const i = _modalStack.indexOf(meuId);
+      if (i >= 0) _modalStack.splice(i, 1);
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflowOriginal;
+      anterior?.focus?.(); // devolve o foco a quem abriu
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} className="ndc-modal-overlay"
+      style={{ position:"fixed", inset:0, background:"#00000088", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:24 }}>
+      <style>{`
+        @media(max-width:560px){
+          .ndc-modal-card{ max-width:100% !important; width:100% !important; max-height:100dvh !important;
+            height:100dvh; border-radius:0 !important; }
+          .ndc-modal-overlay{ padding:0 !important; }
+        }
+      `}</style>
+      <Card className="ndc-modal-card" style={{ width:"100%", maxWidth:larguras[size]||560, maxHeight:"90vh", overflowY:"auto" }}>
+        <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId} style={{ outline:"none" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"16px 20px", borderBottom:`1px solid ${C.border}` }}>
+            <span id={titleId} style={{ fontWeight:700, fontSize:16, textTransform:"uppercase", letterSpacing:"0.06em", color:C.cream }}>{title}</span>
+            <button onClick={onClose} aria-label="Fechar" style={{ background:"none", border:"none", color:C.dim, fontSize:20, cursor:"pointer", lineHeight:1, padding:8, margin:-8 }}>✕</button>
+          </div>
+          <div style={{ padding:20 }}>{children}</div>
         </div>
-        <div style={{ padding:20 }}>{children}</div>
       </Card>
     </div>
   );
+}
+// ── Confirmação estilizada: substitui o window.confirm() nativo ──
+// Uso: const { confirmar, dialogo } = useConfirm();  →  renderize {dialogo} no JSX
+function useConfirm() {
+  const [estado, setEstado] = useState(null); // { msg, resolve, titulo, perigoso, textoOk }
+  const confirmar = (msg, opts = {}) =>
+    new Promise((resolve) => setEstado({ msg, resolve, ...opts }));
+  const responder = (ok) => { estado?.resolve(ok); setEstado(null); };
+  const dialogo = estado ? (
+    <Modal title={estado.titulo || "Confirmar"} onClose={() => responder(false)}>
+      <div style={{ fontSize:14, color:C.cream, whiteSpace:"pre-line", marginBottom:20, lineHeight:1.5 }}>{estado.msg}</div>
+      <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+        <Btn variant="secondary" onClick={() => responder(false)}>Cancelar</Btn>
+        <Btn variant={estado.perigoso ? "danger" : "primary"} onClick={() => responder(true)}>{estado.textoOk || "Confirmar"}</Btn>
+      </div>
+    </Modal>
+  ) : null;
+  return { confirmar, dialogo };
+}
+// ── Copiar com fallback: clipboard falha em contexto não-seguro/iOS antigo ──
+async function copiarTexto(texto) {
+  try {
+    await navigator.clipboard.writeText(texto);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = texto; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch { return false; }
+  }
 }
 
 function useQuery(fetcher, deps=[], opts={}) {
@@ -153,6 +240,7 @@ function useQuery(fetcher, deps=[], opts={}) {
 function useToast() {
   const [toast, setToast] = useState(null);
   const timerRef = useRef(null);
+  const close = () => { if (timerRef.current) clearTimeout(timerRef.current); setToast(null); };
   const show = (msg, type="success") => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setToast({msg,type});
@@ -160,7 +248,7 @@ function useToast() {
     const dur = Math.min(base + String(msg||"").length * 60, type === "error" ? 16000 : 9000);
     timerRef.current = setTimeout(()=>setToast(null), dur);
   };
-  return { toast, show };
+  return { toast, show, close };
 }
 
 // ── LOGIN SUPER ───────────────────────────────────────────────
@@ -210,6 +298,7 @@ function LoginSuper({ onLogin, aviso }) {
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:16, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif" }}>
+      <style>{`:focus-visible{outline:2px solid ${C.gold} !important;outline-offset:2px;border-radius:8px;}`}</style>
       <Card style={{ width:"100%", maxWidth:380, padding:"32px 24px" }}>
         <div style={{ textAlign:"center", marginBottom:32 }}>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:12, marginBottom:4 }}>
@@ -381,10 +470,10 @@ function DashboardSuper() {
   );
   // contagem total de times (query leve, sem trazer os dados) — usa header via select mínimo
   const { data: totalTimesData } = useQuery(() => api.get(`time?select=id_time&limit=100000`), []);
-  const { data: usuarios } = useQuery(() => api.get(`usuario_time?select=*&order=criado_em.desc`));
+  const { data: usuarios } = useQuery(() => api.get(`usuario_time?select=*&order=criado_em.desc&limit=2000`));
   const { data: solPendentes, reload: reloadPendentes } = useQuery(() => api.get(`solicitacao_time?select=id&status=eq.pendente`));
   const { data: avalPendentes, reload: reloadAvalPend } = useQuery(() => api.get(`avaliacao?select=id&status=eq.pendente`));
-  const { toast, show } = useToast();
+  const { toast, show, close } = useToast();
   const [modalNovoTime, setModalNovoTime]     = useState(false);
   const [modalNovoUser, setModalNovoUser]     = useState(false);
   const [timeSelecionado, setTimeSelecionado] = useState(null);
@@ -426,10 +515,10 @@ function DashboardSuper() {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:24 }}>
-      <Toast {...(toast||{msg:null})}/>
+      <Toast {...(toast||{msg:null})} onClose={close}/>
 
       {/* Abas */}
-      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+      <nav aria-label="Seções do painel" style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
         {[
           { id:"visao",        label:"📊 Visão Geral" },
           { id:"times",        label:"🏆 Times" },
@@ -443,13 +532,13 @@ function DashboardSuper() {
         ].map(a => {
           const temPendentes = (a.id === "solicitacoes" && (solPendentes||[]).length > 0)
                             || (a.id === "avaliacoes" && (avalPendentes||[]).length > 0);
-          const corFundo = aba===a.id ? (temPendentes ? C.loss : C.gold)
-                                       : (temPendentes ? C.loss+"22" : C.surface);
+          const corFundo = aba===a.id ? (temPendentes ? C.lossBg : C.gold)
+                                       : (temPendentes ? C.lossBg+"22" : C.surface);
           const corTexto = aba===a.id ? (temPendentes ? "#fff" : "#0B3D2E")
                                        : (temPendentes ? C.loss : C.dim);
-          const corBorda = temPendentes ? C.loss : (aba===a.id ? C.gold : C.border);
+          const corBorda = temPendentes ? C.lossBg : (aba===a.id ? C.gold : C.border);
           return (
-          <button key={a.id} onClick={() => setAba(a.id)}
+          <button key={a.id} onClick={() => setAba(a.id)} aria-current={aba===a.id ? "page" : undefined}
             style={{ background: corFundo, color: corTexto,
               border:`1px solid ${corBorda}`, borderRadius:8, padding:"8px 18px",
               fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase",
@@ -457,7 +546,7 @@ function DashboardSuper() {
             {a.label}
           </button>
         );})}
-      </div>
+      </nav>
 
       {aba === "visao"        && <VisaoGeralSuper totalTimes={totalTimes} totalUsuarios={(usuarios||[]).length} solPendentes={(solPendentes||[]).length} faixaAtivo={faixaAtivo} faixaRisco={faixaRisco} onVerRisco={()=>{setAba("times"); setFiltroAtividade("risco");}} />}
       {aba === "tipos"        && <CrudTipoTime show={show}/>}
@@ -495,20 +584,20 @@ function DashboardSuper() {
               value={filtroTime}
               onChange={e => setFiltroTime(e.target.value)}
               placeholder="🔍 Filtrar por nome do time"
-              style={{ flex:"1 1 240px", minWidth:200, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 14px", outline:"none" }}
+              style={{ flex:"1 1 240px", minWidth:200, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 14px" }}
             />
             <select value={filtroUf} onChange={e=>{setFiltroUf(e.target.value); setLimiteTimes(LOTE_TIMES);}}
-              style={{ background:C.surf2, border:`1px solid ${filtroUf?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", outline:"none", cursor:"pointer" }}>
+              style={{ background:C.surf2, border:`1px solid ${filtroUf?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", cursor:"pointer" }}>
               <option value="">Estado (todos)</option>
               {UFS_BR.map(uf => <option key={uf} value={uf}>{uf}</option>)}
             </select>
             <select value={filtroNivel} onChange={e=>{setFiltroNivel(e.target.value); setLimiteTimes(LOTE_TIMES);}}
-              style={{ background:C.surf2, border:`1px solid ${filtroNivel?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", outline:"none", cursor:"pointer" }}>
+              style={{ background:C.surf2, border:`1px solid ${filtroNivel?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", cursor:"pointer" }}>
               <option value="">Nível (todos)</option>
               {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>Nível {n}</option>)}
             </select>
             <select value={filtroStatusTime} onChange={e=>{setFiltroStatusTime(e.target.value); setLimiteTimes(LOTE_TIMES);}}
-              style={{ background:C.surf2, border:`1px solid ${filtroStatusTime?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", outline:"none", cursor:"pointer" }}>
+              style={{ background:C.surf2, border:`1px solid ${filtroStatusTime?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", cursor:"pointer" }}>
               <option value="">Status (todos)</option>
               <option value="Ativo">Ativos</option>
               <option value="Inativo">Inativos</option>
@@ -578,15 +667,19 @@ function DashboardSuper() {
                   <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px", color: t.status==="Inativo" ? C.win : C.loss }}
                     onClick={async ()=>{
                       const novo = t.status==="Inativo" ? "Ativo" : "Inativo";
-                      await api.patch(`time?id_time=eq.${t.id_time}`, { status: novo });
-                      show(`${t.nome}: ${novo}`); reload();
+                      try {
+                        await api.patch(`time?id_time=eq.${t.id_time}`, { status: novo });
+                        show(`${t.nome}: ${novo}`); reload();
+                      } catch(e) { show("Erro ao alterar status: " + e.message, "error"); }
                     }}>
                     {t.status==="Inativo" ? "Ativar" : "Inativar"}
                   </Btn>
                   <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px", color: t.destaque ? C.gold : C.dim }}
                     onClick={async ()=>{
-                      await api.patch(`time?id_time=eq.${t.id_time}`, { destaque: !t.destaque });
-                      show(t.destaque ? `${t.nome}: destaque removido` : `${t.nome}: marcado como destaque`); reload();
+                      try {
+                        await api.patch(`time?id_time=eq.${t.id_time}`, { destaque: !t.destaque });
+                        show(t.destaque ? `${t.nome}: destaque removido` : `${t.nome}: marcado como destaque`); reload();
+                      } catch(e) { show("Erro ao alterar destaque: " + e.message, "error"); }
                     }}>
                     {t.destaque ? "★ Destaque" : "☆ Destaque"}
                   </Btn>
@@ -653,9 +746,10 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
     api.post(`rpc/listar_usuarios_time`, {})
   );
   const [filtroEmail, setFiltroEmail] = useState("");
+  const { confirmar, dialogo } = useConfirm();
 
   async function revogar(id) {
-    if (!confirm("Revogar acesso deste usuário?")) return;
+    if (!(await confirmar("Revogar acesso deste usuário?", { perigoso:true, textoOk:"Revogar" }))) return;
     try { await api.delete(`usuario_time?id=eq.${id}`); show("Acesso revogado."); reloadVinculos(); }
     catch(e) { show(e.message, "error"); }
   }
@@ -669,7 +763,7 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
           value={filtroEmail}
           onChange={e => setFiltroEmail(e.target.value)}
           placeholder="🔍 Filtrar por e-mail (para descobrir de qual time é o usuário)"
-          style={{ width:"100%", maxWidth:420, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 14px", outline:"none" }}
+          style={{ width:"100%", maxWidth:420, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 14px" }}
         />
         {filtroEmail && (
           <span style={{ marginLeft:12, fontSize:12, color:C.dim }}>
@@ -708,6 +802,7 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
         ))}
       </tbody>
     </table></div>
+    {dialogo}
     </div>
   );
 }
@@ -1035,7 +1130,7 @@ function ModalPermissoes({ user_id, id_time, nomeUsuario, onClose, show }) {
 function GestaoAvaliacoes({ show, onMudou }) {
   const [filtro, setFiltro] = useState("pendente");
   const { data: avaliacoes, reload } = useQuery(
-    () => api.get(`avaliacao?select=*,time(nome,escudo_url)&order=criado_em.desc`),
+    () => api.get(`avaliacao?select=*,time(nome,escudo_url)&order=criado_em.desc&limit=500`),
     []
   );
   const [saving, setSaving] = useState(null);
@@ -1131,7 +1226,7 @@ function GestaoAvaliacoes({ show, onMudou }) {
 
 function CrudSolicitacoes({ show, onMudou }) {
   const { data: solicitacoes, reload } = useQuery(() =>
-    api.get(`solicitacao_time?select=*&order=criado_em.desc`)
+    api.get(`solicitacao_time?select=*&order=criado_em.desc&limit=500`)
   );
   const { data: tipos } = useQuery(() => api.get(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
   const [modalSol, setModalSol] = useState(null);
@@ -1380,7 +1475,7 @@ nerddocampo.com.br/admin`;
 
       {/* Modal de análise */}
       {modalSol && (
-        <Modal title={`Analisar Solicitação — ${modalSol.nome_time}`} onClose={() => setModalSol(null)}>
+        <Modal title={`Analisar Solicitação — ${modalSol.nome_time}`} size="lg" onClose={() => setModalSol(null)}>
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
             {/* Dados da solicitação */}
@@ -1465,7 +1560,7 @@ nerddocampo.com.br/admin`;
                   placeholder="Senha inicial"
                   style={{ flex:1, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8,
                     color:C.cream, fontFamily:"inherit", fontSize:13, padding:"10px 12px",
-                    boxSizing:"border-box", outline:"none" }}/>
+                    boxSizing:"border-box" }}/>
                 <Btn variant="secondary" onClick={() => setSenhaInicial("nerd" + Math.floor(1000 + Math.random() * 9000))} style={{ fontSize:11, whiteSpace:"nowrap" }}>🎲 Gerar</Btn>
               </div>
               <div style={{ fontSize:10, color:C.dim, marginTop:4 }}>Mínimo 6 caracteres. Anote antes de aprovar — a mensagem de sucesso também mostra e-mail e senha.</div>
@@ -1478,7 +1573,7 @@ nerddocampo.com.br/admin`;
                 placeholder="Mensagem para o solicitante..."
                 style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8,
                   color:C.cream, fontFamily:"inherit", fontSize:12, padding:"10px 12px",
-                  resize:"vertical", boxSizing:"border-box", outline:"none" }}/>
+                  resize:"vertical", boxSizing:"border-box" }}/>
             </div>
 
             <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
@@ -1503,12 +1598,12 @@ nerddocampo.com.br/admin`;
           <div style={{ fontSize:12, color:C.gold, fontWeight:700, marginBottom:6 }}>Assunto</div>
           <div style={{ display:"flex", gap:8, marginBottom:16 }}>
             <div style={{ flex:1, background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 12px", fontSize:13, color:C.cream }}>{emailPronto.assunto}</div>
-            <Btn variant="secondary" onClick={() => { navigator.clipboard.writeText(emailPronto.assunto); show("Assunto copiado!"); }} style={{ fontSize:12, whiteSpace:"nowrap" }}>📋 Copiar</Btn>
+            <Btn variant="secondary" onClick={async () => { (await copiarTexto(emailPronto.assunto)) ? show("Assunto copiado!") : show("Não deu pra copiar automático — selecione o texto e copie manualmente.", "error"); }} style={{ fontSize:12, whiteSpace:"nowrap" }}>📋 Copiar</Btn>
           </div>
           <div style={{ fontSize:12, color:C.gold, fontWeight:700, marginBottom:6 }}>Corpo do e-mail</div>
           <textarea readOnly value={emailPronto.corpo}
             style={{ width:"100%", height:240, background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:12.5, padding:"12px 14px", boxSizing:"border-box", lineHeight:1.5, resize:"vertical", marginBottom:8 }}/>
-          <Btn onClick={() => { navigator.clipboard.writeText(emailPronto.corpo); show("Corpo do e-mail copiado!"); }} style={{ width:"100%", marginBottom:14 }}>📋 Copiar corpo do e-mail</Btn>
+          <Btn onClick={async () => { (await copiarTexto(emailPronto.corpo)) ? show("Corpo do e-mail copiado!") : show("Não deu pra copiar automático — toque no texto acima, selecione tudo e copie.", "error"); }} style={{ width:"100%", marginBottom:14 }}>📋 Copiar corpo do e-mail</Btn>
           <div style={{ display:"flex", justifyContent:"flex-end" }}>
             <Btn variant="secondary" onClick={() => setEmailPronto(null)} style={{ fontSize:13 }}>Fechar</Btn>
           </div>
@@ -1691,7 +1786,7 @@ function ConfigSistema({ show }) {
             <div style={{ fontSize:12, color:C.win, marginBottom:5 }}>● Ativo: até</div>
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
               <input type="number" min="1" value={faixas.ativo} onChange={e=>setFaixas(f=>({...f, ativo:e.target.value}))}
-                style={{ width:80, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"8px 12px", outline:"none" }}/>
+                style={{ width:80, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"8px 12px" }}/>
               <span style={{ fontSize:13, color:C.dim }}>dias</span>
             </div>
           </div>
@@ -1699,7 +1794,7 @@ function ConfigSistema({ show }) {
             <div style={{ fontSize:12, color:C.loss, marginBottom:5 }}>● Em risco: acima de</div>
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
               <input type="number" min="2" value={faixas.risco} onChange={e=>setFaixas(f=>({...f, risco:e.target.value}))}
-                style={{ width:80, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"8px 12px", outline:"none" }}/>
+                style={{ width:80, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"8px 12px" }}/>
               <span style={{ fontSize:13, color:C.dim }}>dias</span>
             </div>
           </div>
@@ -1732,7 +1827,7 @@ function ConfigSistema({ show }) {
                     value={niveis[cfg.chave] ?? ""}
                     onChange={e => setNiveis(prev => ({ ...prev, [cfg.chave]: e.target.value }))}
                     style={{ width:120, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8,
-                      color:C.cream, fontFamily:"inherit", fontSize:14, padding:"8px 12px", outline:"none" }}/>
+                      color:C.cream, fontFamily:"inherit", fontSize:14, padding:"8px 12px" }}/>
                 </div>
                 <Btn variant="secondary" style={{ fontSize:11, padding:"6px 14px" }}
                   disabled={saving === cfg.chave}
@@ -1745,7 +1840,7 @@ function ConfigSistema({ show }) {
                   value={niveis[chaveDesc] ?? ""}
                   onChange={e => setNiveis(prev => ({ ...prev, [chaveDesc]: e.target.value }))}
                   style={{ flex:1, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8,
-                    color:C.dim, fontFamily:"inherit", fontSize:12, padding:"6px 10px", outline:"none" }}/>
+                    color:C.dim, fontFamily:"inherit", fontSize:12, padding:"6px 10px" }}/>
                 <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }}
                   disabled={saving === chaveDesc}
                   onClick={() => salvarDescNivel(nivel)}>
@@ -1773,7 +1868,7 @@ function ConfigSistema({ show }) {
               value={raioPadrao}
               onChange={e => setRaioPadrao(e.target.value)}
               style={{ width:120, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8,
-                color:C.cream, fontFamily:"inherit", fontSize:14, padding:"8px 12px", outline:"none" }}/>
+                color:C.cream, fontFamily:"inherit", fontSize:14, padding:"8px 12px" }}/>
             <span style={{ fontSize:13, color:C.dim }}>km</span>
           </div>
           <Btn variant="secondary" style={{ fontSize:11, padding:"6px 14px" }}
@@ -1818,7 +1913,7 @@ function CelulaObservacao({ time, show, reload }) {
         onKeyDown={e => { if (e.key === "Escape") { setValor(time.observacao_super||""); setEditando(false); } }}
         rows={2}
         placeholder="Anotação interna..."
-        style={{ width:"100%", minWidth:200, background:C.surf2, border:`1px solid ${C.gold}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:12, padding:"6px 8px", outline:"none", resize:"vertical" }}
+        style={{ width:"100%", minWidth:200, background:C.surf2, border:`1px solid ${C.gold}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:12, padding:"6px 8px", resize:"vertical" }}
       />
     );
   }
@@ -1881,7 +1976,7 @@ function ModalNivelMensalidade({ time, onClose, onSalvo, show }) {
           <div style={{ fontSize:11, color:C.dim }}>Anotações sobre este time. Nunca visível para os admins do time.</div>
           <textarea value={obsSuper} onChange={e => setObsSuper(e.target.value)} rows={3}
             placeholder="Ex: contato pelo WhatsApp, combinou desconto nos 3 primeiros meses..."
-            style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"9px 12px", outline:"none", resize:"vertical" }}/>
+            style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"9px 12px", resize:"vertical" }}/>
         </div>
         <div style={{ display:"flex", justifyContent:"flex-end", gap:8 }}>
           <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
@@ -1909,6 +2004,7 @@ function fmtBRL(v) {
 }
 
 function CrudMensalidadeTimes({ show }) {
+  const { confirmar, dialogo } = useConfirm();
   const hoje = new Date();
   const [mesSel, setMesSel] = useState(hoje.getMonth() + 1);
   const [anoSel, setAnoSel] = useState(hoje.getFullYear());
@@ -1957,12 +2053,12 @@ function CrudMensalidadeTimes({ show }) {
   // só dígitos, para comparar telefones salvos em formatos diferentes
   const soDigitos = (v) => String(v||"").replace(/\D/g, "");
   // solicitações (têm telefone + id_time_criado) — segunda trilha
-  const { data: solicitacoes } = useQuery(() => api.get(`solicitacao_time?select=telefone,id_time_criado&id_time_criado=not.is.null`), []);
+  const { data: solicitacoes } = useQuery(() => api.get(`solicitacao_time?select=telefone,id_time_criado&id_time_criado=not.is.null&limit=2000`), []);
   // times com telefone (primeira trilha) — busca sob demanda quando há número confirmado
   const { data: timesPorTel } = useQuery(() => {
     const d = soDigitos(telConfirmado);
     if (d.length < 8) return Promise.resolve([]); // evita busca com número curto demais
-    return api.get(`time?select=id_time,telefone&telefone=not.is.null`);
+    return api.get(`time?select=id_time,telefone&telefone=not.is.null&limit=2000`);
   }, [telConfirmado]);
   // resolve os id_time ligados ao número (união das duas trilhas)
   const idsPorTelefone = useMemo(() => {
@@ -2138,7 +2234,7 @@ function CrudMensalidadeTimes({ show }) {
 
   async function marcarPagoLote() {
     if (!timesSelec.length) return;
-    if (!confirm(`Dar baixa em ${timesSelec.length} time(s), cada um pelo seu valor (total ${fmtBRL(totalSelec)})? Mês ${mesSel}/${anoSel}.`)) return;
+    if (!(await confirmar(`Dar baixa em ${timesSelec.length} time(s), cada um pelo seu valor (total ${fmtBRL(totalSelec)})?\nMês ${mesSel}/${anoSel}.`, { perigoso:true, titulo:"Baixa em lote", textoOk:"Dar baixa" }))) return;
     setSalvandoLote(true);
     const hoje = new Date().toISOString().split("T")[0];
     let ok = 0, erros = 0;
@@ -2180,7 +2276,7 @@ function CrudMensalidadeTimes({ show }) {
       {/* Abas */}
       <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
         {[{ id:"mensal", label:"📋 Controle Mensal" }, { id:"inadimplentes", label:"🚨 Inadimplentes" }, { id:"relatorio", label:"📊 Relatório" }].map(a => (
-          <button key={a.id} onClick={() => setAbaRel(a.id)}
+          <button key={a.id} onClick={() => setAbaRel(a.id)} aria-current={abaRel===a.id ? "page" : undefined}
             style={{ background: abaRel===a.id ? C.gold : C.surface, color: abaRel===a.id ? "#0B3D2E" : C.dim,
               border:`1px solid ${abaRel===a.id ? C.gold : C.border}`, borderRadius:8, padding:"8px 18px",
               fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>
@@ -2238,10 +2334,10 @@ function CrudMensalidadeTimes({ show }) {
               value={filtroNomeMens}
               onChange={e => setFiltroNomeMens(e.target.value)}
               placeholder="🔍 Filtrar por nome do time"
-              style={{ flex:"1 1 280px", minWidth:200, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 14px", outline:"none" }}
+              style={{ flex:"1 1 280px", minWidth:200, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 14px" }}
             />
             <select value={filtroAdmin} onChange={e => { setFiltroAdmin(e.target.value); setSelecionados(new Set()); }}
-              style={{ background:C.surf2, border:`1px solid ${filtroAdmin?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", outline:"none", cursor:"pointer", maxWidth:280 }}>
+              style={{ background:C.surf2, border:`1px solid ${filtroAdmin?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", cursor:"pointer", maxWidth:280 }}>
               <option value="">👤 Todos os admins</option>
               {adminsDistintos.map(em => <option key={em} value={em}>{em}</option>)}
             </select>
@@ -2251,7 +2347,7 @@ function CrudMensalidadeTimes({ show }) {
                 onChange={e => setBuscaTel(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") { setTelConfirmado(buscaTel); setSelecionados(new Set()); } }}
                 placeholder="📱 Buscar por telefone"
-                style={{ width:180, background:C.surf2, border:`1px solid ${telConfirmado?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", outline:"none" }}
+                style={{ width:180, background:C.surf2, border:`1px solid ${telConfirmado?C.gold:C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px" }}
               />
               <Btn variant="secondary" style={{ fontSize:12, padding:"8px 12px" }}
                 onClick={() => { setTelConfirmado(buscaTel); setSelecionados(new Set()); }}>Buscar</Btn>
@@ -2537,6 +2633,7 @@ function CrudMensalidadeTimes({ show }) {
           </div>
         </Modal>
       )}
+      {dialogo}
     </div>
   );
 }
@@ -2592,6 +2689,7 @@ function AjudaSuper() {
 // GESTÃO DE CIDADES (global — só super admin)
 // ══════════════════════════════════════════════════════════════
 function GestaoCidades({ show }) {
+  const { confirmar, dialogo } = useConfirm();
   const [uf, setUf] = useState("RS");
   const { data: cidades, loading, reload } = useQuery(() => uf ? api.get(`cidade?estado=eq.${uf}&select=*&order=nome.asc`) : Promise.resolve([]), [uf]);
   const [busca, setBusca] = useState("");
@@ -2621,7 +2719,7 @@ function GestaoCidades({ show }) {
   }
 
   async function excluir(c) {
-    if (!confirm(`Excluir a cidade "${c.nome}"? Times, campos ou adversários que apontam para ela ficarão sem cidade.`)) return;
+    if (!(await confirmar(`Excluir a cidade "${c.nome}"?\nTimes, campos ou adversários que apontam para ela ficarão sem cidade.`, { perigoso:true, textoOk:"Excluir" }))) return;
     try { await api.delete(`cidade?id_cidade=eq.${c.id_cidade}`); show("Cidade excluída."); reload(); }
     catch (e) { show("Não foi possível excluir (pode estar em uso): " + e.message, "error"); }
   }
@@ -2690,6 +2788,7 @@ function GestaoCidades({ show }) {
           </div>
         </Modal>
       )}
+      {dialogo}
     </div>
   );
 }
@@ -2698,6 +2797,7 @@ function GestaoCidades({ show }) {
 // CRUD TIPOS DE TIME
 // ══════════════════════════════════════════════════════════════
 function GestaoPosicoesTipo({ tipo, show, onClose }) {
+  const { confirmar, dialogo } = useConfirm();
   const { data: posicoes, loading, reload } = useQuery(() => api.get(`posicao?id_tipo_time=eq.${tipo.id_tipo_time}&select=*&order=ordem.asc,nome.asc`), [tipo]);
   const [form, setForm] = useState(null); // {nome, ordem, id_posicao_pai, descricao} ou null
   const [saving, setSaving] = useState(false);
@@ -2726,7 +2826,7 @@ function GestaoPosicoesTipo({ tipo, show, onClose }) {
   }
 
   async function excluir(p) {
-    if (!confirm(`Excluir a posição "${p.nome}"? Jogadores que a usam ficarão sem posição.`)) return;
+    if (!(await confirmar(`Excluir a posição "${p.nome}"?\nJogadores que a usam ficarão sem posição.`, { perigoso:true, textoOk:"Excluir" }))) return;
     try { await api.delete(`posicao?id_posicao=eq.${p.id_posicao}`); show("Posição excluída."); reload(); }
     catch(e) { show("Erro ao excluir: " + e.message); }
   }
@@ -2777,6 +2877,7 @@ function GestaoPosicoesTipo({ tipo, show, onClose }) {
           <Btn onClick={abrirNovo}>+ Nova posição</Btn>
         )}
       </div>
+      {dialogo}
     </Modal>
   );
 }
@@ -2922,7 +3023,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.22.7";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.1";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
@@ -2934,20 +3035,30 @@ export default function SuperApp() {
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream }}>
-      <header style={{ background:"#060F1E", borderBottom:`3px solid ${C.gold}`, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:64, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 20px #00000066" }}>
+      <style>{`
+        :focus-visible{outline:2px solid ${C.gold} !important;outline-offset:2px;border-radius:8px;}
+        @media(max-width:768px){
+          .super-header{ padding:0 12px !important; gap:8px !important; }
+          .super-header-titulo{ display:none !important; }
+          .super-header-versao{ display:none !important; }
+          .super-main{ padding:20px 12px !important; }
+          input, select, textarea { max-width:100%; box-sizing:border-box; }
+        }
+      `}</style>
+      <header className="super-header" style={{ background:"#060F1E", borderBottom:`3px solid ${C.gold}`, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:64, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 20px #00000066" }}>
         <img src="/logo.png" alt="Nerd do Campo" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
-        <div style={{ fontSize:18, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream }}>Nerd do Campo</div>
+        <div className="super-header-titulo" style={{ fontSize:18, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream }}>Nerd do Campo</div>
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"2px 8px" }}>Super Admin</div>
         <BadgePendentes/>
         {process.env.REACT_APP_ENV === "development" && (
           <div style={{ fontSize:10, color:"#ff6b6b", textTransform:"uppercase", background:"#ff6b6b22", border:"1px solid #ff6b6b44", borderRadius:6, padding:"2px 8px", fontWeight:700 }}>🧪 DEV</div>
         )}
-        <div style={{ fontSize:10, color:C.dim }}>v{APP_VERSION}</div>
+        <div className="super-header-versao" style={{ fontSize:10, color:C.dim }}>v{APP_VERSION}</div>
         <div style={{ marginLeft:"auto" }}>
           <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>{ SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_super_token"); sessionStorage.removeItem("ndc_super_refresh"); setSession(null); }}>Sair</Btn>
         </div>
       </header>
-      <main style={{ maxWidth:1400, margin:"0 auto", padding:"28px 24px" }}>
+      <main className="super-main" style={{ maxWidth:1400, margin:"0 auto", padding:"28px 24px" }}>
         <DashboardSuper/>
       </main>
     </div>

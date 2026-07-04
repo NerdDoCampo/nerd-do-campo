@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.22.7";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.1";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
 const C = {
   bg:      "#0B3D2E", surface: "#103D2A", surf2: "#174D36",
   border:  "#1F5C3E", gold: "#E8A020",    cream: "#F0E8D0",
-  dim:     "#8FAF9A", win: "#4CAF50",     loss: "#E53935",
+  dim:     "#8FAF9A",
+  // win/loss são cores de TEXTO (contraste AA sobre os fundos escuros).
+  // winBg/lossBg são as versões saturadas, para FUNDOS de botão/preenchimento.
+  win:     "#6FCF73", winBg: "#4CAF50",
+  loss:    "#FF8A80", lossBg: "#E53935",
   draw:    "#E8A020",
 };
 
@@ -1136,8 +1140,8 @@ function ThSortable({ colKey, sortKey, asc, onSort, children }) {
 const f = (tag, base) => ({ children, style: s = {}, ...p }) =>
   { const T = tag; return <T style={{ ...base, ...s }} {...p}>{children}</T>; };
 
-function Card({ children, style: s = {} }) {
-  return <div style={{ background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, ...s }}>{children}</div>;
+function Card({ children, style: s = {}, className }) {
+  return <div className={className} style={{ background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, ...s }}>{children}</div>;
 }
 // Estado vazio reutilizável: ícone + título + texto orientativo + ação opcional
 function EstadoVazio({ icone, titulo, texto, acaoLabel, onAcao }) {
@@ -1151,8 +1155,8 @@ function EstadoVazio({ icone, titulo, texto, acaoLabel, onAcao }) {
   );
 }
 function Btn({ children, variant = "primary", onClick, disabled, style: s = {}, type = "button" }) {
-  const bg = disabled ? C.surf2 : variant === "primary" ? C.gold : variant === "danger" ? C.loss : C.surf2;
-  const color = disabled ? C.dim : variant === "primary" ? "#0B3D2E" : C.cream;
+  const bg = disabled ? C.surf2 : variant === "primary" ? C.gold : variant === "danger" ? C.lossBg : C.surf2;
+  const color = disabled ? C.dim : variant === "primary" ? "#0B3D2E" : variant === "danger" ? "#FFFFFF" : C.cream;
   return (
     <button type={type} onClick={onClick} disabled={disabled} style={{ background: bg, color, border: "none", borderRadius: 8, padding: "9px 18px", fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.06em", transition: "opacity 0.15s", ...s }}>
       {children}
@@ -1160,51 +1164,102 @@ function Btn({ children, variant = "primary", onClick, disabled, style: s = {}, 
   );
 }
 function Input({ label, error, style: s = {}, ...p }) {
+  const id = React.useId();
+  const errId = `${id}-err`;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0, ...s }}>
-      {label && <label style={{ fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{label}</label>}
-      <input {...p} style={{ background: C.surf2, border: `1px solid ${error ? C.loss : C.border}`, borderRadius: 8, padding: "9px 12px", color: C.cream, fontFamily: "inherit", fontSize: 14, outline: "none", width: "100%", minWidth: 0, boxSizing: "border-box" }} />
-      {error && <span style={{ color: C.loss, fontSize: 12 }}>{error}</span>}
+      {label && <label htmlFor={id} style={{ fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{label}</label>}
+      <input id={id} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined}
+        {...p} style={{ background: C.surf2, border: `1px solid ${error ? C.loss : C.border}`, borderRadius: 8, padding: "9px 12px", color: C.cream, fontFamily: "inherit", fontSize: 14, width: "100%", minWidth: 0, boxSizing: "border-box" }} />
+      {error && <span id={errId} role="alert" style={{ color: C.loss, fontSize: 12 }}>{error}</span>}
     </div>
   );
 }
 function Select({ label, children, error, style: s = {}, ...p }) {
+  const id = React.useId();
+  const errId = `${id}-err`;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0, ...s }}>
-      {label && <label style={{ fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{label}</label>}
-      <select {...p} style={{ background: C.surf2, border: `1px solid ${error ? C.loss : C.border}`, borderRadius: 8, padding: "9px 12px", color: C.cream, fontFamily: "inherit", fontSize: 14, outline: "none", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {label && <label htmlFor={id} style={{ fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{label}</label>}
+      <select id={id} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined}
+        {...p} style={{ background: C.surf2, border: `1px solid ${error ? C.loss : C.border}`, borderRadius: 8, padding: "9px 12px", color: C.cream, fontFamily: "inherit", fontSize: 14, width: "100%", minWidth: 0, boxSizing: "border-box" }}>
         {children}
       </select>
-      {error && <span style={{ color: C.loss, fontSize: 12 }}>{error}</span>}
+      {error && <span id={errId} role="alert" style={{ color: C.loss, fontSize: 12 }}>{error}</span>}
     </div>
   );
 }
 function Spinner() {
   return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: 60 }}>
+    <div role="status" aria-label="Carregando" style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: 60 }}>
       <div style={{ width: 36, height: 36, border: `3px solid ${C.border}`, borderTop: `3px solid ${C.gold}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
-function Toast({ msg, type }) {
+function Toast({ msg, type, onClose }) {
   if (!msg) return null;
   const cor = type === "error" ? C.loss : C.win;
   return (
-    <div style={{ position: "fixed", bottom: 24, right: 24, background: C.surf2, border: `1px solid ${cor}`, borderRadius: 10, padding: "12px 20px", color: cor, fontWeight: 700, fontSize: 14, zIndex: 9999, boxShadow: "0 4px 20px #00000088" }}>
-      {type === "error" ? "❌" : "✅"} {msg}
+    <div role={type === "error" ? "alert" : "status"} aria-live={type === "error" ? "assertive" : "polite"}
+      style={{ position: "fixed", bottom: 24, right: 16, left: 16, margin: "0 0 0 auto", maxWidth: 480, width: "fit-content",
+        background: C.surf2, border: `1px solid ${cor}`, borderRadius: 10, padding: "12px 16px", color: cor,
+        fontWeight: 700, fontSize: 14, zIndex: 9999, boxShadow: "0 4px 20px #00000088",
+        display: "flex", alignItems: "center", gap: 12 }}>
+      <span>{type === "error" ? "❌" : "✅"} {msg}</span>
+      {onClose && (
+        <button onClick={onClose} aria-label="Fechar aviso"
+          style={{ background: "none", border: "none", color: C.dim, fontSize: 16, cursor: "pointer", padding: 4, lineHeight: 1, flexShrink: 0 }}>
+          ✕
+        </button>
+      )}
     </div>
   );
 }
-function Modal({ title, children, onClose }) {
+// pilha de modais abertos — garante que o Escape feche só o modal de cima (ex: confirmação dentro de outro modal)
+const _modalStack = [];
+function Modal({ title, children, onClose, size = "md" }) {
+  const ref = React.useRef(null);
+  const titleId = React.useId();
+  const larguras = { sm: 420, md: 560, lg: 760 };
+
+  React.useEffect(() => {
+    const meuId = {};
+    _modalStack.push(meuId);
+    const anterior = document.activeElement;
+    const overflowOriginal = document.body.style.overflow;
+    document.body.style.overflow = "hidden"; // trava o scroll do fundo (importante no iOS)
+    ref.current?.focus();
+    const onKey = (e) => { if (e.key === "Escape" && _modalStack[_modalStack.length - 1] === meuId) onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      const i = _modalStack.indexOf(meuId);
+      if (i >= 0) _modalStack.splice(i, 1);
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflowOriginal;
+      anterior?.focus?.(); // devolve o foco a quem abriu
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#00000088", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 24 }}>
-      <Card style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${C.border}` }}>
-          <span style={{ fontWeight: 700, fontSize: 16, textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>✕</button>
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} className="ndc-modal-overlay"
+      style={{ position: "fixed", inset: 0, background: "#00000088", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 24 }}>
+      <style>{`
+        @media(max-width:560px){
+          .ndc-modal-card{ max-width:100% !important; width:100% !important; max-height:100dvh !important;
+            height:100dvh; border-radius:0 !important; }
+          .ndc-modal-overlay{ padding:0 !important; }
+        }
+      `}</style>
+      <Card className="ndc-modal-card" style={{ width: "100%", maxWidth: larguras[size] || 560, maxHeight: "90vh", overflowY: "auto" }}>
+        <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId} style={{ outline: "none" }} className="ndc-modal-card-inner">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${C.border}` }}>
+            <span id={titleId} style={{ fontWeight: 700, fontSize: 16, textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</span>
+            <button onClick={onClose} aria-label="Fechar" style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1, padding: 8, margin: -8 }}>✕</button>
+          </div>
+          <div style={{ padding: 20 }}>{children}</div>
         </div>
-        <div style={{ padding: 20 }}>{children}</div>
       </Card>
     </div>
   );
@@ -1213,6 +1268,7 @@ function Modal({ title, children, onClose }) {
 function useToast() {
   const [toast, setToast] = useState(null);
   const timerRef = React.useRef(null);
+  const close = () => { if (timerRef.current) clearTimeout(timerRef.current); setToast(null); };
   const show = (msg, type = "success") => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setToast({ msg, type });
@@ -1222,7 +1278,70 @@ function useToast() {
     const dur = Math.min(base + leitura, type === "error" ? 16000 : 9000);
     timerRef.current = setTimeout(() => setToast(null), dur);
   };
-  return { toast, show };
+  return { toast, show, close };
+}
+
+// ── Confirmação estilizada: substitui o window.confirm() nativo ──
+// Uso: const { confirmar, dialogo } = useConfirm();  →  renderize {dialogo} no JSX
+//      if (!(await confirmar("Remover?", { perigoso:true, textoOk:"Remover" }))) return;
+function useConfirm() {
+  const [estado, setEstado] = useState(null); // { msg, resolve, titulo?, perigoso?, textoOk? }
+  const confirmar = (msg, opts = {}) => new Promise((resolve) => setEstado({ msg, resolve, ...opts }));
+  const responder = (ok) => { const e = estado; setEstado(null); e?.resolve(ok); };
+
+  const dialogo = estado ? (
+    <Modal title={estado.titulo || "Confirmar"} onClose={() => responder(false)} size="sm">
+      <div style={{ fontSize: 14, color: C.cream, whiteSpace: "pre-line", marginBottom: 20, lineHeight: 1.5 }}>
+        {estado.msg}
+      </div>
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <Btn variant="secondary" onClick={() => responder(false)}>Cancelar</Btn>
+        <Btn variant={estado.perigoso ? "danger" : "primary"} onClick={() => responder(true)}>
+          {estado.textoOk || "Confirmar"}
+        </Btn>
+      </div>
+    </Modal>
+  ) : null;
+  return { confirmar, dialogo };
+}
+
+// ── Menu "⋯" para ações secundárias (evita fileiras com 8 botões) ──
+function MenuAcoes({ acoes }) {
+  const [aberto, setAberto] = useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!aberto) return;
+    const fora = (e) => { if (ref.current && !ref.current.contains(e.target)) setAberto(false); };
+    const esc = (e) => { if (e.key === "Escape") setAberto(false); };
+    document.addEventListener("mousedown", fora);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", fora); document.removeEventListener("keydown", esc); };
+  }, [aberto]);
+  const itens = (acoes || []).filter(Boolean);
+  if (!itens.length) return null;
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <button onClick={() => setAberto(v => !v)} aria-label="Mais ações" aria-expanded={aberto} aria-haspopup="menu"
+        style={{ background: aberto ? C.surf2 : "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.cream,
+          fontFamily: "inherit", fontSize: 16, fontWeight: 800, padding: "5px 12px", cursor: "pointer", lineHeight: 1 }}>
+        ⋯
+      </button>
+      {aberto && (
+        <div role="menu" style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: C.surf2,
+          border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: "0 8px 24px #00000088", zIndex: 200,
+          minWidth: 190, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          {itens.map((a, i) => (
+            <button key={i} role="menuitem" onClick={() => { setAberto(false); a.onClick(); }}
+              style={{ background: "none", border: "none", borderTop: i > 0 ? `1px solid ${C.border}55` : "none",
+                color: a.perigoso ? C.loss : C.cream, fontFamily: "inherit", fontSize: 13, fontWeight: 700,
+                padding: "11px 16px", cursor: "pointer", textAlign: "left", whiteSpace: "nowrap" }}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function useQuery(fetcher, deps = []) {
@@ -1239,6 +1358,7 @@ function useQuery(fetcher, deps = []) {
   return { data, loading, error, reload: load };
 }
 
+const _semAcento = (s) => String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
 function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone:"UTC" }) : "—"; }
 function resultado(p) {
@@ -1432,6 +1552,7 @@ function Login({ onLogin, aviso }) {
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", flexDirection:"column", alignItems: "center", justifyContent: "flex-start", padding: 16, paddingTop:48, fontFamily: "'Oswald','Arial Narrow',Arial,sans-serif" }}>
+      <style>{`:focus-visible{outline:2px solid ${C.gold} !important;outline-offset:2px;border-radius:8px;}`}</style>
       <Card style={{ width: "100%", maxWidth: 380, padding: "32px 24px" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ display:"inline-block", position:"relative", marginBottom:16 }}>
@@ -1459,7 +1580,7 @@ function Login({ onLogin, aviso }) {
             Esqueci minha senha
           </button>
         </div>
-        <div style={{ textAlign:"center", marginTop:24, fontSize:11, color:C.gold, letterSpacing:"0.08em", opacity:0.8 }}>
+        <div style={{ textAlign:"center", marginTop:24, fontSize:11, color:C.dim, letterSpacing:"0.08em" }}>
           ⚽ Designed by Caxpa Augsten
         </div>
       </Card>
@@ -1511,6 +1632,15 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
   (_posLista || []).forEach(p => { mapaPosLista[p.id_posicao] = p; });
 
   const [filtro, setFiltro] = useState("pendentes");
+  // Se não há pendentes mas há jogados, abre direto em "Jogados" (só na primeira carga)
+  const _ajustouFiltro = React.useRef(false);
+  useEffect(() => {
+    if (_ajustouFiltro.current || !partidas) return;
+    _ajustouFiltro.current = true;
+    const pend = partidas.filter(p => p.cancelada !== "S" && p.gols_marcados === null).length;
+    const jog  = partidas.filter(p => p.cancelada !== "S" && p.gols_marcados !== null).length;
+    if (pend === 0 && jog > 0) setFiltro("jogados");
+  }, [partidas]);
   const [loadingImportPartida, setLoadingImportPartida] = useState(false);
   const [resultadoImportPartida, setResultadoImportPartida] = useState(null);
 
@@ -1631,6 +1761,8 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
           return (
             <div key={p.id_partida}
               onClick={() => { onSelect(p); }}
+              role="button" tabIndex={0}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(p); } }}
               style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "background 0.15s", background: procurando ? "rgba(232,160,32,0.10)" : C.surface, borderRadius: 12, border: procurando ? `1px solid ${C.gold}` : `1px solid ${C.border}` }}
               onMouseEnter={e => e.currentTarget.style.background = procurando ? "rgba(232,160,32,0.16)" : C.surf2}
               onMouseLeave={e => e.currentTarget.style.background = procurando ? "rgba(232,160,32,0.10)" : C.surface}>
@@ -1674,7 +1806,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
 
   const [form, setForm] = useState({ data: "", horario: "14:00", id_adversario: "", em_casa: "S", id_campo: "", observacoes: "", link_local: "" });
   const [saving, setSaving] = useState(false);
-  const { toast, show } = useToast();
+  const { toast, show, close } = useToast();
 
   // auto-preenche campo conforme casa/fora
   useEffect(() => {
@@ -1738,7 +1870,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Toast {...(toast || { msg: null })} />
+      <Toast {...(toast || { msg: null })} onClose={close} />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Input label="Data *" type="date" value={form.data} onChange={e => set("data", e.target.value)} />
         <Input label="Horário *" type="time" value={form.horario} onChange={e => set("horario", e.target.value)} />
@@ -2334,6 +2466,7 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
 // Edita participacao.gols / .assistencias por jogador; jogador 0 (gol contra)
 // entra sob demanda e só edita gols_contra.
 function GolsSimples({ partida, participacoes, jogadores, readOnly, show, onMudou }) {
+  const { confirmar, dialogo } = useConfirm();
   const [salvandoId, setSalvandoId] = useState(null);
   // a participação do jogador 0 não vem na query de escalação (que filtra id_jogador>0),
   // então buscamos à parte. Ela já existe (criada por trigger ao criar a partida).
@@ -2375,7 +2508,7 @@ function GolsSimples({ partida, participacoes, jogadores, readOnly, show, onMudo
   }
   async function removerGolContra() {
     if (!partZero) return;
-    if (!confirm("Zerar e ocultar a linha de gol contra a nosso favor?")) return;
+    if (!(await confirmar("Zerar e ocultar a linha de gol contra a nosso favor?", { perigoso:true, textoOk:"Zerar" }))) return;
     try {
       await api.patch(`participacao?id_participacao=eq.${partZero.id_participacao}`, { gols_contra: 0 });
       setMostrarZero(false);
@@ -2389,11 +2522,12 @@ function GolsSimples({ partida, participacoes, jogadores, readOnly, show, onMudo
       key={`${p.id_participacao}-${campo}-${valor}`}
       onBlur={e => { const n = Number(e.target.value)||0; if (n !== (Number(valor)||0)) salvarCampo(p, campo, n); }}
       style={{ width:54, textAlign:"center", background: readOnly?C.bg:C.surf2, border:`1px solid ${C.border}`,
-        borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"6px 4px", outline:"none" }}/>
+        borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"6px 4px" }}/>
   );
 
   return (
     <Card style={{ padding:"20px 24px" }}>
+      {dialogo}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:8 }}>
         <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700 }}>
           Gols e assistências
@@ -2449,6 +2583,7 @@ function GolsSimples({ partida, participacoes, jogadores, readOnly, show, onMudo
 
 
 function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
+  const { confirmar, dialogo } = useConfirm();
   const [partida, setPartida] = useState(p0);
   const [editDados, setEditDados] = useState(null); // {data, hora, id_campo, link_local} quando editando
   async function salvarDadosPartida() {
@@ -2467,7 +2602,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
       show("Dados do jogo atualizados!");
     } catch (e) { show(e.message, "error"); }
   }
-  const { toast, show } = useToast();
+  const { toast, show, close } = useToast();
 
   const { data: jogadores }     = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=*,posicao(nome)&order=camisa.asc`) : Promise.resolve([]), [idTime]);
   // Meu time: tipo, raio padrão e coordenadas da cidade-sede — declarado ANTES das queries que usam meuTipoTime (evita TDZ no bundle de produção)
@@ -2485,6 +2620,8 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
   // Buscar times disponíveis na mesma data (partida em branco, público, mesmo tipo)
   const dataPartida = partida.data ? partida.data.split("T")[0] : null;
   const semAdversario = !(partida.id_adversario); // partida "procurando" se não tem adversário
+  // A ordem dos blocos acompanha o estado: antes do jogo, convocar; depois, lançar placar/escalação/gols
+  const jaAconteceu = partida.data ? new Date(partida.data) < new Date() : false;
   const [verProcurando, setVerProcurando] = useState(false); // botão: ver times procurando jogo mesmo com adversário definido
   const mostrarDisponiveis = (semAdversario || verProcurando) && !!dataPartida;
   const { data: disponiveis, loading: loadingDisp } = useQuery(
@@ -2530,7 +2667,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
     if (numeroTitulares) {
       const titularesEscalados = (participacoes || []).filter(p => p.titular === "S" && p.id_jogador > 0).length;
       if (titularesEscalados > 0 && titularesEscalados < numeroTitulares) {
-        if (!confirm(`A escalação tem ${titularesEscalados} titulares, mas o time joga com ${numeroTitulares}. Confirmar mesmo assim? (Ex: faltaram jogadores no dia.)`)) return;
+        if (!(await confirmar(`A escalação tem ${titularesEscalados} titulares, mas o time joga com ${numeroTitulares}. Confirmar mesmo assim? (Ex: faltaram jogadores no dia.)`, { textoOk:"Salvar assim mesmo" }))) return;
       }
     }
     setSavingPlacar(true);
@@ -2546,7 +2683,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
   }
 
   async function cancelarPartida() {
-    if (!confirm("Cancelar esta partida?")) return;
+    if (!(await confirmar("Cancelar esta partida?", { perigoso:true, textoOk:"Sim, cancelar" }))) return;
     try {
       await api.patch(`partida?id_partida=eq.${partida.id_partida}`, { cancelada: "S" });
       setPartida(u => ({ ...u, cancelada: "S" }));
@@ -2559,7 +2696,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
     const temPlacar = (partida.gols_marcados !== null && partida.gols_marcados !== undefined);
     // Ao remover adversário de partida com placar/gols, avisar que tudo será apagado
     if (!novoId && temPlacar) {
-      if (!confirm("Esta partida já tem placar e gols lançados. Ao remover o adversário, o resultado, os gols e a escalação desta partida serão APAGADOS. Deseja continuar?")) return;
+      if (!(await confirmar("Esta partida já tem placar e gols lançados. Ao remover o adversário, o resultado, os gols e a escalação desta partida serão APAGADOS. Deseja continuar?", { perigoso:true, textoOk:"Apagar e continuar" }))) return;
     }
     setSavingAdv(true);
     try {
@@ -2593,7 +2730,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
   }
 
   async function removerGol(id_gol) {
-    if (!confirm("Remover este gol?")) return;
+    if (!(await confirmar("Remover este gol?", { perigoso:true, textoOk:"Remover" }))) return;
     try {
       await api.delete(`gol?id_gol=eq.${id_gol}`);
       show("Gol removido."); reloadGols();
@@ -2621,13 +2758,13 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
     finally { setSavingMovP(false); }
   }
   async function removerMovP(m) {
-    if (!confirm("Remover este lançamento?")) return;
+    if (!(await confirmar("Remover este lançamento?", { perigoso:true, textoOk:"Remover" }))) return;
     try { await api.delete(`movimento_caixa?id_movimento=eq.${m.id_movimento}`); show("Removido."); reloadMovsP(); }
     catch(e){ show("Erro: "+e.message, "error"); }
   }
 
   async function removerParticipacao(id) {
-    if (!confirm("Remover jogador da partida?")) return;
+    if (!(await confirmar("Remover jogador da partida?", { perigoso:true, textoOk:"Remover" }))) return;
     try {
       await api.delete(`participacao?id_participacao=eq.${id}`);
       show("Jogador removido."); reloadPart();
@@ -2639,7 +2776,8 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <Toast {...(toast || { msg: null })} />
+      <Toast {...(toast || { msg: null })} onClose={close} />
+      {dialogo}
 
       {/* Cabeçalho da partida */}
       <Card style={{ padding: "20px 24px" }}>
@@ -2673,9 +2811,6 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
             {!cancelada && !readOnly && (
               <Btn variant="secondary" style={{ fontSize: 11, padding: "6px 12px" }} onClick={()=>setEditDados({ data: dataDeTS(partida.data), hora: horaDeTS(partida.data), id_campo: partida.id_campo ? String(partida.id_campo) : "", link_local: partida.link_local || "" })}>📅 Editar dados</Btn>
             )}
-            {!cancelada && (
-              <Btn variant="danger" style={{ fontSize: 11, padding: "6px 12px" }} onClick={cancelarPartida}>Cancelar Partida</Btn>
-            )}
           </div>
         </div>
       </Card>
@@ -2688,8 +2823,8 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
         </button>
       )}
 
-      {/* Link de confirmação de presença + convite para o WhatsApp */}
-      {!readOnly && !cancelada && (
+      {/* Link de confirmação de presença + convite para o WhatsApp (antes do jogo: primeira ação da tela) */}
+      {!readOnly && !cancelada && !jaAconteceu && (
         <Card style={{ background:C.surf2, display:"flex", flexDirection:"column", gap:14 }}>
           <LinkConfirmacao tipo="partida" idRef={partida.id_partida} idTime={idTime} dataRef={partida.data} show={show} embutido />
           <ConvocarPartida partida={partida} time={meuTimeData?.[0]} idTime={idTime} show={show}/>
@@ -2700,13 +2835,13 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
       {!cancelada && (
         <Card style={{ padding: "20px 24px" }}>
           <div style={{ fontSize: 13, color: C.gold, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 16 }}>Placar Final</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
             <Input label="Gols Marcados" type="number" min="0" value={placar.gols_marcados}
               onChange={e => setPlacar(p => ({ ...p, gols_marcados: e.target.value }))} style={{ width: 140 }} />
-            <div style={{ fontSize: 28, fontWeight: 800, color: C.dim, marginTop: 20 }}>×</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: C.dim, marginBottom: 2 }}>×</div>
             <Input label="Gols Sofridos" type="number" min="0" value={placar.gols_sofridos}
               onChange={e => setPlacar(p => ({ ...p, gols_sofridos: e.target.value }))} style={{ width: 140 }} />
-            <Btn onClick={salvarPlacar} disabled={savingPlacar} style={{ marginTop: 20 }}>
+            <Btn onClick={salvarPlacar} disabled={savingPlacar}>
               {savingPlacar ? "Salvando..." : "Salvar Placar"}
             </Btn>
           </div>
@@ -2863,7 +2998,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 12, color: C.dim }}>Raio de busca:</span>
                 <input type="number" min="1" step="5" value={raioAtual} onChange={e => setRaioKm(Number(e.target.value) || 1)}
-                  style={{ width: 80, background: C.surf2, border: `1px solid ${C.border}`, borderRadius: 8, color: C.cream, fontFamily: "inherit", fontSize: 13, padding: "6px 10px", outline: "none" }} />
+                  style={{ width: 80, background: C.surf2, border: `1px solid ${C.border}`, borderRadius: 8, color: C.cream, fontFamily: "inherit", fontSize: 13, padding: "6px 10px" }} />
                 <span style={{ fontSize: 12, color: C.dim }}>km a partir de {minhaCidade.nome}</span>
               </div>
             )}
@@ -2936,6 +3071,21 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
           </Card>
         );
       })()}
+
+      {/* Link de confirmação + convite (depois do jogo: desce para o fim, sem atrapalhar o lançamento) */}
+      {!readOnly && !cancelada && jaAconteceu && (
+        <Card style={{ background:C.surf2, display:"flex", flexDirection:"column", gap:14 }}>
+          <LinkConfirmacao tipo="partida" idRef={partida.id_partida} idTime={idTime} dataRef={partida.data} show={show} embutido />
+          <ConvocarPartida partida={partida} time={meuTimeData?.[0]} idTime={idTime} show={show}/>
+        </Card>
+      )}
+
+      {/* Ação destrutiva: isolada no fim da página, longe das ações rotineiras */}
+      {!cancelada && !readOnly && (
+        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+          <Btn variant="danger" style={{ fontSize: 11, padding: "8px 16px" }} onClick={cancelarPartida}>Cancelar Partida</Btn>
+        </div>
+      )}
 
       {/* Modais */}
       {editDados && (
@@ -3230,6 +3380,7 @@ function FormEscalacao({ partida, jogadores, posicoes, participacoes, meuTime, o
 
 // ── FORM GOL ──────────────────────────────────────────────────
 function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, readOnly = false }) {
+  const { confirmar, dialogo } = useConfirm();
   const [form, setForm] = useState({ id_participacao: "", periodo: "1", minuto: "", penalti: "N", gol_contra: "N", id_assistente: "" });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -3271,7 +3422,7 @@ function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, re
       if (!permiteAcres) {
         show(`Este time não permite acréscimos. O minuto não pode passar de ${minPorPeriodo} (tempo padrão do período).`, "error"); return;
       } else {
-        if (!confirm(`O minuto ${minuto} é maior que o tempo padrão do período (${minPorPeriodo} min). Registrar como acréscimo?`)) return;
+        if (!(await confirmar(`O minuto ${minuto} é maior que o tempo padrão do período (${minPorPeriodo} min). Registrar como acréscimo?`, { textoOk:"Registrar" }))) return;
       }
     }
 
@@ -3301,6 +3452,7 @@ function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, re
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {dialogo}
       <Select label="Quem fez o gol *" value={form.id_participacao} onChange={e => set("id_participacao", e.target.value)}>
         <option value="">Selecione...</option>
         {participacoes.map(pa => <option key={pa.id_participacao} value={pa.id_participacao}>#{pa.camisa} — {pa.jogador?.apelido || pa.jogador?.nome}</option>)}
@@ -3626,7 +3778,141 @@ function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
   const concluidas = etapas.filter(e => e.concluido).length;
   const pct = Math.round((concluidas / etapas.length) * 100);
   const proxima = etapas.find(e => !e.concluido);
+  const configurado = pct === 100;
 
+  // ── Dados operacionais (para a Home pós-configuração) ──
+  const agora = new Date();
+  const hojeYMD = agora.toISOString().split("T")[0];
+  const partidasValidas = (partidas || []).filter(p => p.cancelada !== "S");
+  const proximaPartida = !ehTurmaFechada ? partidasValidas.find(p => p.data && new Date(p.data) >= agora) : null;
+  const pendentesPlacar = !ehTurmaFechada ? partidasValidas.filter(p => p.data && new Date(p.data) < agora && p.gols_marcados === null) : [];
+  const ultimoResultado = !ehTurmaFechada ? [...partidasValidas].reverse().find(p => p.gols_marcados !== null) : null;
+  const encontrosLista = (encontros || []);
+  const proximoEncontro = ehTurmaFechada ? encontrosLista.find(e => e.data && String(e.data).split("T")[0] >= hojeYMD) : null;
+  const ultimoEncontro  = ehTurmaFechada ? [...encontrosLista].reverse().find(e => e.data && String(e.data).split("T")[0] < hojeYMD) : null;
+  const resUlt = ultimoResultado ? (
+    ultimoResultado.gols_marcados > ultimoResultado.gols_sofridos ? { label:"Vitória", cor:C.win } :
+    ultimoResultado.gols_marcados < ultimoResultado.gols_sofridos ? { label:"Derrota", cor:C.loss } :
+    { label:"Empate", cor:C.draw }
+  ) : null;
+  const rotuloJogo = ehTurmaFechada ? "encontro" : "partida";
+
+  if (configurado) return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+      {/* Escolha do modo de registro de gols (só para times normais que ainda não definiram) */}
+      {!ehTurmaFechada && time && !time.modo_gol && (
+        <EscolherModoGol idTime={idTime} time={time} show={show} />
+      )}
+
+      {/* ── Card herói: o próximo compromisso do time ── */}
+      {(!ehTurmaFechada ? proximaPartida : proximoEncontro) ? (
+        <Card style={{ padding:"24px 28px", background:"linear-gradient(135deg,#103D2A,#174D36)", border:`1px solid ${C.gold}55` }}>
+          <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:6 }}>
+            {ehTurmaFechada ? "Próximo encontro" : "Próxima partida"}
+          </div>
+          {!ehTurmaFechada ? (
+            <>
+              <div style={{ fontSize:24, fontWeight:800, color:C.cream, marginBottom:4 }}>
+                {proximaPartida.id_adversario ? (proximaPartida.adversario?.nome || "Adversário") : "🔍 Procurando adversário"}
+              </div>
+              <div style={{ fontSize:14, color:C.dim, marginBottom:16 }}>
+                📅 {fmtData(proximaPartida.data)} · {fmtHora(proximaPartida.data)}
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize:24, fontWeight:800, color:C.cream, marginBottom:16 }}>
+              📅 {fmtDataA(proximoEncontro.data)}
+            </div>
+          )}
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+            <Btn onClick={() => onNavegar("partidas")}>{ehTurmaFechada ? "Abrir encontro" : "Abrir partida"}</Btn>
+            <span style={{ alignSelf:"center", fontSize:12, color:C.dim }}>
+              {ehTurmaFechada ? "Organize a presença e o sorteio por lá." : "Convoque a galera por lá 📣"}
+            </span>
+          </div>
+        </Card>
+      ) : (
+        <Card style={{ padding:"24px 28px", background:"linear-gradient(135deg,#103D2A,#174D36)" }}>
+          <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:6 }}>Agenda</div>
+          <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:12 }}>Nenhum {rotuloJogo} marcado</div>
+          <Btn onClick={() => onNavegar("partidas")}>+ {ehTurmaFechada ? "Registrar encontro" : "Marcar partida"}</Btn>
+        </Card>
+      )}
+
+      {/* ── Pendências: partidas passadas sem placar ── */}
+      {pendentesPlacar.length > 0 && (
+        <button onClick={() => onNavegar("partidas")}
+          style={{ textAlign:"left", background:C.gold+"14", border:`1px solid ${C.gold}`, borderRadius:12,
+            padding:"16px 20px", cursor:"pointer", fontFamily:"inherit", color:C.cream,
+            display:"flex", alignItems:"center", gap:14 }}>
+          <span style={{ fontSize:24 }} aria-hidden="true">⚠️</span>
+          <span style={{ flex:1 }}>
+            <span style={{ fontWeight:800, color:C.gold }}>{pendentesPlacar.length} partida(s) sem placar lançado</span>
+            <span style={{ display:"block", fontSize:12, color:C.dim, marginTop:2 }}>Toque para lançar os resultados e manter as estatísticas em dia.</span>
+          </span>
+          <span style={{ color:C.gold, fontSize:20 }} aria-hidden="true">›</span>
+        </button>
+      )}
+
+      {/* ── Último resultado ── */}
+      {!ehTurmaFechada && ultimoResultado && (
+        <Card style={{ padding:"18px 22px", display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+          <div style={{ flex:1, minWidth:180 }}>
+            <div style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:4 }}>Último resultado</div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.cream }}>
+              <span style={{ color:resUlt.cor }}>{ultimoResultado.gols_marcados} × {ultimoResultado.gols_sofridos}</span>
+              {" "}vs {ultimoResultado.adversario?.nome || "Adversário"}
+            </div>
+            <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>{fmtData(ultimoResultado.data)}</div>
+          </div>
+          <Badge label={resUlt.label} cor={resUlt.cor} />
+        </Card>
+      )}
+      {ehTurmaFechada && ultimoEncontro && (
+        <Card style={{ padding:"18px 22px" }}>
+          <div style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:4 }}>Último encontro</div>
+          <div style={{ fontSize:18, fontWeight:800, color:C.cream }}>📅 {fmtDataA(ultimoEncontro.data)}</div>
+        </Card>
+      )}
+
+      {/* Aniversariantes do mês */}
+      <AniversariantesDoMes idTime={idTime} />
+
+      {/* Checklist de configuração: recolhido, para consulta */}
+      <details>
+        <summary style={{ cursor:"pointer", fontSize:12, color:C.dim, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", listStyle:"none", padding:"4px 0" }}>
+          ⚙️ Rever etapas de configuração <span style={{ color:C.win }}>({concluidas}/{etapas.length} ✓)</span>
+        </summary>
+        <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:10 }}>
+          {etapas.map(etapa => (
+            <button key={etapa.numero} onClick={() => onNavegar(etapa.menu)}
+              style={{ textAlign:"left", background:C.surface, border:`1px solid ${C.border}`, borderRadius:10,
+                padding:"10px 16px", cursor:"pointer", fontFamily:"inherit", color:C.cream, fontSize:13,
+                display:"flex", alignItems:"center", gap:10 }}>
+              <span aria-hidden="true">{etapa.concluido ? "✅" : etapa.icone}</span>
+              <span style={{ fontWeight:700 }}>{etapa.titulo}</span>
+              <span style={{ marginLeft:"auto", color:C.gold }} aria-hidden="true">›</span>
+            </button>
+          ))}
+        </div>
+      </details>
+
+      {/* Convite para avaliar o app */}
+      <Card style={{ padding:"20px 24px", background:`linear-gradient(135deg, ${C.surface}, ${C.surf2})`, border:`1px solid ${C.gold}55` }}>
+        <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+          <div style={{ fontSize:34 }} aria-hidden="true">⭐</div>
+          <div style={{ flex:1, minWidth:200 }}>
+            <div style={{ fontWeight:800, fontSize:16, color:C.cream, marginBottom:4 }}>Tá gostando do Nerd do Campo?</div>
+            <div style={{ fontSize:13, color:C.dim, lineHeight:1.5 }}>Deixe sua avaliação! Ela pode aparecer na página inicial e ajudar outros times a conhecerem o app.</div>
+          </div>
+          <Btn onClick={() => onNavegar("avaliar")} style={{ fontSize:13, whiteSpace:"nowrap" }}>⭐ Avaliar o app</Btn>
+        </div>
+      </Card>
+    </div>
+  );
+
+  // ── Modo onboarding: a configuração ainda não terminou ──
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
@@ -3685,8 +3971,9 @@ function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
           const bloqueado = anterior && !anterior.concluido;
 
           return (
-            <div key={etapa.numero}
+            <button key={etapa.numero}
               onClick={() => !bloqueado && onNavegar(etapa.menu)}
+              disabled={bloqueado}
               style={{
                 background: etapa.concluido ? C.surf2 : C.surface,
                 border: `1px solid ${etapa.concluido ? C.win+"55" : bloqueado ? C.border : C.gold+"44"}`,
@@ -3698,6 +3985,11 @@ function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
                 alignItems: "center",
                 gap: 16,
                 transition: "all 0.15s",
+                width: "100%",
+                textAlign: "left",
+                fontFamily: "inherit",
+                color: "inherit",
+                fontSize: "inherit",
               }}
               onMouseEnter={e => { if (!bloqueado) e.currentTarget.style.background = C.surf2; }}
               onMouseLeave={e => { e.currentTarget.style.background = etapa.concluido ? C.surf2 : C.surface; }}
@@ -3739,9 +4031,9 @@ function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
 
               {/* Seta */}
               {!bloqueado && (
-                <span style={{ color: etapa.concluido ? C.win : C.gold, fontSize: 20, flexShrink: 0 }}>›</span>
+                <span style={{ color: etapa.concluido ? C.win : C.gold, fontSize: 20, flexShrink: 0 }} aria-hidden="true">›</span>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
@@ -3984,22 +4276,26 @@ function CrudMensalidades({ idTime, show, readOnly }) {
         <Card style={{ padding:"16px 20px" }}>
           <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", justifyContent:"space-between" }}>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <button onClick={() => { let m=mesSel-1, a=anoSel; if(m<1){m=12;a--;} setMesSel(m); setAnoSel(a); }}
-                style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, color:C.dim, cursor:"pointer", padding:"4px 12px", fontFamily:"inherit", fontSize:16 }}>‹</button>
+              <button onClick={() => { let m=mesSel-1, a=anoSel; if(m<1){m=12;a--;} setMesSel(m); setAnoSel(a); }} aria-label="Mês anterior"
+                style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.dim, cursor:"pointer", padding:"10px 16px", fontFamily:"inherit", fontSize:16 }}>‹</button>
               <div style={{ textAlign:"center", minWidth:160 }}>
                 <div style={{ fontSize:18, fontWeight:800, color:C.cream }}>{MESES_LABEL[mesSel-1]} {anoSel}</div>
                 <div style={{ fontSize:11, color:C.dim }}>Mensalidade padrão: {fmtMoeda(time?.valor_mensalidade)}</div>
               </div>
-              <button onClick={() => { let m=mesSel+1, a=anoSel; if(m>12){m=1;a++;} setMesSel(m); setAnoSel(a); }}
-                style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, color:C.dim, cursor:"pointer", padding:"4px 12px", fontFamily:"inherit", fontSize:16 }}>›</button>
+              <button onClick={() => { let m=mesSel+1, a=anoSel; if(m>12){m=1;a++;} setMesSel(m); setAnoSel(a); }} aria-label="Próximo mês"
+                style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.dim, cursor:"pointer", padding:"10px 16px", fontFamily:"inherit", fontSize:16 }}>›</button>
+              {(mesSel !== hoje.getMonth()+1 || anoSel !== hoje.getFullYear()) && (
+                <button onClick={() => { setMesSel(hoje.getMonth()+1); setAnoSel(hoje.getFullYear()); }}
+                  style={{ background:C.gold+"22", border:`1px solid ${C.gold}`, borderRadius:8, color:C.gold, cursor:"pointer", padding:"10px 14px", fontFamily:"inherit", fontSize:12, fontWeight:700, textTransform:"uppercase" }}>Hoje</button>
+              )}
             </div>
-            <div style={{ display:"flex", gap:12 }}>
+            <div style={{ display:"flex", gap:12, flex:"1 1 280px" }}>
               {[
                 { label:"Esperado", valor: fmtMoeda(totalEsperado), cor: C.cream },
                 { label:"Recebido", valor: fmtMoeda(totalRecebido), cor: C.win },
                 { label:"Pendente", valor: fmtMoeda(totalPendente), cor: totalPendente>0 ? C.loss : C.win },
               ].map(s => (
-                <div key={s.label} style={{ textAlign:"center", background:C.surf2, borderRadius:8, padding:"10px 16px" }}>
+                <div key={s.label} style={{ textAlign:"center", background:C.surf2, borderRadius:8, padding:"10px 16px", flex:1 }}>
                   <div style={{ fontSize:16, fontWeight:800, color:s.cor }}>{s.valor}</div>
                   <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase" }}>{s.label}</div>
                 </div>
@@ -4045,7 +4341,7 @@ function CrudMensalidades({ idTime, show, readOnly }) {
                 </td>
                 <td style={{ padding:"11px 14px", display:"flex", gap:6 }}>
                   {!readOnly && j.status !== "pago" && j.status !== "isento" && (
-                    <Btn style={{ fontSize:11, padding:"4px 10px", background:C.win, color:"white" }}
+                    <Btn style={{ fontSize:11, padding:"4px 10px", background:C.winBg, color:"white" }}
                       onClick={() => marcarPago(j)}>✅ Pago</Btn>
                   )}
                   <Btn variant="secondary" style={{ fontSize:11, padding:"4px 10px" }}
@@ -4331,7 +4627,7 @@ function PaginaAvaliar({ idTime, meusTimes, session, show, onEnviado }) {
       <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:10 }}>Conta como tem sido sua experiência</div>
       <textarea value={texto} onChange={e => setTexto(e.target.value.slice(0,500))} rows={4}
         placeholder="O que você mais gostou? O que faz diferença no dia a dia do seu time?"
-        style={{ width:"100%", background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"14px 16px", resize:"vertical", boxSizing:"border-box", outline:"none", lineHeight:1.5 }}/>
+        style={{ width:"100%", background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"14px 16px", resize:"vertical", boxSizing:"border-box", lineHeight:1.5 }}/>
       <div style={{ fontSize:11, color:C.dim, textAlign:"right", marginTop:4, marginBottom:22 }}>{texto.length} / 500</div>
 
       <label style={{ display:"flex", alignItems:"flex-start", gap:12, background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:16, marginBottom:14, cursor:"pointer" }}>
@@ -4833,13 +5129,20 @@ function CrudCaixa({ idTime, show, readOnly }) {
         ))}
       </div>
 
-      {/* Filtros temporada + datas + exportação */}
+      {/* Filtros temporada + datas + exportação — recolhíveis, com contador de filtros ativos */}
       <Card style={{ padding:"14px 16px" }}>
-        <div style={{ marginBottom:12 }}>
+        <details open={typeof window !== "undefined" && window.innerWidth > 768}>
+        <summary style={{ cursor:"pointer", fontSize:12, color:C.gold, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", listStyle:"none", display:"flex", alignItems:"center", gap:8 }}>
+          🔍 Filtros e exportação
+          {(() => { const n = [filtroTemporada!=="todas", filtroNatureza!=="todas", filtroTipo!=="todos", !!dataDe, !!dataAte, !!buscaObs.trim()].filter(Boolean).length;
+            return n > 0 ? <span style={{ background:C.gold, color:"#0B3D2E", borderRadius:10, padding:"1px 8px", fontSize:11 }}>{n} ativo(s)</span> : null; })()}
+          <span style={{ marginLeft:"auto", color:C.dim, fontSize:11, textTransform:"none", fontWeight:400 }}>toque para abrir/fechar</span>
+        </summary>
+        <div style={{ marginBottom:12, marginTop:12 }}>
           <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", marginBottom:4 }}>🔍 Buscar na observação/descrição</div>
           <input type="text" value={buscaObs} onChange={e=>setBuscaObs(e.target.value)}
             placeholder="Ex: nerd campo (traz o que tiver as duas palavras)"
-            style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"9px 12px", outline:"none" }}/>
+            style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"9px 12px" }}/>
         </div>
         <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"flex-end" }}>
           <div style={{ minWidth:130 }}>
@@ -4888,6 +5191,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
             <Btn variant="secondary" style={{ fontSize:11, padding:"8px 12px" }} onClick={exportarPDF}>📕 PDF</Btn>
           </div>
         </div>
+        </details>
       </Card>
 
       {/* Extrato cronológico */}
@@ -4904,7 +5208,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
             <thead><tr style={{ background:C.surf2 }}>
               {["Data","Descrição","Origem","Valor", temFiltro?"Acum. (seleção)":"Saldo","Obs.","Lançado por"].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
+                <th key={h} className={(h==="Obs."||h==="Lançado por")?"col-ocultar-mobile":undefined} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -4917,8 +5221,8 @@ function CrudCaixa({ idTime, show, readOnly }) {
                     {m.natureza==="receita"?"+":"−"} {fmtMoeda(m.valor)}
                   </td>
                   <td style={{ padding:"10px 14px", fontWeight:700, whiteSpace:"nowrap", color: m.saldoAcc>=0?C.cream:C.loss }}>{fmtMoeda(m.saldoAcc)}</td>
-                  <td style={{ padding:"10px 14px", color:C.dim, fontSize:11, maxWidth:160 }}>{m.observacao || "—"}</td>
-                  <td style={{ padding:"10px 14px", color:C.dim, fontSize:11, whiteSpace:"nowrap" }}>{m.registrado_por || "—"}</td>
+                  <td className="col-ocultar-mobile" style={{ padding:"10px 14px", color:C.dim, fontSize:11, maxWidth:160 }}>{m.observacao || "—"}</td>
+                  <td className="col-ocultar-mobile" style={{ padding:"10px 14px", color:C.dim, fontSize:11, whiteSpace:"nowrap" }}>{m.registrado_por || "—"}</td>
                 </tr>
               ))}
               {extrato.length===0 && <tr><td colSpan={7} style={{ padding:24, textAlign:"center", color:C.dim }}>Nenhum movimento registrado.</td></tr>}
@@ -5080,14 +5384,14 @@ function RelatorioFinanceiro({ idTime, show }) {
       <Card style={{ padding:16, marginBottom:16 }}>
         <div className="no-print" style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
           <select value={modoPeriodo} onChange={e=>setModoPeriodo(e.target.value)}
-            style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none", cursor:"pointer" }}>
+            style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", cursor:"pointer" }}>
             <option value="tudo">Todo o histórico</option>
             <option value="temporada">Por temporada</option>
             <option value="intervalo">Intervalo de datas</option>
           </select>
           {modoPeriodo === "temporada" && (
             <select value={tempSel} onChange={e=>setTempSel(e.target.value)}
-              style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none", cursor:"pointer" }}>
+              style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", cursor:"pointer" }}>
               <option value="">Selecione a temporada</option>
               {(temporadas||[]).map(t => <option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
             </select>
@@ -5095,10 +5399,10 @@ function RelatorioFinanceiro({ idTime, show }) {
           {modoPeriodo === "intervalo" && (
             <>
               <input type="date" value={dataIni} onChange={e=>setDataIni(e.target.value)}
-                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none" }}/>
+                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px" }}/>
               <span style={{ color:C.dim }}>até</span>
               <input type="date" value={dataFim} onChange={e=>setDataFim(e.target.value)}
-                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none" }}/>
+                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px" }}/>
             </>
           )}
         </div>
@@ -5189,6 +5493,7 @@ function RelatorioFinanceiro({ idTime, show }) {
 // Fases 2 e 3: controle de quem vendeu quanto, meta, complemento e status.
 // NÃO mexe no caixa (isso é a Fase 4).
 function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
+  const { confirmar, dialogo } = useConfirm();
   const valorUnit = Number(evento.valor_unitario || 0);
   const metaPadrao = Number(evento.meta_padrao || 0);
   const eventoEncerrado = evento.status === "encerrado";
@@ -5268,7 +5573,7 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
   async function adicionarTodos() {
     const faltantes = (jogadores || []).filter(j => !lista.some(v => String(v.id_jogador) === String(j.id_jogador)));
     if (faltantes.length === 0) { show("Todos os atletas ativos já estão na lista."); return; }
-    if (!confirm(`Adicionar ${faltantes.length} atleta(s) ativo(s) à lista de vendedores, cada um com meta ${metaPadrao} un.?`)) return;
+    if (!(await confirmar(`Adicionar ${faltantes.length} atleta(s) ativo(s) à lista de vendedores, cada um com meta ${metaPadrao} un.?`, { textoOk:"Adicionar todos" }))) return;
     setSalvando(true);
     try {
       const corpo = faltantes.map(j => ({
@@ -5335,7 +5640,7 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
     const c = calc(v);
     let msg = `Acertar ${nomeVend(v)}?\n\nEntra ${fmtMoeda(c.entregue)} no caixa do time.`;
     if (c.faltante > 0) msg += `\n\n(Meta de ${fmtMoeda(c.metaValor)} — faltaram ${fmtMoeda(c.faltante)}. Você pode acertar mesmo assim.)`;
-    if (!confirm(msg)) return;
+    if (!(await confirmar(msg, { perigoso:true, textoOk:"Confirmar" }))) return;
     try {
       // 1º lança no caixa; só marca acertado se o lançamento der certo (transacional)
       await lancarReceitaVendedor(v);
@@ -5351,7 +5656,7 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
     }
   }
   async function reabrir(v) {
-    if (!confirm(`Reabrir ${nomeVend(v)}?\n\nO lançamento de ${fmtMoeda(calc(v).entregue)} será removido do caixa.`)) return;
+    if (!(await confirmar(`Reabrir ${nomeVend(v)}?\n\nO lançamento de ${fmtMoeda(calc(v).entregue)} será removido do caixa.`, { perigoso:true, textoOk:"Reabrir" }))) return;
     try {
       await removerReceitaVendedor(v);
       await api.patch(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`, { status:"aberto", atualizado_em: new Date().toISOString() });
@@ -5364,7 +5669,7 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
   }
   async function remover(v) {
     if (v.status === "acertado") { show("Reabra o vendedor antes de remover.", "error"); return; }
-    if (!confirm(`Remover ${nomeVend(v)} deste evento?`)) return;
+    if (!(await confirmar(`Remover ${nomeVend(v)} deste evento?`, { perigoso:true, textoOk:"Remover" }))) return;
     try {
       await api.delete(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`);
       reload();
@@ -5373,6 +5678,7 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
 
   return (
     <Modal title={`Vendedores — ${evento.nome}`} onClose={onClose}>
+      {dialogo}
       <div style={{ display:"flex", flexDirection:"column", gap:14, minWidth:0 }}>
         {/* Totais */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10 }}>
@@ -5443,19 +5749,19 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
                   <div style={{ fontSize:10, color:C.dim, marginBottom:2 }}>Vendidos</div>
                   <input key={`vend-${v.id_evento_vendedor}-${v.vendidos}-${v.status}`} type="number" min="0" step="1" disabled={travado} defaultValue={v.vendidos||0}
                     onBlur={e=>{ const n=Number(e.target.value)||0; if(n!==Number(v.vendidos||0)) atualizarCampo(v,"vendidos",n); }}
-                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px", outline:"none" }}/>
+                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px" }}/>
                 </div>
                 <div>
                   <div style={{ fontSize:10, color:C.dim, marginBottom:2 }}>Meta (un.)</div>
                   <input key={`meta-${v.id_evento_vendedor}-${v.meta_unidades}-${v.status}`} type="number" min="0" step="1" disabled={travado} defaultValue={v.meta_unidades||0}
                     onBlur={e=>{ const n=Number(e.target.value)||0; if(n!==Number(v.meta_unidades||0)) atualizarCampo(v,"meta_unidades",n); }}
-                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px", outline:"none" }}/>
+                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px" }}/>
                 </div>
                 <div>
                   <div style={{ fontSize:10, color:C.dim, marginBottom:2 }}>Complemento (R$)</div>
                   <input key={`comp-${v.id_evento_vendedor}-${v.complemento}-${v.status}`} type="number" min="0" step="0.01" disabled={travado} defaultValue={v.complemento||0}
                     onBlur={e=>{ const n=Number(e.target.value)||0; if(n!==Number(v.complemento||0)) atualizarCampo(v,"complemento",n); }}
-                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px", outline:"none" }}/>
+                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px" }}/>
                 </div>
               </div>
               {/* linha informativa de meta/faltante */}
@@ -5658,6 +5964,7 @@ function RelatorioVendas({ evento, idTime, onClose }) {
 
 
 function CrudEventos({ idTime, show, readOnly }) {
+  const { confirmar, dialogo } = useConfirm();
   // idTime recebido por prop (filtrado pelo usuário logado no componente pai)
   const { data: _timeEvento } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,cidade:id_cidade_sede(nome,estado)&limit=1`) : Promise.resolve([]), [idTime]);
   const { data: eventos, loading, reload } = useQuery(
@@ -5745,7 +6052,7 @@ function CrudEventos({ idTime, show, readOnly }) {
     if (vendAbertos.length > 0) {
       msg += `\n\n⚠️ ${vendAbertos.length} vendedor(es) ainda em aberto, somando ${fmtMoeda(totalAbertos)}.\nAo encerrar, eles serão ACERTADOS e lançados no caixa automaticamente.`;
     }
-    if (!confirm(msg)) return;
+    if (!(await confirmar(msg, { perigoso:true, textoOk:"Confirmar" }))) return;
     if (vendAbertos.length > 0) setProcessando(`Acertando ${vendAbertos.length} vendedor(es) e lançando no caixa…`);
     try {
       // acerta cada vendedor em aberto: lança no caixa + marca acertado
@@ -5800,7 +6107,7 @@ function CrudEventos({ idTime, show, readOnly }) {
   }
 
   async function reabrir(ev) {
-    if (!confirm(`Reabrir "${ev.nome}"?\nO resultado deixará de ficar congelado e voltará a ser ${ev.modo==="direto"?"o valor digitado":"calculado pelos lançamentos"}.`)) return;
+    if (!(await confirmar(`Reabrir "${ev.nome}"?\nO resultado deixará de ficar congelado e voltará a ser ${ev.modo==="direto"?"o valor digitado":"calculado pelos lançamentos"}.`, { textoOk:"Reabrir" }))) return;
     try {
       await api.patch(`evento?id_evento=eq.${ev.id_evento}`, { status:"aberto", resultado_final:null, meta_atingida:null });
       show("Evento reaberto!"); reload();
@@ -5810,7 +6117,7 @@ function CrudEventos({ idTime, show, readOnly }) {
   async function excluir(ev) {
     const temMov = (movsEvento||[]).some(m=>m.id_evento===ev.id_evento);
     if (temMov) { show("Este evento tem lançamentos vinculados e não pode ser excluído.", "error"); return; }
-    if (!confirm(`Excluir o evento "${ev.nome}"?`)) return;
+    if (!(await confirmar(`Excluir o evento "${ev.nome}"?`, { perigoso:true, textoOk:"Excluir" }))) return;
     try { await api.delete(`evento?id_evento=eq.${ev.id_evento}`); show("Evento excluído."); reload(); }
     catch(e){ show("Erro: "+e.message, "error"); }
   }
@@ -5840,7 +6147,7 @@ function CrudEventos({ idTime, show, readOnly }) {
   }
 
   async function removerMov(m) {
-    if (!confirm("Remover este lançamento?")) return;
+    if (!(await confirmar("Remover este lançamento?", { perigoso:true, textoOk:"Remover" }))) return;
     try { await api.delete(`movimento_caixa?id_movimento=eq.${m.id_movimento}`); show("Removido."); reloadMovs(); }
     catch(e){ show("Erro: "+e.message, "error"); }
   }
@@ -5849,6 +6156,7 @@ function CrudEventos({ idTime, show, readOnly }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {dialogo}
       {!readOnly && <div><Btn onClick={abrirNovo}>+ Novo Evento</Btn></div>}
 
       {(eventos||[]).length === 0 && !loading && (
@@ -5902,23 +6210,25 @@ function CrudEventos({ idTime, show, readOnly }) {
               </div>
             )}
 
-            {/* Ações */}
+            {/* Ações: as do fluxo principal do estado atual ficam visíveis; o resto vai para o menu "⋯" */}
             {!readOnly && (
-              <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
-                {ehFin && ev.status!=="encerrado" && ev.modo==="detalhado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>abrirLancar(ev)}>+ Lançar receita/despesa</Btn>}
-                {ehFin && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>setVendedoresDe(ev)}>🎟️ Vendedores</Btn>}
-                {ehFin && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>setRelatorioDe(ev)}>📊 Relatório</Btn>}
-                {ev.status!=="encerrado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>abrirEditar(ev)}>Editar</Btn>}
-                {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>setLinkEvento(ev)}>📲 Confirmação</Btn>}
-                {ehFin && ev.status!=="encerrado" && <Btn style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>encerrar(ev)}>Encerrar</Btn>}
-                {ehFin && ev.status==="encerrado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>reabrir(ev)}>🔓 Reabrir</Btn>}
-                {!movs.length && !(movsEvento||[]).some(m=>m.id_evento===ev.id_evento) && <Btn variant="danger" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>excluir(ev)}>Excluir</Btn>}
+              <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap", alignItems:"center" }}>
+                {ehFin && ev.status!=="encerrado" && ev.modo==="detalhado" && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>abrirLancar(ev)}>+ Lançar receita/despesa</Btn>}
+                {ehFin && ev.status!=="encerrado" && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>setVendedoresDe(ev)}>🎟️ Vendedores</Btn>}
+                {ehFin && ev.status==="encerrado" && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>setRelatorioDe(ev)}>📊 Relatório</Btn>}
+                <MenuAcoes acoes={[
+                  ev.status!=="encerrado" && { label:"✏️ Editar evento", onClick:()=>abrirEditar(ev) },
+                  { label:"📲 Link de confirmação", onClick:()=>setLinkEvento(ev) },
+                  ehFin && ev.status!=="encerrado" && ev.controla_venda && { label:"📊 Relatório de vendas", onClick:()=>setRelatorioDe(ev) },
+                  ehFin && ev.status!=="encerrado" && { label:"🏁 Encerrar evento", onClick:()=>encerrar(ev) },
+                  ehFin && ev.status==="encerrado" && { label:"🔓 Reabrir evento", onClick:()=>reabrir(ev) },
+                  (!movs.length && !(movsEvento||[]).some(m=>m.id_evento===ev.id_evento)) && { label:"🗑️ Excluir evento", perigoso:true, onClick:()=>excluir(ev) },
+                ]}/>
               </div>
             )}
           </Card>
         );
       })}
-      {(eventos||[]).length===0 && <Card style={{ padding:24, textAlign:"center", color:C.dim }}>Nenhum evento cadastrado.</Card>}
 
       {/* Modal criar/editar evento */}
       {modal && (
@@ -6066,7 +6376,7 @@ export default function AdminAppCompleto() {
 
   const [partida, setPartida]   = useState(null);
   const [novaPartida, setNovaPartida] = useState(false);
-  const { toast, show }         = useToast();
+  const { toast, show, close }  = useToast();
 
   // Verificar manutenção do sistema
   const { data: todosTimesSuper } = useQuery(() =>
@@ -6183,9 +6493,10 @@ export default function AdminAppCompleto() {
   const { data: _adversarios } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario&limit=1`) : Promise.resolve([]), [session, idTime]);
   const { data: _jogadores }  = useQuery(() => idTime ? api.get(`jogador?id_time=eq.${idTime}&id_jogador=gt.0&select=id_jogador&limit=1`) : Promise.resolve([]), [session, idTime]);
   const _idsTemp = (temporadas||[]).map(t=>t.id_temporada).join(",");
-  const { data: _partidas }   = useQuery(() => _idsTemp ? api.get(`partida?id_temporada=in.(${_idsTemp})&select=id_partida&limit=1`) : Promise.resolve([]), [_idsTemp]);
+  // Dados ricos (com limite defensivo): alimentam tanto o checklist quanto a Home operacional
+  const { data: _partidas }   = useQuery(() => _idsTemp ? api.get(`partida?id_temporada=in.(${_idsTemp})&select=id_partida,data,cancelada,gols_marcados,gols_sofridos,id_adversario,adversario(nome)&order=data.asc&limit=500`) : Promise.resolve([]), [_idsTemp]);
   const { data: _timesInternos } = useQuery(() => idTime ? api.get(`time_interno?id_time=eq.${idTime}&select=id_time_interno&limit=1`) : Promise.resolve([]), [session, idTime]);
-  const { data: _encontros }  = useQuery(() => _idsTemp ? api.get(`encontro?id_temporada=in.(${_idsTemp})&select=id_encontro&limit=1`) : Promise.resolve([]), [_idsTemp]);
+  const { data: _encontros }  = useQuery(() => _idsTemp ? api.get(`encontro?id_temporada=in.(${_idsTemp})&select=id_encontro,data,status&order=data.asc&limit=500`) : Promise.resolve([]), [_idsTemp]);
   const [temporadaSel, setTemporadaSel] = useState(null);
   useEffect(() => {
     const lista = temporadas || [];
@@ -6246,6 +6557,11 @@ export default function AdminAppCompleto() {
   const ehTurmaFechada = !!_tipoDoTime?.[0]?.eh_turma_fechada;
 
   function navMenu(id) { setMenu(id); setPartida(null); setNovaPartida(false); }
+  // Na barra horizontal do mobile, mantém o item ativo visível ao trocar de módulo
+  React.useEffect(() => {
+    const el = document.querySelector('.admin-sidebar [aria-current="page"]');
+    if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [menu]);
   // Menu base + item de Times Internos (só para turma fechada). Aditivo: times tradicionais não veem.
   const MENU_COM_TURMA = ehTurmaFechada
     ? (() => {
@@ -6274,10 +6590,17 @@ export default function AdminAppCompleto() {
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream, display:"flex", flexDirection:"column" }}>
       <style>{`
+        /* ── Foco visível para navegação por teclado (WCAG 2.4.7) — não aparece no toque/clique ── */
+        :focus-visible{outline:2px solid ${C.gold} !important;outline-offset:2px;border-radius:8px;}
         /* ── Navegação mobile: retrato (largura) OU paisagem de celular (altura baixa) ── */
         @media (max-width:768px), (max-height:600px) and (orientation:landscape){
           .admin-header{padding:0 12px !important; gap:8px !important;}
           .header-time-nome{display:none;}
+          /* Header enxuto no mobile: versão e link do site público saem (acessíveis via menu Ajuda/Visão App) */
+          .header-versao{display:none !important;}
+          .header-link-publico{display:none !important;}
+          /* Colunas secundárias de tabelas densas somem em telas pequenas */
+          .col-ocultar-mobile{display:none !important;}
           .admin-layout{flex-direction:column !important;}
           /* Sidebar vira barra horizontal rolável no topo do conteúdo */
           .admin-sidebar{
@@ -6288,9 +6611,16 @@ export default function AdminAppCompleto() {
           }
           .admin-sidebar .menu-grupo{display:flex; flex-direction:row; align-items:center; flex-shrink:0;}
           .admin-sidebar .menu-grupo-titulo{display:none !important;}
+          /* Separador fino entre grupos: mantém a noção de agrupamento na barra horizontal */
+          .admin-sidebar .menu-grupo + .menu-grupo{border-left:1px solid ${C.border}; margin-left:4px; padding-left:4px;}
           .admin-sidebar button{
             white-space:nowrap; flex-shrink:0; border-left:none !important;
-            border-bottom:3px solid transparent; padding:8px 12px !important; font-size:11px !important;
+            border-bottom:3px solid transparent; padding:10px 14px !important; font-size:12px !important;
+          }
+          /* Fade indicando que a barra rola horizontalmente */
+          .admin-sidebar{
+            mask-image:linear-gradient(to right, black 0, black calc(100% - 28px), transparent 100%);
+            -webkit-mask-image:linear-gradient(to right, black 0, black calc(100% - 28px), transparent 100%);
           }
           .admin-main{padding:16px 12px !important;}
           /* Inputs nativos não excedem o container */
@@ -6312,7 +6642,7 @@ export default function AdminAppCompleto() {
         .form-grid-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
         .form-grid-auto{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px;}
       `}</style>
-      <Toast {...(toast||{msg:null})} />
+      <Toast {...(toast||{msg:null})} onClose={close} />
 
       {/* Header */}
       <header className="admin-header" style={{ background:"#091F15", borderBottom:`3px solid ${C.gold}`, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:64, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 20px #00000066" }}>
@@ -6324,7 +6654,7 @@ export default function AdminAppCompleto() {
             🧪 DEV
           </div>
         )}
-        <div style={{ fontSize:10, color:C.dim, letterSpacing:"0.05em" }}>
+        <div className="header-versao" style={{ fontSize:10, color:C.dim, letterSpacing:"0.05em" }}>
           v{APP_VERSION}
         </div>
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
@@ -6369,17 +6699,17 @@ export default function AdminAppCompleto() {
               {(temporadas||[]).map(t=><option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
             </select>
           )}
-          <a href="/" target="_blank" rel="noopener noreferrer" title="Abrir o site público" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:11, fontWeight:700, padding:"6px 12px", textDecoration:"none", whiteSpace:"nowrap" }}>🌐 Ver site público</a>
+          <a className="header-link-publico" href="/" target="_blank" rel="noopener noreferrer" title="Abrir o site público" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:11, fontWeight:700, padding:"6px 12px", textDecoration:"none", whiteSpace:"nowrap" }}>🌐 Ver site público</a>
           <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>Sair</Btn>
         </div>
       </header>
 
       <div className="admin-layout" style={{ display:"flex", flex:1 }}>
         {/* Sidebar */}
-        <aside className="admin-sidebar" style={{ width:210, background:"#091F15", borderRight:`1px solid ${C.border}`, padding:"16px 0", flexShrink:0, position:"sticky", top:64, height:"calc(100vh - 64px)", overflowY:"auto" }}>
+        <nav aria-label="Menu principal" className="admin-sidebar" style={{ width:210, background:"#091F15", borderRight:`1px solid ${C.border}`, padding:"16px 0", flexShrink:0, position:"sticky", top:64, height:"calc(100vh - 64px)", overflowY:"auto" }}>
           {/* Item sem grupo: Início */}
           {MENU.filter(m => m.grupo === "").map(m => (
-            <button key={m.id} onClick={() => navMenu(m.id)} style={{
+            <button key={m.id} onClick={() => navMenu(m.id)} aria-current={menu===m.id ? "page" : undefined} style={{
               display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 20px",
               background: menu===m.id ? C.gold+"22" : "transparent",
               borderLeft: menu===m.id ? `3px solid ${C.gold}` : "3px solid transparent",
@@ -6387,7 +6717,7 @@ export default function AdminAppCompleto() {
               fontFamily:"inherit", fontWeight:700, fontSize:12, textTransform:"uppercase",
               letterSpacing:"0.06em", cursor:"pointer", textAlign:"left", transition:"all 0.15s",
             }}>
-              <span>{m.icon}</span><span>{m.label}</span>
+              <span aria-hidden="true">{m.icon}</span><span>{m.label}</span>
             </button>
           ))}
           <div style={{ height:1, background:C.border, margin:"8px 0" }}/>
@@ -6398,7 +6728,7 @@ export default function AdminAppCompleto() {
               <div key={grupo} className="menu-grupo">
                 <div className="menu-grupo-titulo" style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, padding:"12px 20px 6px" }}>{grupo}</div>
                 {itens.map(m => (
-                  <button key={m.id} onClick={() => navMenu(m.id)} style={{
+                  <button key={m.id} onClick={() => navMenu(m.id)} aria-current={menu===m.id ? "page" : undefined} style={{
                     display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 20px",
                     background: menu===m.id ? C.gold+"22" : "transparent",
                     borderLeft: menu===m.id ? `3px solid ${C.gold}` : "3px solid transparent",
@@ -6406,16 +6736,16 @@ export default function AdminAppCompleto() {
                     fontFamily:"inherit", fontWeight:700, fontSize:12, textTransform:"uppercase",
                     letterSpacing:"0.06em", cursor:"pointer", textAlign:"left", transition:"all 0.15s",
                   }}>
-                    <span>{m.icon}</span><span>{m.label}</span>
+                    <span aria-hidden="true">{m.icon}</span><span>{m.label}</span>
                   </button>
                 ))}
               </div>
             );
           })}
-        </aside>
+        </nav>
 
         {/* Conteúdo */}
-        <main className="admin-main" style={{ flex:1, padding:"28px 28px", minWidth:0 }}>
+        <main className="admin-main" style={{ flex:1, padding:"28px 28px", minWidth:0, maxWidth:1150, margin:"0 auto", width:"100%" }}>
           {isSuperadmin && !idTime ? (
             <div style={{ textAlign:"center", padding:"60px 20px", color:C.dim }}>
               <div style={{ fontSize:48, marginBottom:16 }}>👑</div>
@@ -6583,6 +6913,8 @@ function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, 
 
 
 function CrudJogadores({ idTime, show, readOnly }) {
+  const { confirmar, dialogo } = useConfirm();
+  const [busca, setBusca] = useState("");
   const _idTimeJ = idTime; // recebido por prop (filtrado pelo usuário logado)
   // Tipo de time, para filtrar as posições disponíveis
   const { data: _timeInfo } = useQuery(() => _idTimeJ ? api.get(`time?id_time=eq.${_idTimeJ}&select=id_tipo_time,id_subtipo&limit=1`) : Promise.resolve([]), [_idTimeJ]);
@@ -6650,24 +6982,28 @@ function CrudJogadores({ idTime, show, readOnly }) {
   }
 
   async function inativar(j) {
-    if (!confirm(`Inativar ${j.apelido || j.nome}?`)) return;
+    if (!(await confirmar(`Inativar ${j.apelido || j.nome}?`, { perigoso:true, textoOk:"Inativar" }))) return;
     try { await api.patch(`jogador?id_jogador=eq.${j.id_jogador}`, { data_fim: new Date().toISOString().split("T")[0] }); show("Jogador inativado."); reload(); }
     catch (e) { show(e.message, "error"); }
   }
 
   async function reativar(j) {
-    if (!confirm(`Reativar ${j.apelido || j.nome}?`)) return;
+    if (!(await confirmar(`Reativar ${j.apelido || j.nome}?`, { textoOk:"Reativar" }))) return;
     try { await api.patch(`jogador?id_jogador=eq.${j.id_jogador}`, { data_fim: null }); show("Jogador reativado!"); reload(); }
     catch (e) { show(e.message, "error"); }
   }
 
   if (loading) return <Spinner />;
   const _comIdade = (jogadores||[]).map(j => ({ ...j, idade_sort: calcularIdade(j.data_nascimento) ?? -1 }));
-  const ativos   = _comIdade.filter(j => !j.data_fim);
-  const inativos = _comIdade.filter(j =>  j.data_fim);
+  const _filtrados = busca.trim()
+    ? _comIdade.filter(j => _semAcento(j.nome).includes(_semAcento(busca)) || _semAcento(j.apelido).includes(_semAcento(busca)) || String(j.camisa||"").includes(busca.trim()))
+    : _comIdade;
+  const ativos   = _filtrados.filter(j => !j.data_fim);
+  const inativos = _filtrados.filter(j =>  j.data_fim);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {dialogo}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
         <BotoesImportExport
           onExportar={() => exportarExcel(
@@ -6713,6 +7049,8 @@ function CrudJogadores({ idTime, show, readOnly }) {
         />
         {!readOnly && <Btn onClick={abrirNovo}>+ Novo Jogador</Btn>}
       </div>
+      <Input placeholder="🔍 Buscar por nome..." value={busca} onChange={e => setBusca(e.target.value)}
+        aria-label="Buscar na lista" style={{ maxWidth:320 }} />
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       {ativos.length === 0 && inativos.length === 0 && !loading && (
         <EstadoVazio icone="👟" titulo="Nenhum jogador ainda"
@@ -6730,7 +7068,7 @@ function CrudJogadores({ idTime, show, readOnly }) {
           onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly} mapaPosJog={mapaPosJog}/>
       )}
       {modal && (
-        <Modal title={modal === "novo" ? "Novo Jogador" : "Editar Jogador"} onClose={() => setModal(null)}>
+        <Modal title={modal === "novo" ? "Novo Jogador" : "Editar Jogador"} onClose={() => setModal(null)} size="lg">
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <ImageUpload
@@ -6788,6 +7126,7 @@ function CrudJogadores({ idTime, show, readOnly }) {
 
 // ── CRUD ADVERSÁRIOS ──────────────────────────────────────────
 function CrudAdversarios({ idTime, show, readOnly }) {
+  const [busca, setBusca] = useState("");
   const _idTimeA = idTime; // recebido por prop (filtrado pelo usuário logado)
   const { data: adversarios, loading, reload } = useQuery(() => 
     _idTimeA ? api.get(`adversario?id_time=eq.${_idTimeA}&select=*,campo:id_campo(nome),cidade(nome,estado)&order=nome.asc`) : Promise.resolve([]),
@@ -6871,6 +7210,8 @@ function CrudAdversarios({ idTime, show, readOnly }) {
         />
         {!readOnly && <Btn onClick={abrirNovo}>+ Novo Adversário</Btn>}
       </div>
+      <Input placeholder="🔍 Buscar por nome..." value={busca} onChange={e => setBusca(e.target.value)}
+        aria-label="Buscar na lista" style={{ maxWidth:320 }} />
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
         {(adversarios||[]).length === 0 && !loading && (
@@ -6889,7 +7230,7 @@ function CrudAdversarios({ idTime, show, readOnly }) {
                   <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
           </tr></thead>
           <tbody>
-            {(sortData(adversarios, _sk, _asc)||[]).map((a,i) => (
+            {(sortData((adversarios||[]).filter(a => !busca.trim() || _semAcento(a.nome).includes(_semAcento(busca))), _sk, _asc)||[]).map((a,i) => (
               <tr key={a.id_adversario} style={{ background: i%2===0?C.surface:C.bg }}>
                 <td style={{ padding:"11px 14px", fontWeight:700 }}>{a.nome}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{a.campo?.nome || "—"}</td>
@@ -6933,6 +7274,7 @@ function CrudAdversarios({ idTime, show, readOnly }) {
 
 // ── CRUD CAMPOS ───────────────────────────────────────────────
 function CrudCampos({ idTime, show, readOnly }) {
+  const [busca, setBusca] = useState("");
   const { data: campos, loading, reload } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=*,cidade(nome,estado)&order=nome.asc`) : Promise.resolve([]), [idTime]);
   const [ufCampo, setUfCampo] = useState("RS");
   const { data: cidades } = useQuery(() => ufCampo ? api.get(`cidade?estado=eq.${ufCampo}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufCampo]);
@@ -7032,6 +7374,8 @@ function CrudCampos({ idTime, show, readOnly }) {
         />
         {!readOnly && <Btn onClick={abrirNovo}>+ Novo Campo</Btn>}
       </div>
+      <Input placeholder="🔍 Buscar por nome..." value={busca} onChange={e => setBusca(e.target.value)}
+        aria-label="Buscar na lista" style={{ maxWidth:320 }} />
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
         {(campos||[]).length === 0 && !loading && (
@@ -7048,7 +7392,7 @@ function CrudCampos({ idTime, show, readOnly }) {
                   <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
           </tr></thead>
           <tbody>
-            {(sortData(campos, _sk, _asc)||[]).map((c,i) => (
+            {(sortData((campos||[]).filter(c => !busca.trim() || _semAcento(c.nome).includes(_semAcento(busca)) || _semAcento(c.cidade?.nome).includes(_semAcento(busca))), _sk, _asc)||[]).map((c,i) => (
               <tr key={c.id_campo} style={{ background: i%2===0?C.surface:C.bg }}>
                 <td style={{ padding:"11px 14px", fontWeight:700 }}>{c.nome}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{c.endereco || "—"}</td>
@@ -7852,14 +8196,15 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
               <CompartilharPresenca tipo="encontro" idRef={idEncontro} idTime={idTime} titulo="" data={cabecalho.data ? `${cabecalho.data}T${cabecalho.hora || "12:00"}` : null} linkLocal={cabecalho.link_local} time={_timeEnc?.[0]} show={show} />
             </div>
           )}
+          {/* Ordem do ritual da pelada: 1) quem veio (presença) → 2) sortear os times → 3) lançar os jogos */}
+          <PresencaEncontro idEncontro={idEncontro} parts={parts||[]} jogadores={jogadores||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadParts} show={show} readOnly={readOnly}
+            totais={{ totalPlacares, totalGolsJog, totalAssist, totalGolsContra, somaConfere, assistExcede }} statusAtual={encontro?.status} />
           {!readOnly && idEncontro && (timesInternos||[]).length >= 2 && (
             <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
               <SorteioTimes idEncontro={idEncontro} idTime={idTime} timesInternos={timesInternos||[]} jogadores={jogadores||[]} posicoes={posicoesEnc||[]} parts={parts||[]} reloadParts={reloadParts} encontro={encontro} reloadEncontro={reloadParts} show={show} readOnly={readOnly} />
             </div>
           )}
           <JogosEncontro idEncontro={idEncontro} jogos={jogos||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadJogos} show={show} readOnly={readOnly} totalPlacares={totalPlacares} />
-          <PresencaEncontro idEncontro={idEncontro} parts={parts||[]} jogadores={jogadores||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadParts} show={show} readOnly={readOnly}
-            totais={{ totalPlacares, totalGolsJog, totalAssist, totalGolsContra, somaConfere, assistExcede }} statusAtual={encontro?.status} />
         </>
       )}
     </div>
@@ -7868,6 +8213,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
 
 // Jogos do rodízio (placar entre times internos)
 function JogosEncontro({ idEncontro, jogos, timesInternos, mapaTI, reload, show, readOnly, totalPlacares }) {
+  const { confirmar, dialogo } = useConfirm();
   const [form, setForm] = useState({ a:"", b:"", pa:"0", pb:"0" });
   const [saving, setSaving] = useState(false);
   const [loadingImport, setLoadingImport] = useState(null);
@@ -7925,13 +8271,14 @@ function JogosEncontro({ idEncontro, jogos, timesInternos, mapaTI, reload, show,
     } catch (e) { show(e.message, "error"); } finally { setSaving(false); }
   }
   async function removerJogo(id) {
-    if (!confirm("Remover este jogo?")) return;
+    if (!(await confirmar("Remover este jogo?", { perigoso:true, textoOk:"Remover" }))) return;
     try { await api.delete(`encontro_jogo?id_encontro_jogo=eq.${id}`); show("Jogo removido."); reload(); }
     catch (e) { show(e.message, "error"); }
   }
 
   return (
     <Card>
+      {dialogo}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:14 }}>
         <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>Jogos do dia (rodízio)</div>
         {!readOnly && (
@@ -7994,6 +8341,7 @@ function JogosEncontro({ idEncontro, jogos, timesInternos, mapaTI, reload, show,
 
 // Presença + estatísticas agregadas do jogador no dia
 function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI, reload, show, readOnly, totais, statusAtual }) {
+  const { confirmar, dialogo } = useConfirm();
   const [addJog, setAddJog] = useState("");
   const [saving, setSaving] = useState(false);
   const [loadingImport, setLoadingImport] = useState(null);
@@ -8086,7 +8434,7 @@ function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI,
     catch (e) { show(e.message, "error"); }
   }
   async function removerPresenca(id) {
-    if (!confirm("Remover este jogador do encontro?")) return;
+    if (!(await confirmar("Remover este jogador do encontro?", { perigoso:true, textoOk:"Remover" }))) return;
     try { await api.delete(`encontro_participacao?id_encontro_part=eq.${id}`); show("Removido."); reload(); }
     catch (e) { show(e.message, "error"); }
   }
@@ -8105,6 +8453,7 @@ function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI,
 
   return (
     <Card>
+      {dialogo}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:14 }}>
         <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>Presença e estatísticas do dia</div>
         {!readOnly && (
@@ -8196,6 +8545,7 @@ function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI,
 
 // ── CRUD POSIÇÕES ─────────────────────────────────────────────
 function CrudPosicoes({ idTime, show, readOnly }) {
+  const { confirmar, dialogo } = useConfirm();
   // Tela de CONSULTA: o admin apenas visualiza as posições do tipo do seu time.
   // A gestão de posições é feita pelo super admin (no cadastro do Tipo de Time).
   const { data: _timeInfoP } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_tipo_time,id_subtipo&limit=1`) : Promise.resolve([]), [idTime]);
@@ -8247,7 +8597,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
   }
 
   async function inativar(p) {
-    if (!confirm(`Inativar a posição "${p.nome}"?`)) return;
+    if (!(await confirmar(`Inativar a posição "${p.nome}"?`, { perigoso:true, textoOk:"Inativar" }))) return;
     try { await api.patch(`posicao?id_posicao=eq.${p.id_posicao}`, { data_fim: new Date().toISOString().split("T")[0] }); show("Inativado."); reload(); }
     catch (e) { show(e.message, "error"); }
   }
@@ -8259,6 +8609,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {dialogo}
       <div style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", fontSize:13, color:C.dim }}>
         ℹ️ As posições são definidas pelo tipo de time{_tipoNomeP ? <> (<b style={{color:C.cream}}>{_tipoNomeP}</b>)</> : ""} e são iguais para todos os times desse tipo. Esta tela é apenas para consulta. Para alterações, fale com o suporte.
       </div>
@@ -8455,7 +8806,15 @@ function CrudTemporadas({ idTime, show, readOnly, ehTurmaFechada }) {
           <tbody>
             {(sortData(temporadas, _sk, _asc)||[]).map((t,i) => (
               <tr key={t.id_temporada} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:700, color:C.gold, whiteSpace:"nowrap" }}>{t.nome}</td>
+                <td style={{ padding:"11px 14px", fontWeight:700, color:C.gold, whiteSpace:"nowrap" }}>
+                  {t.nome}
+                  {(() => { const h = new Date().toISOString().split("T")[0];
+                    const ini = t.data_inicio ? String(t.data_inicio).split("T")[0] : null;
+                    const fim = t.data_fim ? String(t.data_fim).split("T")[0] : null;
+                    return (ini && ini <= h && (!fim || fim >= h))
+                      ? <span style={{ marginLeft:8, fontSize:10, background:C.gold+"22", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:4, padding:"1px 6px", fontWeight:700, verticalAlign:"middle" }}>ATUAL</span>
+                      : null; })()}
+                </td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.time?.nome || "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_inicio ? new Date(t.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
                 <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_fim ? new Date(t.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
@@ -8486,7 +8845,7 @@ function CrudTemporadas({ idTime, show, readOnly, ehTurmaFechada }) {
         </table></div>
       </Card>
       {modal && (
-        <Modal title={modal === "novo" ? "Nova Temporada" : "Editar Temporada"} onClose={() => setModal(null)}>
+        <Modal title={modal === "novo" ? "Nova Temporada" : "Editar Temporada"} onClose={() => setModal(null)} size="lg">
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} placeholder="ex: Temporada 2026" />
@@ -8606,7 +8965,8 @@ function ConfigTime({ idTime, show, readOnly }) {
   const [subtipoOriginal, setSubtipoOriginal] = useState("");
   const [confirmaTroca, setConfirmaTroca] = useState(null); // {qtd, motivo:'tipo'|'subtipo'} quando precisa confirmar
   const [textoConfirma, setTextoConfirma] = useState("");
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [dirty, setDirty] = useState(false); // há alterações não salvas?
+  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setDirty(true); };
   // É turma fechada? (pelo tipo selecionado no form)
   const tipoSelecionado = (tipos||[]).find(t => String(t.id_tipo_time) === String(form?.id_tipo_time));
   const ehTurmaFechada = !!tipoSelecionado?.eh_turma_fechada;
@@ -8630,6 +8990,7 @@ function ConfigTime({ idTime, show, readOnly }) {
   function aplicarTipo(id_tipo) {
     const tipo = (tipos||[]).find(t => String(t.id_tipo_time) === String(id_tipo));
     if (!tipo) return;
+    setDirty(true);
     setForm(f => ({ ...f,
       id_tipo_time: String(id_tipo),
       numero_titulares: tipo.numero_titulares,
@@ -8711,6 +9072,7 @@ function ConfigTime({ idTime, show, readOnly }) {
         }
       } else {
         show("Configurações salvas!");
+        setDirty(false);
       }
       setTipoOriginal(form.id_tipo_time ? String(form.id_tipo_time) : "");
       setSubtipoOriginal(form.id_subtipo ? String(form.id_subtipo) : "");
@@ -8811,17 +9173,21 @@ function ConfigTime({ idTime, show, readOnly }) {
           </Select>
         </div>
 
-        <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginTop:4, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Comissão Atual</div>
-        <div className="cfg-grid-2">
-          <Input label="Técnico"         value={form.tecnico||""}         onChange={e => set("tecnico",          e.target.value)} />
-          <Input label="Presidente"      value={form.presidente||""}      onChange={e => set("presidente",       e.target.value)} />
-          <Input label="Vice-Presidente" value={form.vice_presidente||""} onChange={e => set("vice_presidente",  e.target.value)} />
-          <Input label="Financeiro"      value={form.financeiro||""}      onChange={e => set("financeiro",       e.target.value)} />
-          <Input label="Vice-Financeiro" value={form.vice_financeiro||""} onChange={e => set("vice_financeiro",  e.target.value)} />
-          <Input label="Marca Jogos"     value={form.marca_jogos||""}     onChange={e => set("marca_jogos",      e.target.value)} />
-          <Input label="Resp. Redes"     value={form.resp_redes_sociais||""} onChange={e => set("resp_redes_sociais", e.target.value)} />
-          <Input label="Resp. Eventos"   value={form.resp_eventos||""}    onChange={e => set("resp_eventos",     e.target.value)} />
-        </div>
+        <details open={!!(form.tecnico||form.presidente||form.vice_presidente||form.financeiro||form.vice_financeiro||form.marca_jogos||form.resp_redes_sociais||form.resp_eventos)}>
+          <summary style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginTop:4, borderLeft:`3px solid ${C.gold}`, paddingLeft:10, cursor:"pointer", listStyle:"none" }}>
+            Comissão Atual <span style={{ color:C.dim, fontWeight:400, textTransform:"none" }}>(toque para expandir)</span>
+          </summary>
+          <div className="cfg-grid-2" style={{ marginTop:14 }}>
+            <Input label="Técnico"         value={form.tecnico||""}         onChange={e => set("tecnico",          e.target.value)} />
+            <Input label="Presidente"      value={form.presidente||""}      onChange={e => set("presidente",       e.target.value)} />
+            <Input label="Vice-Presidente" value={form.vice_presidente||""} onChange={e => set("vice_presidente",  e.target.value)} />
+            <Input label="Financeiro"      value={form.financeiro||""}      onChange={e => set("financeiro",       e.target.value)} />
+            <Input label="Vice-Financeiro" value={form.vice_financeiro||""} onChange={e => set("vice_financeiro",  e.target.value)} />
+            <Input label="Marca Jogos"     value={form.marca_jogos||""}     onChange={e => set("marca_jogos",      e.target.value)} />
+            <Input label="Resp. Redes"     value={form.resp_redes_sociais||""} onChange={e => set("resp_redes_sociais", e.target.value)} />
+            <Input label="Resp. Eventos"   value={form.resp_eventos||""}    onChange={e => set("resp_eventos",     e.target.value)} />
+          </div>
+        </details>
         <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
         {/* Toggle público/privado */}
         <div style={{ background: form.publico !== false ? C.win+"11" : C.loss+"11", border:`1px solid ${form.publico !== false ? C.win+"44" : C.loss+"44"}`, borderRadius:10, padding:"16px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
@@ -8842,9 +9208,20 @@ function ConfigTime({ idTime, show, readOnly }) {
           </button>
         </div>
 
-        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
-          <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar Configurações"}</Btn>
-        </div>
+        {/* Barra de salvar: fica visível (sticky) assim que houver alteração — sem precisar rolar até o fim */}
+        {(dirty || saving) && !readOnly ? (
+          <div style={{ position:"sticky", bottom:0, background:"#091F15ee", backdropFilter:"blur(4px)",
+            borderTop:`1px solid ${C.gold}`, borderRadius:"0 0 12px 12px", padding:"12px 16px",
+            display:"flex", alignItems:"center", justifyContent:"flex-end", gap:10, zIndex:50,
+            margin:"8px -24px -24px -24px" }}>
+            <span style={{ marginRight:"auto", fontSize:12, color:C.gold, fontWeight:700 }}>● Alterações não salvas</span>
+            <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar Configurações"}</Btn>
+          </div>
+        ) : (
+          <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
+            <Btn onClick={salvar} disabled={saving || readOnly}>{readOnly ? "Somente Leitura" : "Salvar Configurações"}</Btn>
+          </div>
+        )}
       </div>
 
       {confirmaTroca && (
