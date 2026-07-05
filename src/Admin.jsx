@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.3";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.6";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -5976,6 +5976,22 @@ function CrudEventos({ idTime, show, readOnly }) {
     () => idTime ? api.get(`movimento_caixa?id_time=eq.${idTime}&origem=in.(evento,venda_evento)&select=*,tipo_movimento(descricao)`) : Promise.resolve([]),
     [idTime]
   );
+  // Confirmações de presença por evento (contador nos cards). tipo="evento", id_ref=id_evento.
+  const { data: _linksEvento } = useQuery(() => idTime ? api.get(`link_confirmacao?tipo=eq.evento&id_time=eq.${idTime}&select=id_link,id_ref`) : Promise.resolve([]), [idTime]);
+  const _idLinksEv = (_linksEvento||[]).map(l=>l.id_link).join(",");
+  const { data: _confsEvento } = useQuery(() => _idLinksEv ? api.get(`confirmacao_presenca?id_link=in.(${_idLinksEv})&select=id_link,status`) : Promise.resolve([]), [_idLinksEv]);
+  const confirmadosPorEvento = useMemo(() => {
+    const linkToEv = {}; (_linksEvento||[]).forEach(l => { linkToEv[l.id_link] = l.id_ref; });
+    const m = {};
+    (_confsEvento||[]).forEach(c => {
+      const ev = linkToEv[c.id_link]; if (ev == null) return;
+      if (!m[ev]) m[ev] = { vou:0, talvez:0, nao:0 };
+      if (c.status === "vou") m[ev].vou++;
+      else if (c.status === "talvez") m[ev].talvez++;
+      else if (c.status === "nao_vou") m[ev].nao++;
+    });
+    return m;
+  }, [_linksEvento, _confsEvento]);
 
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
@@ -5986,6 +6002,10 @@ function CrudEventos({ idTime, show, readOnly }) {
   const [processando, setProcessando] = useState(null); // texto do overlay enquanto processa em lote (ex: encerrar com vendedores)
   const [linkEvento, setLinkEvento] = useState(null); // evento cujo link de confirmação está aberto
   const [formMov, setFormMov] = useState({});
+  // Filtros inteligentes
+  const [filtroTipo, setFiltroTipo] = useState("todos");     // todos | financeiro | presenca
+  const [filtroStatus, setFiltroStatus] = useState("todos"); // todos | andamento | encerrado
+  const [buscaEv, setBuscaEv] = useState("");
 
   function abrirNovo() {
     setForm({ nome:"", data_evento:new Date().toISOString().split("T")[0], link_local:"", meta:"", modo:"detalhado", resultado_direto:"", id_temporada: temporadas?.[0]?.id_temporada || "", observacoes:"", eh_financeiro:true, controla_venda:false, valor_unitario:"", meta_padrao:"" });
@@ -6163,71 +6183,183 @@ function CrudEventos({ idTime, show, readOnly }) {
           texto="Crie eventos de arrecadação (churrasco, rifa, festa) com meta e controle financeiro, ou eventos só de presença (como uma janta) para organizar quem vai — sem mexer em dinheiro."
           acaoLabel={!readOnly ? "+ Criar primeiro evento" : null} onAcao={!readOnly ? abrirNovo : null}/>
       )}
-      {(eventos||[]).map(ev => {
-        const ehFin = ev.eh_financeiro !== false; // eventos antigos (sem o campo) = financeiros
-        const resultado = ev.status==="encerrado" ? Number(ev.resultado_final||0)
-          : ev.modo==="direto" ? Number(ev.resultado_direto||0) : resultadoCalculado(ev.id_evento);
-        const meta = Number(ev.meta||0);
-        const atingiu = resultado >= meta;
-        const movs = (movsEvento||[]).filter(m=>m.id_evento===ev.id_evento && m.origem==="evento"); // só avulsos (lista/exclusão)
-        return (
-          <Card key={ev.id_evento} style={{ padding:20 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
-              <div>
-                <div style={{ fontSize:16, fontWeight:800, color:C.cream }}>
-                  🎉 {ev.nome}
-                  {!ehFin && <span style={{ fontSize:11, color:C.gold, marginLeft:8, fontWeight:600 }}>· só presença</span>}
-                  {ev.status==="encerrado" && <span style={{ fontSize:11, color:C.dim, marginLeft:8 }}>(encerrado)</span>}
-                </div>
-                <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>
-                  {ev.data_evento ? new Date(ev.data_evento+"T12:00:00").toLocaleDateString("pt-BR") : "Sem data"}
-                  {ev.temporada?.nome && ` · ${ev.temporada.nome}`}
-                  {ehFin && ` · Modo ${ev.modo==="direto"?"resultado direto":"detalhado"}`}
-                </div>
-              </div>
-              {ehFin && (
-                <div style={{ textAlign:"right" }}>
-                  <div style={{ fontSize:20, fontWeight:800, color: resultado>=0?C.win:C.loss }}>{fmtMoeda(resultado)}</div>
-                  <div style={{ fontSize:11, color:C.dim }}>Meta: {fmtMoeda(meta)}</div>
-                  {meta>0 && <div style={{ fontSize:11, fontWeight:700, color: atingiu?C.win:C.loss }}>{atingiu?"✅ Meta atingida":"❌ Abaixo da meta"}</div>}
-                </div>
-              )}
-            </div>
 
-            {/* Movimentos do evento (modo detalhado) — só financeiro */}
-            {ehFin && ev.modo==="detalhado" && movs.length>0 && (
-              <div style={{ marginTop:14, background:C.surf2, borderRadius:8, padding:"10px 14px" }}>
-                {movs.map(m => (
-                  <div key={m.id_movimento} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 0", fontSize:12 }}>
-                    <span style={{ color:C.dim }}>{m.tipo_movimento?.descricao}{m.observacao?` — ${m.observacao}`:""}</span>
-                    <span style={{ display:"flex", gap:10, alignItems:"center" }}>
-                      <span style={{ color: m.natureza==="receita"?C.win:C.loss, fontWeight:700 }}>{m.natureza==="receita"?"+":"−"} {fmtMoeda(m.valor)}</span>
-                      {!readOnly && ev.status!=="encerrado" && <button onClick={()=>removerMov(m)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:14 }}>✕</button>}
+      {/* ── Filtros inteligentes ── */}
+      {(eventos||[]).length > 0 && (() => {
+        const cnt = {
+          todos: (eventos||[]).length,
+          financeiro: (eventos||[]).filter(e=>e.eh_financeiro!==false).length,
+          presenca: (eventos||[]).filter(e=>e.eh_financeiro===false).length,
+          andamento: (eventos||[]).filter(e=>e.status!=="encerrado").length,
+          encerrado: (eventos||[]).filter(e=>e.status==="encerrado").length,
+        };
+        const chip = (ativo, label, onClick, key) => (
+          <button key={key} onClick={onClick} style={{ background: ativo?C.gold:C.surf2, color: ativo?"#0B3D2E":C.dim, border:`1px solid ${ativo?C.gold:C.border}`, borderRadius:7, padding:"6px 12px", fontFamily:"inherit", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{label}</button>
+        );
+        return (
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <Input placeholder="🔍 Buscar evento pelo nome..." value={buscaEv} onChange={e=>setBuscaEv(e.target.value)} aria-label="Buscar evento" style={{ maxWidth:320 }} />
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+              <span style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, marginRight:2 }}>Tipo:</span>
+              {chip(filtroTipo==="todos", `Todos (${cnt.todos})`, ()=>setFiltroTipo("todos"), "t-todos")}
+              {chip(filtroTipo==="financeiro", `💰 Arrecadação (${cnt.financeiro})`, ()=>setFiltroTipo("financeiro"), "t-fin")}
+              {chip(filtroTipo==="presenca", `📋 Presença (${cnt.presenca})`, ()=>setFiltroTipo("presenca"), "t-pres")}
+            </div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+              <span style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, marginRight:2 }}>Situação:</span>
+              {chip(filtroStatus==="todos", "Todas", ()=>setFiltroStatus("todos"), "s-todos")}
+              {chip(filtroStatus==="andamento", `Em andamento (${cnt.andamento})`, ()=>setFiltroStatus("andamento"), "s-and")}
+              {chip(filtroStatus==="encerrado", `Encerrados (${cnt.encerrado})`, ()=>setFiltroStatus("encerrado"), "s-enc")}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Lista filtrada + agrupada ── */}
+      {(eventos||[]).length > 0 && (() => {
+        const _norm = (s) => _semAcento(String(s||""));
+        const filtrados = (eventos||[]).filter(ev => {
+          const ehFin = ev.eh_financeiro !== false;
+          if (filtroTipo==="financeiro" && !ehFin) return false;
+          if (filtroTipo==="presenca" && ehFin) return false;
+          const encerrado = ev.status==="encerrado";
+          if (filtroStatus==="andamento" && encerrado) return false;
+          if (filtroStatus==="encerrado" && !encerrado) return false;
+          if (buscaEv.trim() && !_norm(ev.nome).includes(_norm(buscaEv))) return false;
+          return true;
+        });
+        if (filtrados.length === 0) {
+          return <div style={{ textAlign:"center", color:C.dim, fontSize:14, padding:"30px 16px", background:C.surface, border:`1px solid ${C.border}`, borderRadius:12 }}>Nenhum evento com esse filtro.</div>;
+        }
+        const emAndamento = filtrados.filter(ev => ev.status!=="encerrado");
+        const encerrados  = filtrados.filter(ev => ev.status==="encerrado");
+        const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+        const renderEventoCard = (ev) => {
+          const ehFin = ev.eh_financeiro !== false; // eventos antigos (sem o campo) = financeiros
+          const encerrado = ev.status==="encerrado";
+          const resultado = encerrado ? Number(ev.resultado_final||0)
+            : ev.modo==="direto" ? Number(ev.resultado_direto||0) : resultadoCalculado(ev.id_evento);
+          const meta = Number(ev.meta||0);
+          const atingiu = resultado >= meta;
+          const pct = meta>0 ? Math.round((resultado/meta)*100) : null;
+          const movs = (movsEvento||[]).filter(m=>m.id_evento===ev.id_evento && m.origem==="evento"); // só avulsos
+          const conf = confirmadosPorEvento[ev.id_evento] || { vou:0, talvez:0, nao:0 };
+          const d = ev.data_evento ? new Date(ev.data_evento+"T12:00:00") : null;
+
+          // badge de tipo/situação
+          const badge = encerrado ? { txt:"🏁 Encerrado", bg:C.surf2, cor:C.dim, bd:C.border }
+                       : ehFin    ? { txt:"💰 Arrecadação", bg:C.gold+"22", cor:C.gold, bd:C.gold }
+                                  : { txt:"📋 Presença", bg:C.surf2, cor:C.dim, bd:C.border };
+
+          return (
+            <Card key={ev.id_evento} style={{ padding:14, display:"flex", gap:13, opacity: encerrado ? 0.72 : 1 }}>
+              {/* Tile de data */}
+              <div style={{ width:52, flexShrink:0, borderRadius:10, overflow:"hidden", border:`1px solid ${C.border}`, textAlign:"center", alignSelf:"flex-start" }}>
+                <div style={{ background:C.gold, color:"#0B3D2E", fontSize:10, fontWeight:800, textTransform:"uppercase", padding:"2px 0", letterSpacing:"0.05em" }}>{d ? MESES[d.getMonth()] : "—"}</div>
+                <div style={{ background:C.surf2, color:C.cream, fontSize:22, fontWeight:800, padding:"5px 0 6px" }}>{d ? String(d.getDate()).padStart(2,"0") : "—"}</div>
+              </div>
+
+              <div style={{ flex:1, minWidth:0 }}>
+                {/* Nome + badge */}
+                <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                  <span style={{ fontSize:16, fontWeight:800, color:C.cream }}>{ev.nome}</span>
+                  <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:badge.bg, color:badge.cor, border:`1px solid ${badge.bd}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{badge.txt}</span>
+                </div>
+                <div style={{ fontSize:12, color:C.dim, marginTop:3 }}>
+                  {ev.temporada?.nome || "Sem temporada"}
+                  {ehFin && ` · ${ev.modo==="direto"?"resultado direto":"detalhado"}`}
+                </div>
+
+                {/* Financeiro: barra de progresso da meta */}
+                {ehFin && meta>0 && (
+                  <div style={{ marginTop:11 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:5 }}>
+                      <span style={{ fontSize:17, fontWeight:800, color:C.cream }}>{fmtMoeda(resultado)} <span style={{ fontSize:12, fontWeight:600, color:C.dim }}>/ {fmtMoeda(meta)}</span></span>
+                      <span style={{ fontSize:12, fontWeight:800, color: atingiu?C.win:C.gold }}>{pct}%</span>
+                    </div>
+                    <div style={{ height:9, background:C.surf2, borderRadius:6, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${Math.min(Math.max(pct,0),100)}%`, borderRadius:6, background: atingiu ? "linear-gradient(90deg,#4CAF50,#6FCF73)" : "linear-gradient(90deg,#E8A020,#f0b84a)" }}/>
+                    </div>
+                    <div style={{ fontSize:11, fontWeight:700, marginTop:6, color: atingiu?C.win:C.dim }}>
+                      {atingiu ? (resultado>meta ? `✅ Meta superada em ${fmtMoeda(resultado-meta)}` : "✅ Meta atingida") : `Faltam ${fmtMoeda(meta-resultado)} pra bater a meta`}
+                    </div>
+                  </div>
+                )}
+                {/* Financeiro sem meta definida: mostra só o resultado */}
+                {ehFin && meta<=0 && (
+                  <div style={{ fontSize:18, fontWeight:800, color: resultado>=0?C.win:C.loss, marginTop:8 }}>{fmtMoeda(resultado)} <span style={{ fontSize:11, color:C.dim, fontWeight:600 }}>· sem meta</span></div>
+                )}
+
+                {/* Presença: contador de confirmados */}
+                {!ehFin && (
+                  <div style={{ marginTop:10, fontSize:14, color:C.cream, fontWeight:700, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+                    {(conf.vou+conf.talvez+conf.nao) === 0
+                      ? <span style={{ color:C.dim, fontWeight:400, fontSize:13 }}>Sem confirmações ainda</span>
+                      : <>
+                          <span>✅ <b style={{ color:C.win }}>{conf.vou}</b> confirmados</span>
+                          {conf.talvez>0 && <span style={{ color:C.dim, fontWeight:400, fontSize:13 }}>🤔 {conf.talvez} talvez</span>}
+                          {conf.nao>0 && <span style={{ color:C.dim, fontWeight:400, fontSize:13 }}>❌ {conf.nao} não</span>}
+                        </>}
+                  </div>
+                )}
+
+                {/* Movimentos do evento (modo detalhado) — só financeiro */}
+                {ehFin && ev.modo==="detalhado" && movs.length>0 && (
+                  <div style={{ marginTop:12, background:C.surf2, borderRadius:8, padding:"10px 14px" }}>
+                    {movs.map(m => (
+                      <div key={m.id_movimento} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 0", fontSize:12 }}>
+                        <span style={{ color:C.dim }}>{m.tipo_movimento?.descricao}{m.observacao?` — ${m.observacao}`:""}</span>
+                        <span style={{ display:"flex", gap:10, alignItems:"center" }}>
+                          <span style={{ color: m.natureza==="receita"?C.win:C.loss, fontWeight:700 }}>{m.natureza==="receita"?"+":"−"} {fmtMoeda(m.valor)}</span>
+                          {!readOnly && !encerrado && <button onClick={()=>removerMov(m)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:14 }}>✕</button>}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Ações */}
+                {!readOnly && (
+                  <div style={{ display:"flex", gap:8, marginTop:13, flexWrap:"wrap", alignItems:"center" }}>
+                    {ehFin && !encerrado && ev.modo==="detalhado" && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>abrirLancar(ev)}>+ Lançar</Btn>}
+                    {ehFin && !encerrado && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>setVendedoresDe(ev)}>🎟️ Vendedores</Btn>}
+                    {ehFin && encerrado && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>setRelatorioDe(ev)}>📊 Relatório</Btn>}
+                    {!ehFin && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>setLinkEvento(ev)}>📲 Link de confirmação</Btn>}
+                    <span style={{ marginLeft:"auto" }}>
+                      <MenuAcoes acoes={[
+                        !encerrado && { label:"✏️ Editar evento", onClick:()=>abrirEditar(ev) },
+                        ehFin && { label:"📲 Link de confirmação", onClick:()=>setLinkEvento(ev) },
+                        ehFin && !encerrado && ev.controla_venda && { label:"📊 Relatório de vendas", onClick:()=>setRelatorioDe(ev) },
+                        ehFin && !encerrado && { label:"🏁 Encerrar evento", onClick:()=>encerrar(ev) },
+                        ehFin && encerrado && { label:"🔓 Reabrir evento", onClick:()=>reabrir(ev) },
+                        (!movs.length && !(movsEvento||[]).some(m=>m.id_evento===ev.id_evento)) && { label:"🗑️ Excluir evento", perigoso:true, onClick:()=>excluir(ev) },
+                      ]}/>
                     </span>
                   </div>
-                ))}
+                )}
               </div>
-            )}
+            </Card>
+          );
+        };
 
-            {/* Ações: as do fluxo principal do estado atual ficam visíveis; o resto vai para o menu "⋯" */}
-            {!readOnly && (
-              <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap", alignItems:"center" }}>
-                {ehFin && ev.status!=="encerrado" && ev.modo==="detalhado" && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>abrirLancar(ev)}>+ Lançar receita/despesa</Btn>}
-                {ehFin && ev.status!=="encerrado" && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>setVendedoresDe(ev)}>🎟️ Vendedores</Btn>}
-                {ehFin && ev.status==="encerrado" && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>setRelatorioDe(ev)}>📊 Relatório</Btn>}
-                <MenuAcoes acoes={[
-                  ev.status!=="encerrado" && { label:"✏️ Editar evento", onClick:()=>abrirEditar(ev) },
-                  { label:"📲 Link de confirmação", onClick:()=>setLinkEvento(ev) },
-                  ehFin && ev.status!=="encerrado" && ev.controla_venda && { label:"📊 Relatório de vendas", onClick:()=>setRelatorioDe(ev) },
-                  ehFin && ev.status!=="encerrado" && { label:"🏁 Encerrar evento", onClick:()=>encerrar(ev) },
-                  ehFin && ev.status==="encerrado" && { label:"🔓 Reabrir evento", onClick:()=>reabrir(ev) },
-                  (!movs.length && !(movsEvento||[]).some(m=>m.id_evento===ev.id_evento)) && { label:"🗑️ Excluir evento", perigoso:true, onClick:()=>excluir(ev) },
-                ]}/>
+        return (
+          <>
+            {emAndamento.length > 0 && (
+              <div>
+                <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Em andamento ({emAndamento.length})</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:12 }}>{emAndamento.map(renderEventoCard)}</div>
               </div>
             )}
-          </Card>
+            {encerrados.length > 0 && (
+              <div>
+                <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Encerrados ({encerrados.length})</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:12 }}>{encerrados.map(renderEventoCard)}</div>
+              </div>
+            )}
+          </>
         );
-      })}
+      })()}
 
       {/* Modal criar/editar evento */}
       {modal && (
@@ -6858,56 +6990,61 @@ export default function AdminAppCompleto() {
 
 // ── CRUD JOGADORES ────────────────────────────────────────────
 
-function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, onReativar, readOnly, mapaPosJog }) {
+// cor determinística p/ avatar sem foto (a partir do nome)
+function _corAvatar(txt) {
+  const cores = ["#c0392b","#2c3e50","#27ae60","#8e44ad","#d35400","#16a085","#2980b9","#b03a5b"];
+  let h = 0; for (const c of String(txt||"?")) h = (h*31 + c.charCodeAt(0)) >>> 0;
+  return cores[h % cores.length];
+}
+function _iniciais(nome) {
+  const p = String(nome||"?").trim().split(/\s+/);
+  return ((p[0]?.[0]||"") + (p[1]?.[0]||"")).toUpperCase() || "?";
+}
+function TabelaJogadores({ grupo, lista, onEditar, onInativar, onReativar, readOnly, mapaPosJog }) {
   if (!lista.length) return null;
-  const S = k => <ThSortable colKey={k} sortKey={sk} asc={asc} onSort={onSort}/>;
+  const inativoGrupo = grupo === "Inativos";
   return (
     <div>
       <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>{grupo} ({lista.length})</div>
-      <Card style={{ padding:0, overflow:"hidden" }}>
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-          <thead><tr style={{ background:C.surf2 }}>
-            <ThSortable colKey="camisa"      sortKey={sk} asc={asc} onSort={onSort}>#</ThSortable>
-            <ThSortable colKey="nome"        sortKey={sk} asc={asc} onSort={onSort}>Nome</ThSortable>
-            <ThSortable colKey="apelido"     sortKey={sk} asc={asc} onSort={onSort}>Apelido</ThSortable>
-            <ThSortable colKey="data_nascimento" sortKey={sk} asc={asc} onSort={onSort}>Nascimento</ThSortable>
-            <ThSortable colKey="idade_sort" sortKey={sk} asc={asc} onSort={onSort}>Idade</ThSortable>
-            <ThSortable colKey="posicao.nome" sortKey={sk} asc={asc} onSort={onSort}>Posição</ThSortable>
-            <ThSortable colKey="forca" sortKey={sk} asc={asc} onSort={onSort}>Força</ThSortable>
-            <ThSortable colKey="telefone"    sortKey={sk} asc={asc} onSort={onSort}>Telefone</ThSortable>
-            <ThSortable colKey="email"       sortKey={sk} asc={asc} onSort={onSort}>E-mail</ThSortable>
-            <ThSortable colKey="data_inicio" sortKey={sk} asc={asc} onSort={onSort}>Início</ThSortable>
-            <ThSortable colKey="data_fim"    sortKey={sk} asc={asc} onSort={onSort}>Saída</ThSortable>
-            <ThSortable sortKey={sk} asc={asc} onSort={()=>{}}>Obs.</ThSortable>
-            <ThSortable sortKey={sk} asc={asc} onSort={()=>{}}></ThSortable>
-          </tr></thead>
-          <tbody>
-            {lista.map((j,i) => (
-              <tr key={j.id_jogador} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:800, color:C.gold, whiteSpace:"nowrap" }}>{j.camisa}</td>
-                <td style={{ padding:"11px 14px", fontWeight:700, whiteSpace:"nowrap" }}>{j.nome}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.apelido || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_nascimento ? new Date(j.data_nascimento + "T00:00:00").toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric" }) : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{calcularIdade(j.data_nascimento) != null ? `${calcularIdade(j.data_nascimento)} anos` : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.posicao?.nome ? (j.posicao.id_posicao_pai && mapaPosJog[j.posicao.id_posicao_pai] ? `${mapaPosJog[j.posicao.id_posicao_pai]} › ${j.posicao.nome}` : j.posicao.nome) : "—"}</td>
-                <td style={{ padding:"11px 14px", fontSize:12, whiteSpace:"nowrap" }} title={NIVEIS_FORCA[j.forca||2]?.nome}>{NIVEIS_FORCA[j.forca||2]?.estrelas || "⭐⭐"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.telefone || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.email || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_inicio ? new Date(j.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_fim ? new Date(j.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, maxWidth:150, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={j.observacoes||""}>{j.observacoes || "—"}</td>
-                <td style={{ padding:"11px 14px", whiteSpace:"nowrap" }}>
-                  <div style={{ display:"flex", gap:6 }}>
-                    <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onEditar(j)}>Editar</Btn>
-                    {!j.data_fim && !readOnly && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onInativar(j)}>Inativar</Btn>}
-                    {j.data_fim && !readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px", color:C.win, borderColor:C.win }} onClick={() => onReativar(j)}>Reativar</Btn>}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
-      </Card>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {lista.map((j) => {
+          const nomeExib = j.apelido || j.nome;
+          const posTxt = j.posicao?.nome ? (j.posicao.id_posicao_pai && mapaPosJog[j.posicao.id_posicao_pai] ? `${mapaPosJog[j.posicao.id_posicao_pai]} › ${j.posicao.nome}` : j.posicao.nome) : null;
+          const idade = calcularIdade(j.data_nascimento);
+          return (
+            <Card key={j.id_jogador} style={{ padding:12, display:"flex", alignItems:"center", gap:13, opacity: inativoGrupo ? 0.65 : 1 }}>
+              {/* Avatar: foto real ou iniciais + camisa como selo */}
+              <div style={{ position:"relative", flexShrink:0 }}>
+                {j.foto_url
+                  ? <img src={j.foto_url} alt={nomeExib} style={{ width:50, height:50, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.border}` }}/>
+                  : <div style={{ width:50, height:50, borderRadius:"50%", background:_corAvatar(j.nome), display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:800, fontSize:17 }}>{_iniciais(j.nome)}</div>}
+                {j.camisa != null && j.camisa !== "" && (
+                  <span style={{ position:"absolute", bottom:-3, right:-3, background:C.gold, color:"#0B3D2E", fontSize:11, fontWeight:800, minWidth:22, height:22, borderRadius:11, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${C.surface}`, padding:"0 4px" }}>{j.camisa}</span>)}
+              </div>
+              {/* Identidade */}
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                  <span style={{ fontWeight:800, fontSize:16, color:C.cream }}>{nomeExib}</span>
+                  {posTxt && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.gold, border:`1px solid ${C.border}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{posTxt}</span>}
+                </div>
+                <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginTop:4, alignItems:"center", fontSize:12, color:C.dim }}>
+                  <span title={NIVEIS_FORCA[j.forca||2]?.nome} style={{ color:C.gold, letterSpacing:"1px" }}>{NIVEIS_FORCA[j.forca||2]?.estrelas || "⭐⭐"}</span>
+                  {j.apelido && j.nome && j.apelido !== j.nome && <span>{j.nome}</span>}
+                  {idade != null && <span>{idade} anos</span>}
+                  {j.telefone && <span>{j.telefone}</span>}
+                  {inativoGrupo && j.data_fim && <span>saiu {new Date(j.data_fim).toLocaleDateString("pt-BR")}</span>}
+                </div>
+              </div>
+              {/* Ações */}
+              <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
+                <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => onEditar(j)}>Editar</Btn>
+                {!j.data_fim && !readOnly && <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => onInativar(j)}>Inativar</Btn>}
+                {j.data_fim && !readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", color:C.win, borderColor:C.win }} onClick={() => onReativar(j)}>Reativar</Btn>}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -7053,19 +7190,28 @@ function CrudJogadores({ idTime, show, readOnly }) {
       <Input placeholder="🔍 Buscar por nome..." value={busca} onChange={e => setBusca(e.target.value)}
         aria-label="Buscar na lista" style={{ maxWidth:320 }} />
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
+      {(ativos.length > 0 || inativos.length > 0) && (
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          <span style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>Ordenar:</span>
+          {[["camisa","Camisa"],["apelido","Nome"],["idade_sort","Idade"],["forca","Força"]].map(([k,lbl]) => (
+            <button key={k} onClick={()=>{ if(_sk===k)_setAsc(a=>!a); else {_setSk(k); _setAsc(true);} }}
+              style={{ background:_sk===k?C.gold:C.surf2, color:_sk===k?"#0B3D2E":C.dim, border:"none", borderRadius:6, padding:"5px 10px", fontFamily:"inherit", fontSize:11, fontWeight:700, cursor:"pointer" }}>
+              {lbl}{_sk===k ? (_asc?" ↑":" ↓") : ""}
+            </button>
+          ))}
+        </div>
+      )}
       {ativos.length === 0 && inativos.length === 0 && !loading && (
         <EstadoVazio icone="👟" titulo="Nenhum jogador ainda"
           texto="Cadastre os jogadores do seu elenco para montar escalações, registrar gols e acompanhar estatísticas. Você pode adicionar um a um ou importar vários de uma planilha."
           acaoLabel={!readOnly ? "+ Cadastrar primeiro jogador" : null} onAcao={!readOnly ? abrirNovo : null}/>
       )}
       {ativos.length > 0 && (
-        <TabelaJogadores grupo="Ativos" lista={sortData(ativos, _sk, _asc)} sk={_sk} asc={_asc}
-          onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
+        <TabelaJogadores grupo="Ativos" lista={sortData(ativos, _sk, _asc)}
           onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly} mapaPosJog={mapaPosJog}/>
       )}
       {inativos.length > 0 && (
-        <TabelaJogadores grupo="Inativos" lista={sortData(inativos, _sk, _asc)} sk={_sk} asc={_asc}
-          onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
+        <TabelaJogadores grupo="Inativos" lista={sortData(inativos, _sk, _asc)}
           onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly} mapaPosJog={mapaPosJog}/>
       )}
       {modal && (
@@ -7133,7 +7279,7 @@ function CrudAdversarios({ idTime, show, readOnly }) {
     _idTimeA ? api.get(`adversario?id_time=eq.${_idTimeA}&select=*,campo:id_campo(nome),cidade(nome,estado)&order=nome.asc`) : Promise.resolve([]),
     [_idTimeA]
   );
-  const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
+  const [_sk] = useState("nome"); const [_asc] = useState(true);
   const { data: campos }  = useQuery(() => _idTimeA ? api.get(`campo?id_time=eq.${_idTimeA}&select=*&order=nome.asc`) : Promise.resolve([]), [_idTimeA]);
   const [ufAdv, setUfAdv] = useState("RS");
   const { data: cidades } = useQuery(() => ufAdv ? api.get(`cidade?estado=eq.${ufAdv}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufAdv]);
@@ -7220,30 +7366,31 @@ function CrudAdversarios({ idTime, show, readOnly }) {
             texto="Cadastre os times que você costuma enfrentar para registrá-los nas partidas. Você também pode deixar para definir o adversário na hora de criar cada jogo."
             acaoLabel={!readOnly ? "+ Cadastrar adversário" : null} onAcao={!readOnly ? abrirNovo : null}/>
         )}
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-          <thead><tr style={{ background:C.surf2 }}>
-                  <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
-                  <ThSortable colKey="campo.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Campo</ThSortable>
-                  <ThSortable colKey="cidade.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Cidade</ThSortable>
-                  <ThSortable colKey="contato" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Contato</ThSortable>
-                  <ThSortable colKey="observacoes" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Observações</ThSortable>
-                  <ThSortable colKey="data_fim" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Inativo em</ThSortable>
-                  <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
-          </tr></thead>
-          <tbody>
-            {(sortData((adversarios||[]).filter(a => !busca.trim() || _semAcento(a.nome).includes(_semAcento(busca))), _sk, _asc)||[]).map((a,i) => (
-              <tr key={a.id_adversario} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:700 }}>{a.nome}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{a.campo?.nome || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{a.cidade ? `${a.cidade.nome}/${a.cidade.estado}` : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{a.contato || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={a.observacoes||""}>{a.observacoes || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{a.data_fim ? new Date(a.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(a)}>Editar</Btn>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10, padding:(adversarios||[]).length?14:0 }}>
+          {(sortData((adversarios||[]).filter(a => !busca.trim() || _semAcento(a.nome).includes(_semAcento(busca))), _sk, _asc)||[]).map((a) => {
+            const inativo = !!a.data_fim;
+            return (
+              <Card key={a.id_adversario} style={{ padding:12, display:"flex", alignItems:"center", gap:13, opacity: inativo ? 0.6 : 1 }}>
+                <div style={{ width:48, height:48, borderRadius:12, background:C.surf2, border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>🆚</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:800, fontSize:16, color:C.cream }}>{a.nome}</span>
+                    {a.cidade && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.gold, border:`1px solid ${C.border}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{a.cidade.nome}/{a.cidade.estado}</span>}
+                    {inativo && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.dim, border:`1px solid ${C.border}` }}>Inativo</span>}
+                  </div>
+                  {(a.campo?.nome || a.contato) && (
+                    <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginTop:4, fontSize:12, color:C.dim }}>
+                      {a.campo?.nome && <span>📍 {a.campo.nome}</span>}
+                      {a.contato && <span>📞 {a.contato}</span>}
+                    </div>
+                  )}
+                  {a.observacoes && <div style={{ fontSize:12, color:C.dim, marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={a.observacoes}>{a.observacoes}</div>}
+                </div>
+                {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", flexShrink:0 }} onClick={() => abrirEditar(a)}>Editar</Btn>}
+              </Card>
+            );
+          })}
+        </div>
       </Card>
       {modal && (
         <Modal title={modal === "novo" ? "Novo Adversário" : "Editar Adversário"} onClose={() => setModal(null)}>
@@ -7282,7 +7429,7 @@ function CrudCampos({ idTime, show, readOnly }) {
   // Base nacional completa (para a planilha de referência e validação da importação por nome+UF)
   const [cidadesBR, setCidadesBR] = useState([]);
   useEffect(() => { carregarTodasCidades().then(setCidadesBR).catch(()=>{}); }, []);
-  const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
+  const [_sk] = useState("nome"); const [_asc] = useState(true);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
   const [saving, setSaving] = useState(false);
@@ -7384,26 +7531,26 @@ function CrudCampos({ idTime, show, readOnly }) {
             texto="Cadastre os campos onde seu time joga. Eles aparecem ao criar partidas e ajudam a galera a saber onde é o jogo."
             acaoLabel={!readOnly ? "+ Cadastrar campo" : null} onAcao={!readOnly ? abrirNovo : null}/>
         )}
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-          <thead><tr style={{ background:C.surf2 }}>
-                  <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
-                  <ThSortable colKey="endereco" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Endereço</ThSortable>
-                  <ThSortable colKey="cidade.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Cidade</ThSortable>
-                  <ThSortable colKey="data_fim" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Inativo em</ThSortable>
-                  <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
-          </tr></thead>
-          <tbody>
-            {(sortData((campos||[]).filter(c => !busca.trim() || _semAcento(c.nome).includes(_semAcento(busca)) || _semAcento(c.cidade?.nome).includes(_semAcento(busca))), _sk, _asc)||[]).map((c,i) => (
-              <tr key={c.id_campo} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:700 }}>{c.nome}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{c.endereco || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{c.cidade ? `${c.cidade.nome}/${c.cidade.estado}` : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{c.data_fim ? new Date(c.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(c)}>Editar</Btn>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10, padding:(campos||[]).length?14:0 }}>
+          {(sortData((campos||[]).filter(c => !busca.trim() || _semAcento(c.nome).includes(_semAcento(busca)) || _semAcento(c.cidade?.nome).includes(_semAcento(busca))), _sk, _asc)||[]).map((c) => {
+            const inativo = !!c.data_fim;
+            return (
+              <Card key={c.id_campo} style={{ padding:12, display:"flex", alignItems:"center", gap:13, opacity: inativo ? 0.6 : 1 }}>
+                <div style={{ width:48, height:48, borderRadius:12, background:C.surf2, border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>📍</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:800, fontSize:16, color:C.cream }}>{c.nome}</span>
+                    {c.cidade && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.gold, border:`1px solid ${C.border}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{c.cidade.nome}/{c.cidade.estado}</span>}
+                    {inativo && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.dim, border:`1px solid ${C.border}` }}>Inativo</span>}
+                  </div>
+                  {c.endereco && <div style={{ fontSize:12, color:C.dim, marginTop:4 }}>{c.endereco}</div>}
+                  {c.link_local && <a href={c.link_local} target="_blank" rel="noreferrer" style={{ fontSize:12, color:C.gold, marginTop:4, display:"inline-block", textDecoration:"none" }}>🔗 Abrir no mapa</a>}
+                </div>
+                {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", flexShrink:0 }} onClick={() => abrirEditar(c)}>Editar</Btn>}
+              </Card>
+            );
+          })}
+        </div>
       </Card>
       {modal && (
         <Modal title={modal === "novo" ? "Novo Campo" : "Editar Campo"} onClose={() => setModal(null)}>
@@ -7541,28 +7688,31 @@ function CrudTimesInternos({ idTime, show, readOnly }) {
             texto="Os times internos são os grupos fixos que se enfrentam nos encontros da turma (ex: Laranja, Preto, Branco). Cadastre-os para montar os jogos."
             acaoLabel={!readOnly ? "+ Cadastrar time interno" : null} onAcao={!readOnly ? abrirNovo : null}/>
         )}
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-          <thead><tr style={{ background:C.surf2 }}>
-            {["Time","Início","Encerrado em","Situação",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
-          </tr></thead>
-          <tbody>
-            {(times||[]).map((t,i) => (
-              <tr key={t.id_time_interno} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:700 }}>
-                  <span style={{ display:"inline-block", width:13, height:13, borderRadius:"50%", background:t.cor||C.dim, marginRight:8, verticalAlign:"middle", border:`1px solid ${C.border}` }} />
-                  {t.nome}
-                </td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_inicio ? new Date(t.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_fim ? new Date(t.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", fontSize:12 }}>{t.data_fim ? <span style={{ color:C.dim }}>Encerrado</span> : <span style={{ color:C.win, fontWeight:700 }}>Ativo</span>}</td>
-                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(t)}>Editar</Btn>}</td>
-              </tr>
-            ))}
-            {(times||[]).length === 0 && (
-              <tr><td colSpan={5} style={{ padding:"20px 14px", textAlign:"center", color:C.dim, fontSize:13 }}>Nenhum time interno cadastrado ainda.</td></tr>
-            )}
-          </tbody>
-        </table></div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10, padding:(times||[]).length?14:0 }}>
+          {(times||[]).map((t) => {
+            const inativo = !!t.data_fim;
+            return (
+              <Card key={t.id_time_interno} style={{ padding:12, display:"flex", alignItems:"center", gap:13, opacity: inativo ? 0.6 : 1 }}>
+                {/* Avatar na cor real do time interno */}
+                <div style={{ width:48, height:48, borderRadius:"50%", background:t.cor||C.surf2, border:`2px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>🎽</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:800, fontSize:16, color:C.cream }}>{t.nome}</span>
+                    {inativo
+                      ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.dim, border:`1px solid ${C.border}` }}>Encerrado</span>
+                      : <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.win+"22", color:C.win, border:`1px solid ${C.win}` }}>Ativo</span>}
+                  </div>
+                  <div style={{ fontSize:12, color:C.dim, marginTop:4 }}>
+                    {inativo
+                      ? `${t.data_inicio ? new Date(t.data_inicio).toLocaleDateString("pt-BR") : "—"} — ${new Date(t.data_fim).toLocaleDateString("pt-BR")}`
+                      : (t.data_inicio ? `Desde ${new Date(t.data_inicio).toLocaleDateString("pt-BR")}` : "—")}
+                  </div>
+                </div>
+                {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", flexShrink:0 }} onClick={() => abrirEditar(t)}>Editar</Btn>}
+              </Card>
+            );
+          })}
+        </div>
       </Card>
       {modal && (
         <Modal title={modal === "novo" ? "Novo Time Interno" : "Editar Time Interno"} onClose={() => setModal(null)}>
@@ -8562,7 +8712,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
     (posicoes||[]).forEach(p => { m[p.id_posicao] = p.nome; });
     return m;
   }, [posicoes]);
-  const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
+  const [_sk] = useState("nome"); const [_asc] = useState(true);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
   const [saving, setSaving] = useState(false);
@@ -8621,30 +8771,24 @@ function CrudPosicoes({ idTime, show, readOnly }) {
           <div key={titulo}>
             <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>{titulo}</div>
             <Card style={{ padding:0, overflow:"hidden" }}>
-              <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-                <thead><tr style={{ background:C.surf2 }}>
-                  <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
-                  <ThSortable colKey="descricao" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Descrição</ThSortable>
-                  <ThSortable colKey="ordem" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Ordem</ThSortable>
-                  <th style={{ padding:"12px 14px", textAlign:"left", fontSize:11, textTransform:"uppercase", letterSpacing:"0.08em", color:C.dim, fontWeight:700, whiteSpace:"nowrap" }}>Grupo pai</th>
-                  <ThSortable colKey="data_fim" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Inativo em</ThSortable>
-                  <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
-                </tr></thead>
-                <tbody>
-                  {lista.map((p, i) => (
-                    <tr key={p.id_posicao} style={{ background: i%2===0?C.surface:C.bg }}>
-                      <td style={{ padding:"11px 14px", fontWeight:700 }}>{p.nome}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{p.descricao || "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, textAlign:"center" }}>{p.ordem ?? "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{mapaPosicoes[p.id_posicao_pai] || "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{p.data_fim ? new Date(p.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                      <td style={{ padding:"11px 14px", display:"flex", gap:8 }}>
-                        {/* Tela de consulta: edição é feita pelo super admin no tipo de time */}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8, padding:14 }}>
+                {lista.map((p) => {
+                  const inativo = !!p.data_fim;
+                  return (
+                    <div key={p.id_posicao} style={{ display:"flex", alignItems:"center", gap:12, background:C.surface, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px", opacity: inativo ? 0.55 : 1 }}>
+                      <div style={{ width:28, height:28, borderRadius:7, background:C.surf2, border:`1px solid ${C.border}`, color:C.gold, fontWeight:800, fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{p.ordem ?? "—"}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                          <span style={{ fontWeight:700, fontSize:15, color:C.cream }}>{p.nome}</span>
+                          {mapaPosicoes[p.id_posicao_pai] && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.gold, border:`1px solid ${C.border}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{mapaPosicoes[p.id_posicao_pai]}</span>}
+                          {inativo && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.dim, border:`1px solid ${C.border}` }}>Inativa</span>}
+                        </div>
+                        {p.descricao && <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>{p.descricao}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </Card>
           </div>
         );
@@ -8676,7 +8820,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
 // ── CRUD TEMPORADAS ───────────────────────────────────────────
 function CrudTemporadas({ idTime, show, readOnly, ehTurmaFechada }) {
   const { data: temporadas, loading, reload } = useQuery(() =>
-    idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*,time(nome)&order=data_inicio.desc`) : Promise.resolve([]),
+    idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*&order=data_inicio.desc`) : Promise.resolve([]),
     [idTime]
   );
   const { data: times } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=*&order=nome.asc`) : Promise.resolve([]), [idTime]);
@@ -8723,7 +8867,7 @@ function CrudTemporadas({ idTime, show, readOnly, ehTurmaFechada }) {
     if (!form.nome || !form.data_inicio || !form.data_fim) { show("Nome e datas são obrigatórios.", "error"); return; }
     setSaving(true);
     try {
-      const body = { nome: form.nome, id_time: form.id_time ? Number(form.id_time) : null, data_inicio: form.data_inicio, data_fim: form.data_fim, publico: form.publico !== false, uniforme_1_url: form.uniforme_1_url||null, uniforme_2_url: form.uniforme_2_url||null, uniforme_3_url: form.uniforme_3_url||null, escudo_url: form.escudo_url||null, tecnico: form.tecnico||null, presidente: form.presidente||null, vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null, vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null, resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null, observacoes: form.observacoes||null };
+      const body = { nome: form.nome, id_time: idTime || (form.id_time ? Number(form.id_time) : null), data_inicio: form.data_inicio, data_fim: form.data_fim, publico: form.publico !== false, uniforme_1_url: form.uniforme_1_url||null, uniforme_2_url: form.uniforme_2_url||null, uniforme_3_url: form.uniforme_3_url||null, escudo_url: form.escudo_url||null, tecnico: form.tecnico||null, presidente: form.presidente||null, vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null, vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null, resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null, observacoes: form.observacoes||null };
       if (modal === "novo") await api.post("temporada", body);
       else await api.patch(`temporada?id_temporada=eq.${form.id_temporada}`, body);
       show("Salvo!"); setModal(null); reload();
@@ -8786,75 +8930,87 @@ function CrudTemporadas({ idTime, show, readOnly, ehTurmaFechada }) {
             texto="A temporada organiza suas partidas e estatísticas por período. Crie a primeira para começar a registrar jogos."
             acaoLabel={!readOnly ? "+ Criar temporada" : null} onAcao={!readOnly ? abrirNovo : null}/>
         )}
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-          <thead><tr style={{ background:C.surf2 }}>
-                  <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Temporada</ThSortable>
-                  <ThSortable colKey="time.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Time</ThSortable>
-                  <ThSortable colKey="data_inicio" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Início</ThSortable>
-                  <ThSortable colKey="data_fim" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Fim</ThSortable>
-                  <ThSortable colKey="tecnico" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Técnico</ThSortable>
-                  <ThSortable colKey="presidente" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Presidente</ThSortable>
-                  <ThSortable colKey="vice_presidente" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Vice-Pres.</ThSortable>
-                  <ThSortable colKey="financeiro" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Financeiro</ThSortable>
-                  <ThSortable colKey="vice_financeiro" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Vice-Fin.</ThSortable>
-                  <ThSortable colKey="marca_jogos" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Marca Jogos</ThSortable>
-                  <ThSortable colKey="resp_redes_sociais" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Redes</ThSortable>
-                  <ThSortable colKey="resp_eventos" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Eventos</ThSortable>
-                  <ThSortable colKey="fardamento_titular_url" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Fardamentos</ThSortable>
-                  <ThSortable colKey="publico" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Público</ThSortable>
-                  <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
-          </tr></thead>
-          <tbody>
-            {(sortData(temporadas, _sk, _asc)||[]).map((t,i) => (
-              <tr key={t.id_temporada} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:700, color:C.gold, whiteSpace:"nowrap" }}>
-                  {t.nome}
-                  {(() => { const h = new Date().toISOString().split("T")[0];
-                    const ini = t.data_inicio ? String(t.data_inicio).split("T")[0] : null;
-                    const fim = t.data_fim ? String(t.data_fim).split("T")[0] : null;
-                    return (ini && ini <= h && (!fim || fim >= h))
-                      ? <span style={{ marginLeft:8, fontSize:10, background:C.gold+"22", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:4, padding:"1px 6px", fontWeight:700, verticalAlign:"middle" }}>ATUAL</span>
-                      : null; })()}
-                </td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.time?.nome || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_inicio ? new Date(t.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_fim ? new Date(t.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.tecnico || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.presidente || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.vice_presidente || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.financeiro || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.vice_financeiro || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.marca_jogos || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.resp_redes_sociais || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.resp_eventos || "—"}</td>
-                <td style={{ padding:"11px 14px", textAlign:"center" }}>
-                  <div style={{ display:"flex", gap:4, justifyContent:"center" }}>
-                    {t.escudo_url      && <img src={t.escudo_url}      alt="Escudo"    style={{ width:24, height:24, objectFit:"contain", borderRadius:"50%" }} title="Escudo"/>}
-                    {t.uniforme_1_url  && <img src={t.uniforme_1_url}  alt="Uniforme 1" style={{ width:24, height:24, objectFit:"contain" }} title="Uniforme 1"/>}
-                    {t.uniforme_2_url  && <img src={t.uniforme_2_url}  alt="Uniforme 2" style={{ width:24, height:24, objectFit:"contain" }} title="Uniforme 2"/>}
-                    {t.uniforme_3_url  && <img src={t.uniforme_3_url}  alt="Uniforme 3" style={{ width:24, height:24, objectFit:"contain" }} title="Uniforme 3"/>}
-                    {!t.escudo_url && !t.uniforme_1_url && !t.uniforme_2_url && !t.uniforme_3_url && <span style={{ color:C.dim, fontSize:11 }}>—</span>}
+        {/* Ordenação compacta */}
+        {(temporadas||[]).length > 1 && (
+          <div style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 16px", borderBottom:`1px solid ${C.border}` }}>
+            <span style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>Ordenar:</span>
+            <button onClick={()=>{_setSk("data_inicio"); _setAsc(false);}} style={{ background: _sk==="data_inicio"&&!_asc?C.gold:C.surf2, color: _sk==="data_inicio"&&!_asc?"#0B3D2E":C.dim, border:"none", borderRadius:6, padding:"5px 10px", fontFamily:"inherit", fontSize:11, fontWeight:700, cursor:"pointer" }}>Mais recentes</button>
+            <button onClick={()=>{_setSk("data_inicio"); _setAsc(true);}} style={{ background: _sk==="data_inicio"&&_asc?C.gold:C.surf2, color: _sk==="data_inicio"&&_asc?"#0B3D2E":C.dim, border:"none", borderRadius:6, padding:"5px 10px", fontFamily:"inherit", fontSize:11, fontWeight:700, cursor:"pointer" }}>Mais antigas</button>
+            <button onClick={()=>{_setSk("nome"); _setAsc(true);}} style={{ background: _sk==="nome"?C.gold:C.surf2, color: _sk==="nome"?"#0B3D2E":C.dim, border:"none", borderRadius:6, padding:"5px 10px", fontFamily:"inherit", fontSize:11, fontWeight:700, cursor:"pointer" }}>Nome</button>
+          </div>
+        )}
+
+        {/* Lista de temporadas em cards (2 linhas cada) */}
+        <div style={{ display:"flex", flexDirection:"column", gap:12, padding:16 }}>
+          {(sortData(temporadas, _sk, _asc)||[]).map((t) => {
+            const h = new Date().toISOString().split("T")[0];
+            const ini = t.data_inicio ? String(t.data_inicio).split("T")[0] : null;
+            const fim = t.data_fim ? String(t.data_fim).split("T")[0] : null;
+            const atual = ini && ini <= h && (!fim || fim >= h);
+            const fmt = (d) => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+            const uniformes = [
+              { url: t.uniforme_1_url, label:"Uniforme 1" },
+              { url: t.uniforme_2_url, label:"Uniforme 2" },
+              { url: t.uniforme_3_url, label:"Uniforme 3" },
+            ].filter(u => u.url);
+            const comissao = [
+              ["Técnico", t.tecnico], ["Presidente", t.presidente], ["Vice-Pres.", t.vice_presidente],
+              ["Financeiro", t.financeiro], ["Vice-Fin.", t.vice_financeiro], ["Marca Jogos", t.marca_jogos],
+              ["Redes", t.resp_redes_sociais], ["Eventos", t.resp_eventos],
+            ].filter(([,v]) => v);
+            return (
+              <div key={t.id_temporada} style={{ background:C.surface, border:`1px solid ${atual?C.gold:C.border}`, borderRadius:12, overflow:"hidden" }}>
+                {/* Linha 1 — identidade: escudo + nome + período + ações */}
+                <div style={{ display:"flex", alignItems:"center", gap:14, padding:14, background: atual ? C.gold+"11" : "transparent" }}>
+                  {t.escudo_url
+                    ? <img src={t.escudo_url} alt={`Escudo ${t.nome}`} style={{ width:56, height:56, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }}/>
+                    : <div style={{ width:56, height:56, borderRadius:"50%", background:C.surf2, border:`2px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, flexShrink:0 }}>🏆</div>
+                  }
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                      <span style={{ fontWeight:800, fontSize:17, color:C.gold }}>{t.nome}</span>
+                      {atual && <span style={{ fontSize:10, background:C.gold+"22", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:4, padding:"1px 6px", fontWeight:700 }}>ATUAL</span>}
+                      <span title={t.publico !== false ? "Pública" : "Privada"} style={{ fontSize:13 }}>{t.publico !== false ? "🌐" : "🔒"}</span>
+                    </div>
+                    <div style={{ fontSize:12, color:C.dim, marginTop:3 }}>{fmt(t.data_inicio)} &nbsp;—&nbsp; {fmt(t.data_fim)}</div>
                   </div>
-                </td>
-                <td style={{ padding:"11px 14px", textAlign:"center" }}>
-                  <span style={{ color: t.publico !== false ? C.win : C.dim, fontWeight:700, fontSize:12 }}>{t.publico !== false ? "🌐" : "🔒"}</span>
-                </td>
-                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(t)}>Editar</Btn>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
+                  {!readOnly && <Btn variant="secondary" style={{ fontSize:12, padding:"7px 14px", flexShrink:0 }} onClick={() => abrirEditar(t)}>Editar</Btn>}
+                </div>
+
+                {/* Linha 2 — uniformes em destaque + comissão */}
+                {(uniformes.length > 0 || comissao.length > 0) && (
+                  <div style={{ display:"flex", gap:16, flexWrap:"wrap", padding:"12px 14px", borderTop:`1px solid ${C.border}`, alignItems:"flex-start" }}>
+                    {uniformes.length > 0 && (
+                      <div style={{ display:"flex", gap:12 }}>
+                        {uniformes.map((u,ui) => (
+                          <div key={ui} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                            <img src={u.url} alt={u.label} style={{ width:46, height:46, objectFit:"contain", background:C.surf2, borderRadius:8, border:`1px solid ${C.border}`, padding:3 }}/>
+                            <span style={{ fontSize:9, color:C.dim }}>{u.label.replace("Uniforme ","Unif. ")}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {comissao.length > 0 && (
+                      <div style={{ flex:1, minWidth:180, display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:"6px 14px" }}>
+                        {comissao.map(([label,val]) => (
+                          <div key={label} style={{ minWidth:0 }}>
+                            <span style={{ fontSize:9, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, display:"block" }}>{label}</span>
+                            <span style={{ fontSize:13, color:C.cream, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", display:"block" }} title={val}>{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </Card>
       {modal && (
         <Modal title={modal === "novo" ? "Nova Temporada" : "Editar Temporada"} onClose={() => setModal(null)} size="lg">
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-              <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} placeholder="ex: Temporada 2026" />
-              <Select label="Time *" value={form.id_time||""} onChange={e => set("id_time", e.target.value)}>
-                <option value="">Selecione...</option>
-                {(times||[]).map(t => <option key={t.id_time} value={t.id_time}>{t.nome}</option>)}
-              </Select>
-            </div>
+            <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} placeholder="ex: Temporada 2026" />
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <Input label="Data Início *" type="date" value={form.data_inicio||""} onChange={e => set("data_inicio", e.target.value)} />
               <Input label="Data Fim *"   type="date" value={form.data_fim||""}    onChange={e => set("data_fim",    e.target.value)} />
