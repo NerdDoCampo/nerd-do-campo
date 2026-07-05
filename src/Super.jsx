@@ -158,7 +158,6 @@ function Modal({ title, children, onClose, size="md" }) {
       document.body.style.overflow = overflowOriginal;
       anterior?.focus?.(); // devolve o foco a quem abriu
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -3023,7 +3022,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.1";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.2";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };

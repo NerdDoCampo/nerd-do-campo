@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.1";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.2";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1239,7 +1239,6 @@ function Modal({ title, children, onClose, size = "md" }) {
       document.body.style.overflow = overflowOriginal;
       anterior?.focus?.(); // devolve o foco a quem abriu
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
