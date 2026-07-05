@@ -1,5 +1,5 @@
 // Cache versionado: muda a cada release, forçando atualização.
-const CACHE_NAME = 'nerd-do-campo-1.23.2';
+const CACHE_NAME = 'nerd-do-campo-1.23.3';
 const STATIC_ASSETS = ['/manifest.json'];
 
 self.addEventListener('install', event => {
@@ -16,6 +16,10 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // Só interceptamos GET. Métodos como POST/PATCH/DELETE não podem ir pro Cache
+  // ('cache.put' rejeita não-GET) e devem seguir direto pra rede.
+  if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
 
   // API Supabase — sempre rede, nunca cacheia

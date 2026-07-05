@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.2";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.3";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -6504,6 +6504,13 @@ export default function AdminAppCompleto() {
     if (!aindaValida) setTemporadaSel(lista[0]);
   }, [temporadas]);
 
+  // Na barra horizontal do mobile, mantém o item ativo visível ao trocar de módulo.
+  // Precisa ficar AQUI (antes dos returns de guarda) — hooks nunca podem vir depois de um return.
+  React.useEffect(() => {
+    const el = document.querySelector('.admin-sidebar [aria-current="page"]');
+    if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [menu]);
+
   if (loadManut) return null;
 
   // Sistema em manutenção — bloqueia tudo, exceto superadmin já logado
@@ -6556,11 +6563,6 @@ export default function AdminAppCompleto() {
   const ehTurmaFechada = !!_tipoDoTime?.[0]?.eh_turma_fechada;
 
   function navMenu(id) { setMenu(id); setPartida(null); setNovaPartida(false); }
-  // Na barra horizontal do mobile, mantém o item ativo visível ao trocar de módulo
-  React.useEffect(() => {
-    const el = document.querySelector('.admin-sidebar [aria-current="page"]');
-    if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ inline: "center", block: "nearest" });
-  }, [menu]);
   // Menu base + item de Times Internos (só para turma fechada). Aditivo: times tradicionais não veem.
   const MENU_COM_TURMA = ehTurmaFechada
     ? (() => {
