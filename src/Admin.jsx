@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.9";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.0";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -6487,6 +6487,7 @@ export default function AdminAppCompleto() {
   const [timeInativo, setTimeInativo] = useState(false);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
   const [menu, setMenu] = useState("inicio");
+  const [menuAberto, setMenuAberto] = useState(false); // gaveta do menu no mobile
   // tour de boas-vindas: mostra uma vez por navegador
   const [mostrarTour, setMostrarTour] = useState(false);
   useEffect(() => {
@@ -6636,13 +6637,6 @@ export default function AdminAppCompleto() {
     if (!aindaValida) setTemporadaSel(lista[0]);
   }, [temporadas]);
 
-  // Na barra horizontal do mobile, mantém o item ativo visível ao trocar de módulo.
-  // Precisa ficar AQUI (antes dos returns de guarda) — hooks nunca podem vir depois de um return.
-  React.useEffect(() => {
-    const el = document.querySelector('.admin-sidebar [aria-current="page"]');
-    if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ inline: "center", block: "nearest" });
-  }, [menu]);
-
   if (loadManut) return null;
 
   // Sistema em manutenção — bloqueia tudo, exceto superadmin já logado
@@ -6694,7 +6688,7 @@ export default function AdminAppCompleto() {
   const time = times?.[0];
   const ehTurmaFechada = !!_tipoDoTime?.[0]?.eh_turma_fechada;
 
-  function navMenu(id) { setMenu(id); setPartida(null); setNovaPartida(false); }
+  function navMenu(id) { setMenu(id); setPartida(null); setNovaPartida(false); setMenuAberto(false); }
   // Menu base + item de Times Internos (só para turma fechada). Aditivo: times tradicionais não veem.
   const MENU_COM_TURMA = ehTurmaFechada
     ? (() => {
@@ -6721,8 +6715,10 @@ export default function AdminAppCompleto() {
   );
 
   return (
-    <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream, display:"flex", flexDirection:"column" }}>
+    <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream, display:"flex", flexDirection:"column", overflowX:"hidden", maxWidth:"100vw" }}>
       <style>{`
+        /* Nada rola a página inteira de lado: a largura fica presa à da tela */
+        html, body { overflow-x:hidden; max-width:100vw; }
         /* ── Foco visível para navegação por teclado (WCAG 2.4.7) — não aparece no toque/clique ── */
         :focus-visible{outline:2px solid ${C.gold} !important;outline-offset:2px;border-radius:8px;}
         /* ── Navegação mobile: retrato (largura) OU paisagem de celular (altura baixa) ── */
@@ -6735,28 +6731,24 @@ export default function AdminAppCompleto() {
           /* Colunas secundárias de tabelas densas somem em telas pequenas */
           .col-ocultar-mobile{display:none !important;}
           .admin-layout{flex-direction:column !important;}
-          /* Sidebar vira barra horizontal rolável no topo do conteúdo */
+          /* Mostra o botão ☰ e o cabeçalho da gaveta */
+          .menu-toggle{display:flex !important; align-items:center; justify-content:center;}
+          .menu-gaveta-head{display:flex !important;}
+          .header-titulo{display:none !important;}
+          /* Menu vira GAVETA que desliza da esquerda — sem rolagem lateral em lugar nenhum */
           .admin-sidebar{
-            width:100% !important; height:auto !important; max-height:none !important; position:sticky; top:64px;
-            display:flex !important; flex-direction:row !important; overflow-x:auto; overflow-y:hidden;
-            border-right:none !important; border-bottom:1px solid #1F5C3E;
-            padding:6px 8px !important; gap:4px; -webkit-overflow-scrolling:touch; z-index:90;
+            position:fixed !important; left:0; top:0; height:100dvh !important; max-height:none !important;
+            width:min(84vw, 300px) !important; padding:16px 0 !important;
+            transform:translateX(-100%); transition:transform .25s ease; z-index:200;
+            border-right:1px solid ${C.border}; overflow-y:auto; overflow-x:hidden;
           }
-          .admin-sidebar .menu-grupo{display:flex; flex-direction:row; align-items:center; flex-shrink:0;}
-          .admin-sidebar .menu-grupo-titulo{display:none !important;}
-          /* Separador fino entre grupos: mantém a noção de agrupamento na barra horizontal */
-          .admin-sidebar .menu-grupo + .menu-grupo{border-left:1px solid ${C.border}; margin-left:4px; padding-left:4px;}
-          .admin-sidebar button{
-            white-space:nowrap; flex-shrink:0; border-left:none !important;
-            border-bottom:3px solid transparent; padding:10px 14px !important; font-size:12px !important;
-          }
-          /* Fade indicando que a barra rola horizontalmente */
-          .admin-sidebar{
-            mask-image:linear-gradient(to right, black 0, black calc(100% - 28px), transparent 100%);
-            -webkit-mask-image:linear-gradient(to right, black 0, black calc(100% - 28px), transparent 100%);
-          }
+          .admin-sidebar.aberta{transform:translateX(0);}
+          /* Itens do menu ficam empilhados (vertical), grupos com título visível */
+          .admin-sidebar .menu-grupo{display:block;}
+          .admin-sidebar button{width:100% !important; white-space:normal;}
           .admin-main{padding:16px 12px !important;}
-          /* Inputs nativos não excedem o container */
+          /* Nada de tabela/elemento estourando a largura da tela */
+          .admin-main table{max-width:100%;}
           input, select, textarea{max-width:100% !important; box-sizing:border-box !important;}
         }
         /* ── Empilhamento de campos: só telas realmente estreitas (retrato/celular pequeno) ── */
@@ -6779,8 +6771,10 @@ export default function AdminAppCompleto() {
 
       {/* Header */}
       <header className="admin-header" style={{ background:"#091F15", borderBottom:`3px solid ${C.gold}`, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:64, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 20px #00000066" }}>
+        <button className="menu-toggle" aria-label="Abrir menu" aria-expanded={menuAberto} onClick={() => setMenuAberto(true)}
+          style={{ display:"none", background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontSize:20, lineHeight:1, padding:"5px 11px", cursor:"pointer", flexShrink:0 }}>☰</button>
         <img src="/logo.png" alt="Nerd do Campo" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
-        <div style={{ fontSize:18, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream }}>Nerd do Campo</div>
+        <div className="header-titulo" style={{ fontSize:18, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream }}>Nerd do Campo</div>
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"2px 8px" }}>Admin</div>
         {process.env.REACT_APP_ENV === "development" && (
           <div style={{ fontSize:10, color:"#ff6b6b", textTransform:"uppercase", letterSpacing:"0.1em", background:"#ff6b6b22", border:"1px solid #ff6b6b44", borderRadius:6, padding:"2px 8px", fontWeight:700 }}>
@@ -6832,8 +6826,16 @@ export default function AdminAppCompleto() {
       </header>
 
       <div className="admin-layout" style={{ display:"flex", flex:1 }}>
-        {/* Sidebar */}
-        <nav aria-label="Menu principal" className="admin-sidebar" style={{ width:210, background:"#091F15", borderRight:`1px solid ${C.border}`, padding:"16px 0", flexShrink:0, position:"sticky", top:64, height:"calc(100vh - 64px)", overflowY:"auto" }}>
+        {/* Fundo escuro que fecha a gaveta no mobile */}
+        {menuAberto && <div className="menu-backdrop" onClick={() => setMenuAberto(false)} aria-hidden="true"
+          style={{ position:"fixed", inset:0, background:"#000000aa", zIndex:150 }}/>}
+        {/* Sidebar / gaveta */}
+        <nav aria-label="Menu principal" className={`admin-sidebar${menuAberto ? " aberta" : ""}`} style={{ width:210, background:"#091F15", borderRight:`1px solid ${C.border}`, padding:"16px 0", flexShrink:0, position:"sticky", top:64, height:"calc(100vh - 64px)", overflowY:"auto" }}>
+          {/* Cabeçalho da gaveta (só aparece no mobile) */}
+          <div className="menu-gaveta-head" style={{ display:"none", alignItems:"center", justifyContent:"space-between", padding:"4px 16px 12px", borderBottom:`1px solid ${C.border}`, marginBottom:8 }}>
+            <span style={{ fontSize:13, fontWeight:800, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em" }}>Menu</span>
+            <button aria-label="Fechar menu" onClick={() => setMenuAberto(false)} style={{ background:"none", border:"none", color:C.dim, fontSize:22, cursor:"pointer", lineHeight:1, padding:4 }}>✕</button>
+          </div>
           {/* Item sem grupo: Início */}
           {MENU.filter(m => m.grupo === "").map(m => (
             <button key={m.id} onClick={() => navMenu(m.id)} aria-current={menu===m.id ? "page" : undefined} style={{
