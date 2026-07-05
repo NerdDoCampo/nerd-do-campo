@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.22.7";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.6";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
 const C = {
   bg:      "#0B3D2E", surface: "#103D2A", surf2: "#174D36",
   border:  "#1F5C3E", gold: "#E8A020",    cream: "#F0E8D0",
-  dim:     "#8FAF9A", win: "#4CAF50",     loss: "#E53935",
+  dim:     "#8FAF9A",
+  // win/loss são cores de TEXTO (contraste AA sobre os fundos escuros).
+  // winBg/lossBg são as versões saturadas, para FUNDOS de botão/preenchimento.
+  win:     "#6FCF73", winBg: "#4CAF50",
+  loss:    "#FF8A80", lossBg: "#E53935",
   draw:    "#E8A020",
 };
 
@@ -1136,8 +1140,8 @@ function ThSortable({ colKey, sortKey, asc, onSort, children }) {
 const f = (tag, base) => ({ children, style: s = {}, ...p }) =>
   { const T = tag; return <T style={{ ...base, ...s }} {...p}>{children}</T>; };
 
-function Card({ children, style: s = {} }) {
-  return <div style={{ background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, ...s }}>{children}</div>;
+function Card({ children, style: s = {}, className }) {
+  return <div className={className} style={{ background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, ...s }}>{children}</div>;
 }
 // Estado vazio reutilizável: ícone + título + texto orientativo + ação opcional
 function EstadoVazio({ icone, titulo, texto, acaoLabel, onAcao }) {
@@ -1151,8 +1155,8 @@ function EstadoVazio({ icone, titulo, texto, acaoLabel, onAcao }) {
   );
 }
 function Btn({ children, variant = "primary", onClick, disabled, style: s = {}, type = "button" }) {
-  const bg = disabled ? C.surf2 : variant === "primary" ? C.gold : variant === "danger" ? C.loss : C.surf2;
-  const color = disabled ? C.dim : variant === "primary" ? "#0B3D2E" : C.cream;
+  const bg = disabled ? C.surf2 : variant === "primary" ? C.gold : variant === "danger" ? C.lossBg : C.surf2;
+  const color = disabled ? C.dim : variant === "primary" ? "#0B3D2E" : variant === "danger" ? "#FFFFFF" : C.cream;
   return (
     <button type={type} onClick={onClick} disabled={disabled} style={{ background: bg, color, border: "none", borderRadius: 8, padding: "9px 18px", fontFamily: "inherit", fontWeight: 700, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", textTransform: "uppercase", letterSpacing: "0.06em", transition: "opacity 0.15s", ...s }}>
       {children}
@@ -1160,51 +1164,101 @@ function Btn({ children, variant = "primary", onClick, disabled, style: s = {}, 
   );
 }
 function Input({ label, error, style: s = {}, ...p }) {
+  const id = React.useId();
+  const errId = `${id}-err`;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0, ...s }}>
-      {label && <label style={{ fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{label}</label>}
-      <input {...p} style={{ background: C.surf2, border: `1px solid ${error ? C.loss : C.border}`, borderRadius: 8, padding: "9px 12px", color: C.cream, fontFamily: "inherit", fontSize: 14, outline: "none", width: "100%", minWidth: 0, boxSizing: "border-box" }} />
-      {error && <span style={{ color: C.loss, fontSize: 12 }}>{error}</span>}
+      {label && <label htmlFor={id} style={{ fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{label}</label>}
+      <input id={id} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined}
+        {...p} style={{ background: C.surf2, border: `1px solid ${error ? C.loss : C.border}`, borderRadius: 8, padding: "9px 12px", color: C.cream, fontFamily: "inherit", fontSize: 14, width: "100%", minWidth: 0, boxSizing: "border-box" }} />
+      {error && <span id={errId} role="alert" style={{ color: C.loss, fontSize: 12 }}>{error}</span>}
     </div>
   );
 }
 function Select({ label, children, error, style: s = {}, ...p }) {
+  const id = React.useId();
+  const errId = `${id}-err`;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0, ...s }}>
-      {label && <label style={{ fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{label}</label>}
-      <select {...p} style={{ background: C.surf2, border: `1px solid ${error ? C.loss : C.border}`, borderRadius: 8, padding: "9px 12px", color: C.cream, fontFamily: "inherit", fontSize: 14, outline: "none", width: "100%", minWidth: 0, boxSizing: "border-box" }}>
+      {label && <label htmlFor={id} style={{ fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{label}</label>}
+      <select id={id} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined}
+        {...p} style={{ background: C.surf2, border: `1px solid ${error ? C.loss : C.border}`, borderRadius: 8, padding: "9px 12px", color: C.cream, fontFamily: "inherit", fontSize: 14, width: "100%", minWidth: 0, boxSizing: "border-box" }}>
         {children}
       </select>
-      {error && <span style={{ color: C.loss, fontSize: 12 }}>{error}</span>}
+      {error && <span id={errId} role="alert" style={{ color: C.loss, fontSize: 12 }}>{error}</span>}
     </div>
   );
 }
 function Spinner() {
   return (
-    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: 60 }}>
+    <div role="status" aria-label="Carregando" style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: 60 }}>
       <div style={{ width: 36, height: 36, border: `3px solid ${C.border}`, borderTop: `3px solid ${C.gold}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
-function Toast({ msg, type }) {
+function Toast({ msg, type, onClose }) {
   if (!msg) return null;
   const cor = type === "error" ? C.loss : C.win;
   return (
-    <div style={{ position: "fixed", bottom: 24, right: 24, background: C.surf2, border: `1px solid ${cor}`, borderRadius: 10, padding: "12px 20px", color: cor, fontWeight: 700, fontSize: 14, zIndex: 9999, boxShadow: "0 4px 20px #00000088" }}>
-      {type === "error" ? "❌" : "✅"} {msg}
+    <div role={type === "error" ? "alert" : "status"} aria-live={type === "error" ? "assertive" : "polite"}
+      style={{ position: "fixed", bottom: 24, right: 16, left: 16, margin: "0 0 0 auto", maxWidth: 480, width: "fit-content",
+        background: C.surf2, border: `1px solid ${cor}`, borderRadius: 10, padding: "12px 16px", color: cor,
+        fontWeight: 700, fontSize: 14, zIndex: 9999, boxShadow: "0 4px 20px #00000088",
+        display: "flex", alignItems: "center", gap: 12 }}>
+      <span>{type === "error" ? "❌" : "✅"} {msg}</span>
+      {onClose && (
+        <button onClick={onClose} aria-label="Fechar aviso"
+          style={{ background: "none", border: "none", color: C.dim, fontSize: 16, cursor: "pointer", padding: 4, lineHeight: 1, flexShrink: 0 }}>
+          ✕
+        </button>
+      )}
     </div>
   );
 }
-function Modal({ title, children, onClose }) {
+// pilha de modais abertos — garante que o Escape feche só o modal de cima (ex: confirmação dentro de outro modal)
+const _modalStack = [];
+function Modal({ title, children, onClose, size = "md" }) {
+  const ref = React.useRef(null);
+  const titleId = React.useId();
+  const larguras = { sm: 420, md: 560, lg: 760 };
+
+  React.useEffect(() => {
+    const meuId = {};
+    _modalStack.push(meuId);
+    const anterior = document.activeElement;
+    const overflowOriginal = document.body.style.overflow;
+    document.body.style.overflow = "hidden"; // trava o scroll do fundo (importante no iOS)
+    ref.current?.focus();
+    const onKey = (e) => { if (e.key === "Escape" && _modalStack[_modalStack.length - 1] === meuId) onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      const i = _modalStack.indexOf(meuId);
+      if (i >= 0) _modalStack.splice(i, 1);
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflowOriginal;
+      anterior?.focus?.(); // devolve o foco a quem abriu
+    };
+  }, []);
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#00000088", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 24 }}>
-      <Card style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${C.border}` }}>
-          <span style={{ fontWeight: 700, fontSize: 16, textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1 }}>✕</button>
+    <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }} className="ndc-modal-overlay"
+      style={{ position: "fixed", inset: 0, background: "#00000088", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 24 }}>
+      <style>{`
+        @media(max-width:560px){
+          .ndc-modal-card{ max-width:100% !important; width:100% !important; max-height:100dvh !important;
+            height:100dvh; border-radius:0 !important; }
+          .ndc-modal-overlay{ padding:0 !important; }
+        }
+      `}</style>
+      <Card className="ndc-modal-card" style={{ width: "100%", maxWidth: larguras[size] || 560, maxHeight: "90vh", overflowY: "auto" }}>
+        <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId} style={{ outline: "none" }} className="ndc-modal-card-inner">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${C.border}` }}>
+            <span id={titleId} style={{ fontWeight: 700, fontSize: 16, textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</span>
+            <button onClick={onClose} aria-label="Fechar" style={{ background: "none", border: "none", color: C.dim, fontSize: 20, cursor: "pointer", lineHeight: 1, padding: 8, margin: -8 }}>✕</button>
+          </div>
+          <div style={{ padding: 20 }}>{children}</div>
         </div>
-        <div style={{ padding: 20 }}>{children}</div>
       </Card>
     </div>
   );
@@ -1213,6 +1267,7 @@ function Modal({ title, children, onClose }) {
 function useToast() {
   const [toast, setToast] = useState(null);
   const timerRef = React.useRef(null);
+  const close = () => { if (timerRef.current) clearTimeout(timerRef.current); setToast(null); };
   const show = (msg, type = "success") => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setToast({ msg, type });
@@ -1222,7 +1277,70 @@ function useToast() {
     const dur = Math.min(base + leitura, type === "error" ? 16000 : 9000);
     timerRef.current = setTimeout(() => setToast(null), dur);
   };
-  return { toast, show };
+  return { toast, show, close };
+}
+
+// ── Confirmação estilizada: substitui o window.confirm() nativo ──
+// Uso: const { confirmar, dialogo } = useConfirm();  →  renderize {dialogo} no JSX
+//      if (!(await confirmar("Remover?", { perigoso:true, textoOk:"Remover" }))) return;
+function useConfirm() {
+  const [estado, setEstado] = useState(null); // { msg, resolve, titulo?, perigoso?, textoOk? }
+  const confirmar = (msg, opts = {}) => new Promise((resolve) => setEstado({ msg, resolve, ...opts }));
+  const responder = (ok) => { const e = estado; setEstado(null); e?.resolve(ok); };
+
+  const dialogo = estado ? (
+    <Modal title={estado.titulo || "Confirmar"} onClose={() => responder(false)} size="sm">
+      <div style={{ fontSize: 14, color: C.cream, whiteSpace: "pre-line", marginBottom: 20, lineHeight: 1.5 }}>
+        {estado.msg}
+      </div>
+      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <Btn variant="secondary" onClick={() => responder(false)}>Cancelar</Btn>
+        <Btn variant={estado.perigoso ? "danger" : "primary"} onClick={() => responder(true)}>
+          {estado.textoOk || "Confirmar"}
+        </Btn>
+      </div>
+    </Modal>
+  ) : null;
+  return { confirmar, dialogo };
+}
+
+// ── Menu "⋯" para ações secundárias (evita fileiras com 8 botões) ──
+function MenuAcoes({ acoes }) {
+  const [aberto, setAberto] = useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!aberto) return;
+    const fora = (e) => { if (ref.current && !ref.current.contains(e.target)) setAberto(false); };
+    const esc = (e) => { if (e.key === "Escape") setAberto(false); };
+    document.addEventListener("mousedown", fora);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", fora); document.removeEventListener("keydown", esc); };
+  }, [aberto]);
+  const itens = (acoes || []).filter(Boolean);
+  if (!itens.length) return null;
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <button onClick={() => setAberto(v => !v)} aria-label="Mais ações" aria-expanded={aberto} aria-haspopup="menu"
+        style={{ background: aberto ? C.surf2 : "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.cream,
+          fontFamily: "inherit", fontSize: 16, fontWeight: 800, padding: "5px 12px", cursor: "pointer", lineHeight: 1 }}>
+        ⋯
+      </button>
+      {aberto && (
+        <div role="menu" style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: C.surf2,
+          border: `1px solid ${C.border}`, borderRadius: 10, boxShadow: "0 8px 24px #00000088", zIndex: 200,
+          minWidth: 190, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          {itens.map((a, i) => (
+            <button key={i} role="menuitem" onClick={() => { setAberto(false); a.onClick(); }}
+              style={{ background: "none", border: "none", borderTop: i > 0 ? `1px solid ${C.border}55` : "none",
+                color: a.perigoso ? C.loss : C.cream, fontFamily: "inherit", fontSize: 13, fontWeight: 700,
+                padding: "11px 16px", cursor: "pointer", textAlign: "left", whiteSpace: "nowrap" }}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function useQuery(fetcher, deps = []) {
@@ -1239,6 +1357,7 @@ function useQuery(fetcher, deps = []) {
   return { data, loading, error, reload: load };
 }
 
+const _semAcento = (s) => String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
 function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone:"UTC" }) : "—"; }
 function resultado(p) {
@@ -1432,6 +1551,7 @@ function Login({ onLogin, aviso }) {
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", flexDirection:"column", alignItems: "center", justifyContent: "flex-start", padding: 16, paddingTop:48, fontFamily: "'Oswald','Arial Narrow',Arial,sans-serif" }}>
+      <style>{`:focus-visible{outline:2px solid ${C.gold} !important;outline-offset:2px;border-radius:8px;}`}</style>
       <Card style={{ width: "100%", maxWidth: 380, padding: "32px 24px" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ display:"inline-block", position:"relative", marginBottom:16 }}>
@@ -1459,7 +1579,7 @@ function Login({ onLogin, aviso }) {
             Esqueci minha senha
           </button>
         </div>
-        <div style={{ textAlign:"center", marginTop:24, fontSize:11, color:C.gold, letterSpacing:"0.08em", opacity:0.8 }}>
+        <div style={{ textAlign:"center", marginTop:24, fontSize:11, color:C.dim, letterSpacing:"0.08em" }}>
           ⚽ Designed by Caxpa Augsten
         </div>
       </Card>
@@ -1511,6 +1631,15 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
   (_posLista || []).forEach(p => { mapaPosLista[p.id_posicao] = p; });
 
   const [filtro, setFiltro] = useState("pendentes");
+  // Se não há pendentes mas há jogados, abre direto em "Jogados" (só na primeira carga)
+  const _ajustouFiltro = React.useRef(false);
+  useEffect(() => {
+    if (_ajustouFiltro.current || !partidas) return;
+    _ajustouFiltro.current = true;
+    const pend = partidas.filter(p => p.cancelada !== "S" && p.gols_marcados === null).length;
+    const jog  = partidas.filter(p => p.cancelada !== "S" && p.gols_marcados !== null).length;
+    if (pend === 0 && jog > 0) setFiltro("jogados");
+  }, [partidas]);
   const [loadingImportPartida, setLoadingImportPartida] = useState(false);
   const [resultadoImportPartida, setResultadoImportPartida] = useState(null);
 
@@ -1631,6 +1760,8 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
           return (
             <div key={p.id_partida}
               onClick={() => { onSelect(p); }}
+              role="button" tabIndex={0}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(p); } }}
               style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "background 0.15s", background: procurando ? "rgba(232,160,32,0.10)" : C.surface, borderRadius: 12, border: procurando ? `1px solid ${C.gold}` : `1px solid ${C.border}` }}
               onMouseEnter={e => e.currentTarget.style.background = procurando ? "rgba(232,160,32,0.16)" : C.surf2}
               onMouseLeave={e => e.currentTarget.style.background = procurando ? "rgba(232,160,32,0.10)" : C.surface}>
@@ -1674,7 +1805,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
 
   const [form, setForm] = useState({ data: "", horario: "14:00", id_adversario: "", em_casa: "S", id_campo: "", observacoes: "", link_local: "" });
   const [saving, setSaving] = useState(false);
-  const { toast, show } = useToast();
+  const { toast, show, close } = useToast();
 
   // auto-preenche campo conforme casa/fora
   useEffect(() => {
@@ -1738,7 +1869,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Toast {...(toast || { msg: null })} />
+      <Toast {...(toast || { msg: null })} onClose={close} />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Input label="Data *" type="date" value={form.data} onChange={e => set("data", e.target.value)} />
         <Input label="Horário *" type="time" value={form.horario} onChange={e => set("horario", e.target.value)} />
@@ -2334,6 +2465,7 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
 // Edita participacao.gols / .assistencias por jogador; jogador 0 (gol contra)
 // entra sob demanda e só edita gols_contra.
 function GolsSimples({ partida, participacoes, jogadores, readOnly, show, onMudou }) {
+  const { confirmar, dialogo } = useConfirm();
   const [salvandoId, setSalvandoId] = useState(null);
   // a participação do jogador 0 não vem na query de escalação (que filtra id_jogador>0),
   // então buscamos à parte. Ela já existe (criada por trigger ao criar a partida).
@@ -2375,7 +2507,7 @@ function GolsSimples({ partida, participacoes, jogadores, readOnly, show, onMudo
   }
   async function removerGolContra() {
     if (!partZero) return;
-    if (!confirm("Zerar e ocultar a linha de gol contra a nosso favor?")) return;
+    if (!(await confirmar("Zerar e ocultar a linha de gol contra a nosso favor?", { perigoso:true, textoOk:"Zerar" }))) return;
     try {
       await api.patch(`participacao?id_participacao=eq.${partZero.id_participacao}`, { gols_contra: 0 });
       setMostrarZero(false);
@@ -2389,11 +2521,12 @@ function GolsSimples({ partida, participacoes, jogadores, readOnly, show, onMudo
       key={`${p.id_participacao}-${campo}-${valor}`}
       onBlur={e => { const n = Number(e.target.value)||0; if (n !== (Number(valor)||0)) salvarCampo(p, campo, n); }}
       style={{ width:54, textAlign:"center", background: readOnly?C.bg:C.surf2, border:`1px solid ${C.border}`,
-        borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"6px 4px", outline:"none" }}/>
+        borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"6px 4px" }}/>
   );
 
   return (
     <Card style={{ padding:"20px 24px" }}>
+      {dialogo}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:8 }}>
         <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700 }}>
           Gols e assistências
@@ -2449,6 +2582,7 @@ function GolsSimples({ partida, participacoes, jogadores, readOnly, show, onMudo
 
 
 function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
+  const { confirmar, dialogo } = useConfirm();
   const [partida, setPartida] = useState(p0);
   const [editDados, setEditDados] = useState(null); // {data, hora, id_campo, link_local} quando editando
   async function salvarDadosPartida() {
@@ -2467,7 +2601,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
       show("Dados do jogo atualizados!");
     } catch (e) { show(e.message, "error"); }
   }
-  const { toast, show } = useToast();
+  const { toast, show, close } = useToast();
 
   const { data: jogadores }     = useQuery(() => idTime ? api.get(`jogador?id_jogador=gt.0&id_time=eq.${idTime}&select=*,posicao(nome)&order=camisa.asc`) : Promise.resolve([]), [idTime]);
   // Meu time: tipo, raio padrão e coordenadas da cidade-sede — declarado ANTES das queries que usam meuTipoTime (evita TDZ no bundle de produção)
@@ -2485,6 +2619,8 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
   // Buscar times disponíveis na mesma data (partida em branco, público, mesmo tipo)
   const dataPartida = partida.data ? partida.data.split("T")[0] : null;
   const semAdversario = !(partida.id_adversario); // partida "procurando" se não tem adversário
+  // A ordem dos blocos acompanha o estado: antes do jogo, convocar; depois, lançar placar/escalação/gols
+  const jaAconteceu = partida.data ? new Date(partida.data) < new Date() : false;
   const [verProcurando, setVerProcurando] = useState(false); // botão: ver times procurando jogo mesmo com adversário definido
   const mostrarDisponiveis = (semAdversario || verProcurando) && !!dataPartida;
   const { data: disponiveis, loading: loadingDisp } = useQuery(
@@ -2530,7 +2666,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
     if (numeroTitulares) {
       const titularesEscalados = (participacoes || []).filter(p => p.titular === "S" && p.id_jogador > 0).length;
       if (titularesEscalados > 0 && titularesEscalados < numeroTitulares) {
-        if (!confirm(`A escalação tem ${titularesEscalados} titulares, mas o time joga com ${numeroTitulares}. Confirmar mesmo assim? (Ex: faltaram jogadores no dia.)`)) return;
+        if (!(await confirmar(`A escalação tem ${titularesEscalados} titulares, mas o time joga com ${numeroTitulares}. Confirmar mesmo assim? (Ex: faltaram jogadores no dia.)`, { textoOk:"Salvar assim mesmo" }))) return;
       }
     }
     setSavingPlacar(true);
@@ -2546,7 +2682,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
   }
 
   async function cancelarPartida() {
-    if (!confirm("Cancelar esta partida?")) return;
+    if (!(await confirmar("Cancelar esta partida?", { perigoso:true, textoOk:"Sim, cancelar" }))) return;
     try {
       await api.patch(`partida?id_partida=eq.${partida.id_partida}`, { cancelada: "S" });
       setPartida(u => ({ ...u, cancelada: "S" }));
@@ -2559,7 +2695,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
     const temPlacar = (partida.gols_marcados !== null && partida.gols_marcados !== undefined);
     // Ao remover adversário de partida com placar/gols, avisar que tudo será apagado
     if (!novoId && temPlacar) {
-      if (!confirm("Esta partida já tem placar e gols lançados. Ao remover o adversário, o resultado, os gols e a escalação desta partida serão APAGADOS. Deseja continuar?")) return;
+      if (!(await confirmar("Esta partida já tem placar e gols lançados. Ao remover o adversário, o resultado, os gols e a escalação desta partida serão APAGADOS. Deseja continuar?", { perigoso:true, textoOk:"Apagar e continuar" }))) return;
     }
     setSavingAdv(true);
     try {
@@ -2593,7 +2729,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
   }
 
   async function removerGol(id_gol) {
-    if (!confirm("Remover este gol?")) return;
+    if (!(await confirmar("Remover este gol?", { perigoso:true, textoOk:"Remover" }))) return;
     try {
       await api.delete(`gol?id_gol=eq.${id_gol}`);
       show("Gol removido."); reloadGols();
@@ -2621,13 +2757,13 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
     finally { setSavingMovP(false); }
   }
   async function removerMovP(m) {
-    if (!confirm("Remover este lançamento?")) return;
+    if (!(await confirmar("Remover este lançamento?", { perigoso:true, textoOk:"Remover" }))) return;
     try { await api.delete(`movimento_caixa?id_movimento=eq.${m.id_movimento}`); show("Removido."); reloadMovsP(); }
     catch(e){ show("Erro: "+e.message, "error"); }
   }
 
   async function removerParticipacao(id) {
-    if (!confirm("Remover jogador da partida?")) return;
+    if (!(await confirmar("Remover jogador da partida?", { perigoso:true, textoOk:"Remover" }))) return;
     try {
       await api.delete(`participacao?id_participacao=eq.${id}`);
       show("Jogador removido."); reloadPart();
@@ -2639,7 +2775,8 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <Toast {...(toast || { msg: null })} />
+      <Toast {...(toast || { msg: null })} onClose={close} />
+      {dialogo}
 
       {/* Cabeçalho da partida */}
       <Card style={{ padding: "20px 24px" }}>
@@ -2673,9 +2810,6 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
             {!cancelada && !readOnly && (
               <Btn variant="secondary" style={{ fontSize: 11, padding: "6px 12px" }} onClick={()=>setEditDados({ data: dataDeTS(partida.data), hora: horaDeTS(partida.data), id_campo: partida.id_campo ? String(partida.id_campo) : "", link_local: partida.link_local || "" })}>📅 Editar dados</Btn>
             )}
-            {!cancelada && (
-              <Btn variant="danger" style={{ fontSize: 11, padding: "6px 12px" }} onClick={cancelarPartida}>Cancelar Partida</Btn>
-            )}
           </div>
         </div>
       </Card>
@@ -2688,8 +2822,8 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
         </button>
       )}
 
-      {/* Link de confirmação de presença + convite para o WhatsApp */}
-      {!readOnly && !cancelada && (
+      {/* Link de confirmação de presença + convite para o WhatsApp (antes do jogo: primeira ação da tela) */}
+      {!readOnly && !cancelada && !jaAconteceu && (
         <Card style={{ background:C.surf2, display:"flex", flexDirection:"column", gap:14 }}>
           <LinkConfirmacao tipo="partida" idRef={partida.id_partida} idTime={idTime} dataRef={partida.data} show={show} embutido />
           <ConvocarPartida partida={partida} time={meuTimeData?.[0]} idTime={idTime} show={show}/>
@@ -2700,13 +2834,13 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
       {!cancelada && (
         <Card style={{ padding: "20px 24px" }}>
           <div style={{ fontSize: 13, color: C.gold, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 16 }}>Placar Final</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
             <Input label="Gols Marcados" type="number" min="0" value={placar.gols_marcados}
               onChange={e => setPlacar(p => ({ ...p, gols_marcados: e.target.value }))} style={{ width: 140 }} />
-            <div style={{ fontSize: 28, fontWeight: 800, color: C.dim, marginTop: 20 }}>×</div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: C.dim, marginBottom: 2 }}>×</div>
             <Input label="Gols Sofridos" type="number" min="0" value={placar.gols_sofridos}
               onChange={e => setPlacar(p => ({ ...p, gols_sofridos: e.target.value }))} style={{ width: 140 }} />
-            <Btn onClick={salvarPlacar} disabled={savingPlacar} style={{ marginTop: 20 }}>
+            <Btn onClick={salvarPlacar} disabled={savingPlacar}>
               {savingPlacar ? "Salvando..." : "Salvar Placar"}
             </Btn>
           </div>
@@ -2863,7 +2997,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 12, color: C.dim }}>Raio de busca:</span>
                 <input type="number" min="1" step="5" value={raioAtual} onChange={e => setRaioKm(Number(e.target.value) || 1)}
-                  style={{ width: 80, background: C.surf2, border: `1px solid ${C.border}`, borderRadius: 8, color: C.cream, fontFamily: "inherit", fontSize: 13, padding: "6px 10px", outline: "none" }} />
+                  style={{ width: 80, background: C.surf2, border: `1px solid ${C.border}`, borderRadius: 8, color: C.cream, fontFamily: "inherit", fontSize: 13, padding: "6px 10px" }} />
                 <span style={{ fontSize: 12, color: C.dim }}>km a partir de {minhaCidade.nome}</span>
               </div>
             )}
@@ -2936,6 +3070,21 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
           </Card>
         );
       })()}
+
+      {/* Link de confirmação + convite (depois do jogo: desce para o fim, sem atrapalhar o lançamento) */}
+      {!readOnly && !cancelada && jaAconteceu && (
+        <Card style={{ background:C.surf2, display:"flex", flexDirection:"column", gap:14 }}>
+          <LinkConfirmacao tipo="partida" idRef={partida.id_partida} idTime={idTime} dataRef={partida.data} show={show} embutido />
+          <ConvocarPartida partida={partida} time={meuTimeData?.[0]} idTime={idTime} show={show}/>
+        </Card>
+      )}
+
+      {/* Ação destrutiva: isolada no fim da página, longe das ações rotineiras */}
+      {!cancelada && !readOnly && (
+        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+          <Btn variant="danger" style={{ fontSize: 11, padding: "8px 16px" }} onClick={cancelarPartida}>Cancelar Partida</Btn>
+        </div>
+      )}
 
       {/* Modais */}
       {editDados && (
@@ -3230,6 +3379,7 @@ function FormEscalacao({ partida, jogadores, posicoes, participacoes, meuTime, o
 
 // ── FORM GOL ──────────────────────────────────────────────────
 function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, readOnly = false }) {
+  const { confirmar, dialogo } = useConfirm();
   const [form, setForm] = useState({ id_participacao: "", periodo: "1", minuto: "", penalti: "N", gol_contra: "N", id_assistente: "" });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -3271,7 +3421,7 @@ function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, re
       if (!permiteAcres) {
         show(`Este time não permite acréscimos. O minuto não pode passar de ${minPorPeriodo} (tempo padrão do período).`, "error"); return;
       } else {
-        if (!confirm(`O minuto ${minuto} é maior que o tempo padrão do período (${minPorPeriodo} min). Registrar como acréscimo?`)) return;
+        if (!(await confirmar(`O minuto ${minuto} é maior que o tempo padrão do período (${minPorPeriodo} min). Registrar como acréscimo?`, { textoOk:"Registrar" }))) return;
       }
     }
 
@@ -3301,6 +3451,7 @@ function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, re
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {dialogo}
       <Select label="Quem fez o gol *" value={form.id_participacao} onChange={e => set("id_participacao", e.target.value)}>
         <option value="">Selecione...</option>
         {participacoes.map(pa => <option key={pa.id_participacao} value={pa.id_participacao}>#{pa.camisa} — {pa.jogador?.apelido || pa.jogador?.nome}</option>)}
@@ -3626,7 +3777,141 @@ function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
   const concluidas = etapas.filter(e => e.concluido).length;
   const pct = Math.round((concluidas / etapas.length) * 100);
   const proxima = etapas.find(e => !e.concluido);
+  const configurado = pct === 100;
 
+  // ── Dados operacionais (para a Home pós-configuração) ──
+  const agora = new Date();
+  const hojeYMD = agora.toISOString().split("T")[0];
+  const partidasValidas = (partidas || []).filter(p => p.cancelada !== "S");
+  const proximaPartida = !ehTurmaFechada ? partidasValidas.find(p => p.data && new Date(p.data) >= agora) : null;
+  const pendentesPlacar = !ehTurmaFechada ? partidasValidas.filter(p => p.data && new Date(p.data) < agora && p.gols_marcados === null) : [];
+  const ultimoResultado = !ehTurmaFechada ? [...partidasValidas].reverse().find(p => p.gols_marcados !== null) : null;
+  const encontrosLista = (encontros || []);
+  const proximoEncontro = ehTurmaFechada ? encontrosLista.find(e => e.data && String(e.data).split("T")[0] >= hojeYMD) : null;
+  const ultimoEncontro  = ehTurmaFechada ? [...encontrosLista].reverse().find(e => e.data && String(e.data).split("T")[0] < hojeYMD) : null;
+  const resUlt = ultimoResultado ? (
+    ultimoResultado.gols_marcados > ultimoResultado.gols_sofridos ? { label:"Vitória", cor:C.win } :
+    ultimoResultado.gols_marcados < ultimoResultado.gols_sofridos ? { label:"Derrota", cor:C.loss } :
+    { label:"Empate", cor:C.draw }
+  ) : null;
+  const rotuloJogo = ehTurmaFechada ? "encontro" : "partida";
+
+  if (configurado) return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+
+      {/* Escolha do modo de registro de gols (só para times normais que ainda não definiram) */}
+      {!ehTurmaFechada && time && !time.modo_gol && (
+        <EscolherModoGol idTime={idTime} time={time} show={show} />
+      )}
+
+      {/* ── Card herói: o próximo compromisso do time ── */}
+      {(!ehTurmaFechada ? proximaPartida : proximoEncontro) ? (
+        <Card style={{ padding:"24px 28px", background:"linear-gradient(135deg,#103D2A,#174D36)", border:`1px solid ${C.gold}55` }}>
+          <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:6 }}>
+            {ehTurmaFechada ? "Próximo encontro" : "Próxima partida"}
+          </div>
+          {!ehTurmaFechada ? (
+            <>
+              <div style={{ fontSize:24, fontWeight:800, color:C.cream, marginBottom:4 }}>
+                {proximaPartida.id_adversario ? (proximaPartida.adversario?.nome || "Adversário") : "🔍 Procurando adversário"}
+              </div>
+              <div style={{ fontSize:14, color:C.dim, marginBottom:16 }}>
+                📅 {fmtData(proximaPartida.data)} · {fmtHora(proximaPartida.data)}
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize:24, fontWeight:800, color:C.cream, marginBottom:16 }}>
+              📅 {fmtDataA(proximoEncontro.data)}
+            </div>
+          )}
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+            <Btn onClick={() => onNavegar("partidas")}>{ehTurmaFechada ? "Abrir encontro" : "Abrir partida"}</Btn>
+            <span style={{ alignSelf:"center", fontSize:12, color:C.dim }}>
+              {ehTurmaFechada ? "Organize a presença e o sorteio por lá." : "Convoque a galera por lá 📣"}
+            </span>
+          </div>
+        </Card>
+      ) : (
+        <Card style={{ padding:"24px 28px", background:"linear-gradient(135deg,#103D2A,#174D36)" }}>
+          <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.12em", marginBottom:6 }}>Agenda</div>
+          <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:12 }}>Nenhum {rotuloJogo} marcado</div>
+          <Btn onClick={() => onNavegar("partidas")}>+ {ehTurmaFechada ? "Registrar encontro" : "Marcar partida"}</Btn>
+        </Card>
+      )}
+
+      {/* ── Pendências: partidas passadas sem placar ── */}
+      {pendentesPlacar.length > 0 && (
+        <button onClick={() => onNavegar("partidas")}
+          style={{ textAlign:"left", background:C.gold+"14", border:`1px solid ${C.gold}`, borderRadius:12,
+            padding:"16px 20px", cursor:"pointer", fontFamily:"inherit", color:C.cream,
+            display:"flex", alignItems:"center", gap:14 }}>
+          <span style={{ fontSize:24 }} aria-hidden="true">⚠️</span>
+          <span style={{ flex:1 }}>
+            <span style={{ fontWeight:800, color:C.gold }}>{pendentesPlacar.length} partida(s) sem placar lançado</span>
+            <span style={{ display:"block", fontSize:12, color:C.dim, marginTop:2 }}>Toque para lançar os resultados e manter as estatísticas em dia.</span>
+          </span>
+          <span style={{ color:C.gold, fontSize:20 }} aria-hidden="true">›</span>
+        </button>
+      )}
+
+      {/* ── Último resultado ── */}
+      {!ehTurmaFechada && ultimoResultado && (
+        <Card style={{ padding:"18px 22px", display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+          <div style={{ flex:1, minWidth:180 }}>
+            <div style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:4 }}>Último resultado</div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.cream }}>
+              <span style={{ color:resUlt.cor }}>{ultimoResultado.gols_marcados} × {ultimoResultado.gols_sofridos}</span>
+              {" "}vs {ultimoResultado.adversario?.nome || "Adversário"}
+            </div>
+            <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>{fmtData(ultimoResultado.data)}</div>
+          </div>
+          <Badge label={resUlt.label} cor={resUlt.cor} />
+        </Card>
+      )}
+      {ehTurmaFechada && ultimoEncontro && (
+        <Card style={{ padding:"18px 22px" }}>
+          <div style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:4 }}>Último encontro</div>
+          <div style={{ fontSize:18, fontWeight:800, color:C.cream }}>📅 {fmtDataA(ultimoEncontro.data)}</div>
+        </Card>
+      )}
+
+      {/* Aniversariantes do mês */}
+      <AniversariantesDoMes idTime={idTime} />
+
+      {/* Checklist de configuração: recolhido, para consulta */}
+      <details>
+        <summary style={{ cursor:"pointer", fontSize:12, color:C.dim, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", listStyle:"none", padding:"4px 0" }}>
+          ⚙️ Rever etapas de configuração <span style={{ color:C.win }}>({concluidas}/{etapas.length} ✓)</span>
+        </summary>
+        <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:10 }}>
+          {etapas.map(etapa => (
+            <button key={etapa.numero} onClick={() => onNavegar(etapa.menu)}
+              style={{ textAlign:"left", background:C.surface, border:`1px solid ${C.border}`, borderRadius:10,
+                padding:"10px 16px", cursor:"pointer", fontFamily:"inherit", color:C.cream, fontSize:13,
+                display:"flex", alignItems:"center", gap:10 }}>
+              <span aria-hidden="true">{etapa.concluido ? "✅" : etapa.icone}</span>
+              <span style={{ fontWeight:700 }}>{etapa.titulo}</span>
+              <span style={{ marginLeft:"auto", color:C.gold }} aria-hidden="true">›</span>
+            </button>
+          ))}
+        </div>
+      </details>
+
+      {/* Convite para avaliar o app */}
+      <Card style={{ padding:"20px 24px", background:`linear-gradient(135deg, ${C.surface}, ${C.surf2})`, border:`1px solid ${C.gold}55` }}>
+        <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+          <div style={{ fontSize:34 }} aria-hidden="true">⭐</div>
+          <div style={{ flex:1, minWidth:200 }}>
+            <div style={{ fontWeight:800, fontSize:16, color:C.cream, marginBottom:4 }}>Tá gostando do Nerd do Campo?</div>
+            <div style={{ fontSize:13, color:C.dim, lineHeight:1.5 }}>Deixe sua avaliação! Ela pode aparecer na página inicial e ajudar outros times a conhecerem o app.</div>
+          </div>
+          <Btn onClick={() => onNavegar("avaliar")} style={{ fontSize:13, whiteSpace:"nowrap" }}>⭐ Avaliar o app</Btn>
+        </div>
+      </Card>
+    </div>
+  );
+
+  // ── Modo onboarding: a configuração ainda não terminou ──
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
@@ -3685,8 +3970,9 @@ function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
           const bloqueado = anterior && !anterior.concluido;
 
           return (
-            <div key={etapa.numero}
+            <button key={etapa.numero}
               onClick={() => !bloqueado && onNavegar(etapa.menu)}
+              disabled={bloqueado}
               style={{
                 background: etapa.concluido ? C.surf2 : C.surface,
                 border: `1px solid ${etapa.concluido ? C.win+"55" : bloqueado ? C.border : C.gold+"44"}`,
@@ -3698,6 +3984,11 @@ function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
                 alignItems: "center",
                 gap: 16,
                 transition: "all 0.15s",
+                width: "100%",
+                textAlign: "left",
+                fontFamily: "inherit",
+                color: "inherit",
+                fontSize: "inherit",
               }}
               onMouseEnter={e => { if (!bloqueado) e.currentTarget.style.background = C.surf2; }}
               onMouseLeave={e => { e.currentTarget.style.background = etapa.concluido ? C.surf2 : C.surface; }}
@@ -3739,9 +4030,9 @@ function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
 
               {/* Seta */}
               {!bloqueado && (
-                <span style={{ color: etapa.concluido ? C.win : C.gold, fontSize: 20, flexShrink: 0 }}>›</span>
+                <span style={{ color: etapa.concluido ? C.win : C.gold, fontSize: 20, flexShrink: 0 }} aria-hidden="true">›</span>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
@@ -3984,22 +4275,26 @@ function CrudMensalidades({ idTime, show, readOnly }) {
         <Card style={{ padding:"16px 20px" }}>
           <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", justifyContent:"space-between" }}>
             <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <button onClick={() => { let m=mesSel-1, a=anoSel; if(m<1){m=12;a--;} setMesSel(m); setAnoSel(a); }}
-                style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, color:C.dim, cursor:"pointer", padding:"4px 12px", fontFamily:"inherit", fontSize:16 }}>‹</button>
+              <button onClick={() => { let m=mesSel-1, a=anoSel; if(m<1){m=12;a--;} setMesSel(m); setAnoSel(a); }} aria-label="Mês anterior"
+                style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.dim, cursor:"pointer", padding:"10px 16px", fontFamily:"inherit", fontSize:16 }}>‹</button>
               <div style={{ textAlign:"center", minWidth:160 }}>
                 <div style={{ fontSize:18, fontWeight:800, color:C.cream }}>{MESES_LABEL[mesSel-1]} {anoSel}</div>
                 <div style={{ fontSize:11, color:C.dim }}>Mensalidade padrão: {fmtMoeda(time?.valor_mensalidade)}</div>
               </div>
-              <button onClick={() => { let m=mesSel+1, a=anoSel; if(m>12){m=1;a++;} setMesSel(m); setAnoSel(a); }}
-                style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, color:C.dim, cursor:"pointer", padding:"4px 12px", fontFamily:"inherit", fontSize:16 }}>›</button>
+              <button onClick={() => { let m=mesSel+1, a=anoSel; if(m>12){m=1;a++;} setMesSel(m); setAnoSel(a); }} aria-label="Próximo mês"
+                style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.dim, cursor:"pointer", padding:"10px 16px", fontFamily:"inherit", fontSize:16 }}>›</button>
+              {(mesSel !== hoje.getMonth()+1 || anoSel !== hoje.getFullYear()) && (
+                <button onClick={() => { setMesSel(hoje.getMonth()+1); setAnoSel(hoje.getFullYear()); }}
+                  style={{ background:C.gold+"22", border:`1px solid ${C.gold}`, borderRadius:8, color:C.gold, cursor:"pointer", padding:"10px 14px", fontFamily:"inherit", fontSize:12, fontWeight:700, textTransform:"uppercase" }}>Hoje</button>
+              )}
             </div>
-            <div style={{ display:"flex", gap:12 }}>
+            <div style={{ display:"flex", gap:12, flex:"1 1 280px" }}>
               {[
                 { label:"Esperado", valor: fmtMoeda(totalEsperado), cor: C.cream },
                 { label:"Recebido", valor: fmtMoeda(totalRecebido), cor: C.win },
                 { label:"Pendente", valor: fmtMoeda(totalPendente), cor: totalPendente>0 ? C.loss : C.win },
               ].map(s => (
-                <div key={s.label} style={{ textAlign:"center", background:C.surf2, borderRadius:8, padding:"10px 16px" }}>
+                <div key={s.label} style={{ textAlign:"center", background:C.surf2, borderRadius:8, padding:"10px 16px", flex:1 }}>
                   <div style={{ fontSize:16, fontWeight:800, color:s.cor }}>{s.valor}</div>
                   <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase" }}>{s.label}</div>
                 </div>
@@ -4045,7 +4340,7 @@ function CrudMensalidades({ idTime, show, readOnly }) {
                 </td>
                 <td style={{ padding:"11px 14px", display:"flex", gap:6 }}>
                   {!readOnly && j.status !== "pago" && j.status !== "isento" && (
-                    <Btn style={{ fontSize:11, padding:"4px 10px", background:C.win, color:"white" }}
+                    <Btn style={{ fontSize:11, padding:"4px 10px", background:C.winBg, color:"white" }}
                       onClick={() => marcarPago(j)}>✅ Pago</Btn>
                   )}
                   <Btn variant="secondary" style={{ fontSize:11, padding:"4px 10px" }}
@@ -4331,7 +4626,7 @@ function PaginaAvaliar({ idTime, meusTimes, session, show, onEnviado }) {
       <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:10 }}>Conta como tem sido sua experiência</div>
       <textarea value={texto} onChange={e => setTexto(e.target.value.slice(0,500))} rows={4}
         placeholder="O que você mais gostou? O que faz diferença no dia a dia do seu time?"
-        style={{ width:"100%", background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"14px 16px", resize:"vertical", boxSizing:"border-box", outline:"none", lineHeight:1.5 }}/>
+        style={{ width:"100%", background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"14px 16px", resize:"vertical", boxSizing:"border-box", lineHeight:1.5 }}/>
       <div style={{ fontSize:11, color:C.dim, textAlign:"right", marginTop:4, marginBottom:22 }}>{texto.length} / 500</div>
 
       <label style={{ display:"flex", alignItems:"flex-start", gap:12, background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:16, marginBottom:14, cursor:"pointer" }}>
@@ -4833,13 +5128,20 @@ function CrudCaixa({ idTime, show, readOnly }) {
         ))}
       </div>
 
-      {/* Filtros temporada + datas + exportação */}
+      {/* Filtros temporada + datas + exportação — recolhíveis, com contador de filtros ativos */}
       <Card style={{ padding:"14px 16px" }}>
-        <div style={{ marginBottom:12 }}>
+        <details open={typeof window !== "undefined" && window.innerWidth > 768}>
+        <summary style={{ cursor:"pointer", fontSize:12, color:C.gold, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em", listStyle:"none", display:"flex", alignItems:"center", gap:8 }}>
+          🔍 Filtros e exportação
+          {(() => { const n = [filtroTemporada!=="todas", filtroNatureza!=="todas", filtroTipo!=="todos", !!dataDe, !!dataAte, !!buscaObs.trim()].filter(Boolean).length;
+            return n > 0 ? <span style={{ background:C.gold, color:"#0B3D2E", borderRadius:10, padding:"1px 8px", fontSize:11 }}>{n} ativo(s)</span> : null; })()}
+          <span style={{ marginLeft:"auto", color:C.dim, fontSize:11, textTransform:"none", fontWeight:400 }}>toque para abrir/fechar</span>
+        </summary>
+        <div style={{ marginBottom:12, marginTop:12 }}>
           <div style={{ fontSize:10, color:C.dim, textTransform:"uppercase", marginBottom:4 }}>🔍 Buscar na observação/descrição</div>
           <input type="text" value={buscaObs} onChange={e=>setBuscaObs(e.target.value)}
             placeholder="Ex: nerd campo (traz o que tiver as duas palavras)"
-            style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"9px 12px", outline:"none" }}/>
+            style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"9px 12px" }}/>
         </div>
         <div style={{ display:"flex", gap:12, flexWrap:"wrap", alignItems:"flex-end" }}>
           <div style={{ minWidth:130 }}>
@@ -4888,6 +5190,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
             <Btn variant="secondary" style={{ fontSize:11, padding:"8px 12px" }} onClick={exportarPDF}>📕 PDF</Btn>
           </div>
         </div>
+        </details>
       </Card>
 
       {/* Extrato cronológico */}
@@ -4904,7 +5207,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
             <thead><tr style={{ background:C.surf2 }}>
               {["Data","Descrição","Origem","Valor", temFiltro?"Acum. (seleção)":"Saldo","Obs.","Lançado por"].map(h=>(
-                <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
+                <th key={h} className={(h==="Obs."||h==="Lançado por")?"col-ocultar-mobile":undefined} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700, whiteSpace:"nowrap" }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
@@ -4917,8 +5220,8 @@ function CrudCaixa({ idTime, show, readOnly }) {
                     {m.natureza==="receita"?"+":"−"} {fmtMoeda(m.valor)}
                   </td>
                   <td style={{ padding:"10px 14px", fontWeight:700, whiteSpace:"nowrap", color: m.saldoAcc>=0?C.cream:C.loss }}>{fmtMoeda(m.saldoAcc)}</td>
-                  <td style={{ padding:"10px 14px", color:C.dim, fontSize:11, maxWidth:160 }}>{m.observacao || "—"}</td>
-                  <td style={{ padding:"10px 14px", color:C.dim, fontSize:11, whiteSpace:"nowrap" }}>{m.registrado_por || "—"}</td>
+                  <td className="col-ocultar-mobile" style={{ padding:"10px 14px", color:C.dim, fontSize:11, maxWidth:160 }}>{m.observacao || "—"}</td>
+                  <td className="col-ocultar-mobile" style={{ padding:"10px 14px", color:C.dim, fontSize:11, whiteSpace:"nowrap" }}>{m.registrado_por || "—"}</td>
                 </tr>
               ))}
               {extrato.length===0 && <tr><td colSpan={7} style={{ padding:24, textAlign:"center", color:C.dim }}>Nenhum movimento registrado.</td></tr>}
@@ -5080,14 +5383,14 @@ function RelatorioFinanceiro({ idTime, show }) {
       <Card style={{ padding:16, marginBottom:16 }}>
         <div className="no-print" style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
           <select value={modoPeriodo} onChange={e=>setModoPeriodo(e.target.value)}
-            style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none", cursor:"pointer" }}>
+            style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", cursor:"pointer" }}>
             <option value="tudo">Todo o histórico</option>
             <option value="temporada">Por temporada</option>
             <option value="intervalo">Intervalo de datas</option>
           </select>
           {modoPeriodo === "temporada" && (
             <select value={tempSel} onChange={e=>setTempSel(e.target.value)}
-              style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none", cursor:"pointer" }}>
+              style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", cursor:"pointer" }}>
               <option value="">Selecione a temporada</option>
               {(temporadas||[]).map(t => <option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
             </select>
@@ -5095,10 +5398,10 @@ function RelatorioFinanceiro({ idTime, show }) {
           {modoPeriodo === "intervalo" && (
             <>
               <input type="date" value={dataIni} onChange={e=>setDataIni(e.target.value)}
-                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none" }}/>
+                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px" }}/>
               <span style={{ color:C.dim }}>até</span>
               <input type="date" value={dataFim} onChange={e=>setDataFim(e.target.value)}
-                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px", outline:"none" }}/>
+                style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"9px 12px" }}/>
             </>
           )}
         </div>
@@ -5189,6 +5492,7 @@ function RelatorioFinanceiro({ idTime, show }) {
 // Fases 2 e 3: controle de quem vendeu quanto, meta, complemento e status.
 // NÃO mexe no caixa (isso é a Fase 4).
 function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
+  const { confirmar, dialogo } = useConfirm();
   const valorUnit = Number(evento.valor_unitario || 0);
   const metaPadrao = Number(evento.meta_padrao || 0);
   const eventoEncerrado = evento.status === "encerrado";
@@ -5268,7 +5572,7 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
   async function adicionarTodos() {
     const faltantes = (jogadores || []).filter(j => !lista.some(v => String(v.id_jogador) === String(j.id_jogador)));
     if (faltantes.length === 0) { show("Todos os atletas ativos já estão na lista."); return; }
-    if (!confirm(`Adicionar ${faltantes.length} atleta(s) ativo(s) à lista de vendedores, cada um com meta ${metaPadrao} un.?`)) return;
+    if (!(await confirmar(`Adicionar ${faltantes.length} atleta(s) ativo(s) à lista de vendedores, cada um com meta ${metaPadrao} un.?`, { textoOk:"Adicionar todos" }))) return;
     setSalvando(true);
     try {
       const corpo = faltantes.map(j => ({
@@ -5335,7 +5639,7 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
     const c = calc(v);
     let msg = `Acertar ${nomeVend(v)}?\n\nEntra ${fmtMoeda(c.entregue)} no caixa do time.`;
     if (c.faltante > 0) msg += `\n\n(Meta de ${fmtMoeda(c.metaValor)} — faltaram ${fmtMoeda(c.faltante)}. Você pode acertar mesmo assim.)`;
-    if (!confirm(msg)) return;
+    if (!(await confirmar(msg, { perigoso:true, textoOk:"Confirmar" }))) return;
     try {
       // 1º lança no caixa; só marca acertado se o lançamento der certo (transacional)
       await lancarReceitaVendedor(v);
@@ -5351,7 +5655,7 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
     }
   }
   async function reabrir(v) {
-    if (!confirm(`Reabrir ${nomeVend(v)}?\n\nO lançamento de ${fmtMoeda(calc(v).entregue)} será removido do caixa.`)) return;
+    if (!(await confirmar(`Reabrir ${nomeVend(v)}?\n\nO lançamento de ${fmtMoeda(calc(v).entregue)} será removido do caixa.`, { perigoso:true, textoOk:"Reabrir" }))) return;
     try {
       await removerReceitaVendedor(v);
       await api.patch(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`, { status:"aberto", atualizado_em: new Date().toISOString() });
@@ -5364,7 +5668,7 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
   }
   async function remover(v) {
     if (v.status === "acertado") { show("Reabra o vendedor antes de remover.", "error"); return; }
-    if (!confirm(`Remover ${nomeVend(v)} deste evento?`)) return;
+    if (!(await confirmar(`Remover ${nomeVend(v)} deste evento?`, { perigoso:true, textoOk:"Remover" }))) return;
     try {
       await api.delete(`evento_vendedor?id_evento_vendedor=eq.${v.id_evento_vendedor}`);
       reload();
@@ -5373,6 +5677,7 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
 
   return (
     <Modal title={`Vendedores — ${evento.nome}`} onClose={onClose}>
+      {dialogo}
       <div style={{ display:"flex", flexDirection:"column", gap:14, minWidth:0 }}>
         {/* Totais */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))", gap:10 }}>
@@ -5443,19 +5748,19 @@ function GestaoVendedores({ evento, idTime, show, readOnly, onClose }) {
                   <div style={{ fontSize:10, color:C.dim, marginBottom:2 }}>Vendidos</div>
                   <input key={`vend-${v.id_evento_vendedor}-${v.vendidos}-${v.status}`} type="number" min="0" step="1" disabled={travado} defaultValue={v.vendidos||0}
                     onBlur={e=>{ const n=Number(e.target.value)||0; if(n!==Number(v.vendidos||0)) atualizarCampo(v,"vendidos",n); }}
-                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px", outline:"none" }}/>
+                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px" }}/>
                 </div>
                 <div>
                   <div style={{ fontSize:10, color:C.dim, marginBottom:2 }}>Meta (un.)</div>
                   <input key={`meta-${v.id_evento_vendedor}-${v.meta_unidades}-${v.status}`} type="number" min="0" step="1" disabled={travado} defaultValue={v.meta_unidades||0}
                     onBlur={e=>{ const n=Number(e.target.value)||0; if(n!==Number(v.meta_unidades||0)) atualizarCampo(v,"meta_unidades",n); }}
-                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px", outline:"none" }}/>
+                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px" }}/>
                 </div>
                 <div>
                   <div style={{ fontSize:10, color:C.dim, marginBottom:2 }}>Complemento (R$)</div>
                   <input key={`comp-${v.id_evento_vendedor}-${v.complemento}-${v.status}`} type="number" min="0" step="0.01" disabled={travado} defaultValue={v.complemento||0}
                     onBlur={e=>{ const n=Number(e.target.value)||0; if(n!==Number(v.complemento||0)) atualizarCampo(v,"complemento",n); }}
-                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px", outline:"none" }}/>
+                    style={{ width:"100%", background: travado?C.bg:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.cream, fontFamily:"inherit", fontSize:13, padding:"6px 8px" }}/>
                 </div>
               </div>
               {/* linha informativa de meta/faltante */}
@@ -5658,6 +5963,7 @@ function RelatorioVendas({ evento, idTime, onClose }) {
 
 
 function CrudEventos({ idTime, show, readOnly }) {
+  const { confirmar, dialogo } = useConfirm();
   // idTime recebido por prop (filtrado pelo usuário logado no componente pai)
   const { data: _timeEvento } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_time,nome,cidade:id_cidade_sede(nome,estado)&limit=1`) : Promise.resolve([]), [idTime]);
   const { data: eventos, loading, reload } = useQuery(
@@ -5670,6 +5976,22 @@ function CrudEventos({ idTime, show, readOnly }) {
     () => idTime ? api.get(`movimento_caixa?id_time=eq.${idTime}&origem=in.(evento,venda_evento)&select=*,tipo_movimento(descricao)`) : Promise.resolve([]),
     [idTime]
   );
+  // Confirmações de presença por evento (contador nos cards). tipo="evento", id_ref=id_evento.
+  const { data: _linksEvento } = useQuery(() => idTime ? api.get(`link_confirmacao?tipo=eq.evento&id_time=eq.${idTime}&select=id_link,id_ref`) : Promise.resolve([]), [idTime]);
+  const _idLinksEv = (_linksEvento||[]).map(l=>l.id_link).join(",");
+  const { data: _confsEvento } = useQuery(() => _idLinksEv ? api.get(`confirmacao_presenca?id_link=in.(${_idLinksEv})&select=id_link,status`) : Promise.resolve([]), [_idLinksEv]);
+  const confirmadosPorEvento = useMemo(() => {
+    const linkToEv = {}; (_linksEvento||[]).forEach(l => { linkToEv[l.id_link] = l.id_ref; });
+    const m = {};
+    (_confsEvento||[]).forEach(c => {
+      const ev = linkToEv[c.id_link]; if (ev == null) return;
+      if (!m[ev]) m[ev] = { vou:0, talvez:0, nao:0 };
+      if (c.status === "vou") m[ev].vou++;
+      else if (c.status === "talvez") m[ev].talvez++;
+      else if (c.status === "nao_vou") m[ev].nao++;
+    });
+    return m;
+  }, [_linksEvento, _confsEvento]);
 
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
@@ -5680,6 +6002,10 @@ function CrudEventos({ idTime, show, readOnly }) {
   const [processando, setProcessando] = useState(null); // texto do overlay enquanto processa em lote (ex: encerrar com vendedores)
   const [linkEvento, setLinkEvento] = useState(null); // evento cujo link de confirmação está aberto
   const [formMov, setFormMov] = useState({});
+  // Filtros inteligentes
+  const [filtroTipo, setFiltroTipo] = useState("todos");     // todos | financeiro | presenca
+  const [filtroStatus, setFiltroStatus] = useState("todos"); // todos | andamento | encerrado
+  const [buscaEv, setBuscaEv] = useState("");
 
   function abrirNovo() {
     setForm({ nome:"", data_evento:new Date().toISOString().split("T")[0], link_local:"", meta:"", modo:"detalhado", resultado_direto:"", id_temporada: temporadas?.[0]?.id_temporada || "", observacoes:"", eh_financeiro:true, controla_venda:false, valor_unitario:"", meta_padrao:"" });
@@ -5745,7 +6071,7 @@ function CrudEventos({ idTime, show, readOnly }) {
     if (vendAbertos.length > 0) {
       msg += `\n\n⚠️ ${vendAbertos.length} vendedor(es) ainda em aberto, somando ${fmtMoeda(totalAbertos)}.\nAo encerrar, eles serão ACERTADOS e lançados no caixa automaticamente.`;
     }
-    if (!confirm(msg)) return;
+    if (!(await confirmar(msg, { perigoso:true, textoOk:"Confirmar" }))) return;
     if (vendAbertos.length > 0) setProcessando(`Acertando ${vendAbertos.length} vendedor(es) e lançando no caixa…`);
     try {
       // acerta cada vendedor em aberto: lança no caixa + marca acertado
@@ -5800,7 +6126,7 @@ function CrudEventos({ idTime, show, readOnly }) {
   }
 
   async function reabrir(ev) {
-    if (!confirm(`Reabrir "${ev.nome}"?\nO resultado deixará de ficar congelado e voltará a ser ${ev.modo==="direto"?"o valor digitado":"calculado pelos lançamentos"}.`)) return;
+    if (!(await confirmar(`Reabrir "${ev.nome}"?\nO resultado deixará de ficar congelado e voltará a ser ${ev.modo==="direto"?"o valor digitado":"calculado pelos lançamentos"}.`, { textoOk:"Reabrir" }))) return;
     try {
       await api.patch(`evento?id_evento=eq.${ev.id_evento}`, { status:"aberto", resultado_final:null, meta_atingida:null });
       show("Evento reaberto!"); reload();
@@ -5810,7 +6136,7 @@ function CrudEventos({ idTime, show, readOnly }) {
   async function excluir(ev) {
     const temMov = (movsEvento||[]).some(m=>m.id_evento===ev.id_evento);
     if (temMov) { show("Este evento tem lançamentos vinculados e não pode ser excluído.", "error"); return; }
-    if (!confirm(`Excluir o evento "${ev.nome}"?`)) return;
+    if (!(await confirmar(`Excluir o evento "${ev.nome}"?`, { perigoso:true, textoOk:"Excluir" }))) return;
     try { await api.delete(`evento?id_evento=eq.${ev.id_evento}`); show("Evento excluído."); reload(); }
     catch(e){ show("Erro: "+e.message, "error"); }
   }
@@ -5840,7 +6166,7 @@ function CrudEventos({ idTime, show, readOnly }) {
   }
 
   async function removerMov(m) {
-    if (!confirm("Remover este lançamento?")) return;
+    if (!(await confirmar("Remover este lançamento?", { perigoso:true, textoOk:"Remover" }))) return;
     try { await api.delete(`movimento_caixa?id_movimento=eq.${m.id_movimento}`); show("Removido."); reloadMovs(); }
     catch(e){ show("Erro: "+e.message, "error"); }
   }
@@ -5849,6 +6175,7 @@ function CrudEventos({ idTime, show, readOnly }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {dialogo}
       {!readOnly && <div><Btn onClick={abrirNovo}>+ Novo Evento</Btn></div>}
 
       {(eventos||[]).length === 0 && !loading && (
@@ -5856,69 +6183,183 @@ function CrudEventos({ idTime, show, readOnly }) {
           texto="Crie eventos de arrecadação (churrasco, rifa, festa) com meta e controle financeiro, ou eventos só de presença (como uma janta) para organizar quem vai — sem mexer em dinheiro."
           acaoLabel={!readOnly ? "+ Criar primeiro evento" : null} onAcao={!readOnly ? abrirNovo : null}/>
       )}
-      {(eventos||[]).map(ev => {
-        const ehFin = ev.eh_financeiro !== false; // eventos antigos (sem o campo) = financeiros
-        const resultado = ev.status==="encerrado" ? Number(ev.resultado_final||0)
-          : ev.modo==="direto" ? Number(ev.resultado_direto||0) : resultadoCalculado(ev.id_evento);
-        const meta = Number(ev.meta||0);
-        const atingiu = resultado >= meta;
-        const movs = (movsEvento||[]).filter(m=>m.id_evento===ev.id_evento && m.origem==="evento"); // só avulsos (lista/exclusão)
-        return (
-          <Card key={ev.id_evento} style={{ padding:20 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:12 }}>
-              <div>
-                <div style={{ fontSize:16, fontWeight:800, color:C.cream }}>
-                  🎉 {ev.nome}
-                  {!ehFin && <span style={{ fontSize:11, color:C.gold, marginLeft:8, fontWeight:600 }}>· só presença</span>}
-                  {ev.status==="encerrado" && <span style={{ fontSize:11, color:C.dim, marginLeft:8 }}>(encerrado)</span>}
-                </div>
-                <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>
-                  {ev.data_evento ? new Date(ev.data_evento+"T12:00:00").toLocaleDateString("pt-BR") : "Sem data"}
-                  {ev.temporada?.nome && ` · ${ev.temporada.nome}`}
-                  {ehFin && ` · Modo ${ev.modo==="direto"?"resultado direto":"detalhado"}`}
-                </div>
-              </div>
-              {ehFin && (
-                <div style={{ textAlign:"right" }}>
-                  <div style={{ fontSize:20, fontWeight:800, color: resultado>=0?C.win:C.loss }}>{fmtMoeda(resultado)}</div>
-                  <div style={{ fontSize:11, color:C.dim }}>Meta: {fmtMoeda(meta)}</div>
-                  {meta>0 && <div style={{ fontSize:11, fontWeight:700, color: atingiu?C.win:C.loss }}>{atingiu?"✅ Meta atingida":"❌ Abaixo da meta"}</div>}
-                </div>
-              )}
-            </div>
 
-            {/* Movimentos do evento (modo detalhado) — só financeiro */}
-            {ehFin && ev.modo==="detalhado" && movs.length>0 && (
-              <div style={{ marginTop:14, background:C.surf2, borderRadius:8, padding:"10px 14px" }}>
-                {movs.map(m => (
-                  <div key={m.id_movimento} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 0", fontSize:12 }}>
-                    <span style={{ color:C.dim }}>{m.tipo_movimento?.descricao}{m.observacao?` — ${m.observacao}`:""}</span>
-                    <span style={{ display:"flex", gap:10, alignItems:"center" }}>
-                      <span style={{ color: m.natureza==="receita"?C.win:C.loss, fontWeight:700 }}>{m.natureza==="receita"?"+":"−"} {fmtMoeda(m.valor)}</span>
-                      {!readOnly && ev.status!=="encerrado" && <button onClick={()=>removerMov(m)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:14 }}>✕</button>}
+      {/* ── Filtros inteligentes ── */}
+      {(eventos||[]).length > 0 && (() => {
+        const cnt = {
+          todos: (eventos||[]).length,
+          financeiro: (eventos||[]).filter(e=>e.eh_financeiro!==false).length,
+          presenca: (eventos||[]).filter(e=>e.eh_financeiro===false).length,
+          andamento: (eventos||[]).filter(e=>e.status!=="encerrado").length,
+          encerrado: (eventos||[]).filter(e=>e.status==="encerrado").length,
+        };
+        const chip = (ativo, label, onClick, key) => (
+          <button key={key} onClick={onClick} style={{ background: ativo?C.gold:C.surf2, color: ativo?"#0B3D2E":C.dim, border:`1px solid ${ativo?C.gold:C.border}`, borderRadius:7, padding:"6px 12px", fontFamily:"inherit", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>{label}</button>
+        );
+        return (
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            <Input placeholder="🔍 Buscar evento pelo nome..." value={buscaEv} onChange={e=>setBuscaEv(e.target.value)} aria-label="Buscar evento" style={{ maxWidth:320 }} />
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+              <span style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, marginRight:2 }}>Tipo:</span>
+              {chip(filtroTipo==="todos", `Todos (${cnt.todos})`, ()=>setFiltroTipo("todos"), "t-todos")}
+              {chip(filtroTipo==="financeiro", `💰 Arrecadação (${cnt.financeiro})`, ()=>setFiltroTipo("financeiro"), "t-fin")}
+              {chip(filtroTipo==="presenca", `📋 Presença (${cnt.presenca})`, ()=>setFiltroTipo("presenca"), "t-pres")}
+            </div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+              <span style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, marginRight:2 }}>Situação:</span>
+              {chip(filtroStatus==="todos", "Todas", ()=>setFiltroStatus("todos"), "s-todos")}
+              {chip(filtroStatus==="andamento", `Em andamento (${cnt.andamento})`, ()=>setFiltroStatus("andamento"), "s-and")}
+              {chip(filtroStatus==="encerrado", `Encerrados (${cnt.encerrado})`, ()=>setFiltroStatus("encerrado"), "s-enc")}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Lista filtrada + agrupada ── */}
+      {(eventos||[]).length > 0 && (() => {
+        const _norm = (s) => _semAcento(String(s||""));
+        const filtrados = (eventos||[]).filter(ev => {
+          const ehFin = ev.eh_financeiro !== false;
+          if (filtroTipo==="financeiro" && !ehFin) return false;
+          if (filtroTipo==="presenca" && ehFin) return false;
+          const encerrado = ev.status==="encerrado";
+          if (filtroStatus==="andamento" && encerrado) return false;
+          if (filtroStatus==="encerrado" && !encerrado) return false;
+          if (buscaEv.trim() && !_norm(ev.nome).includes(_norm(buscaEv))) return false;
+          return true;
+        });
+        if (filtrados.length === 0) {
+          return <div style={{ textAlign:"center", color:C.dim, fontSize:14, padding:"30px 16px", background:C.surface, border:`1px solid ${C.border}`, borderRadius:12 }}>Nenhum evento com esse filtro.</div>;
+        }
+        const emAndamento = filtrados.filter(ev => ev.status!=="encerrado");
+        const encerrados  = filtrados.filter(ev => ev.status==="encerrado");
+        const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+        const renderEventoCard = (ev) => {
+          const ehFin = ev.eh_financeiro !== false; // eventos antigos (sem o campo) = financeiros
+          const encerrado = ev.status==="encerrado";
+          const resultado = encerrado ? Number(ev.resultado_final||0)
+            : ev.modo==="direto" ? Number(ev.resultado_direto||0) : resultadoCalculado(ev.id_evento);
+          const meta = Number(ev.meta||0);
+          const atingiu = resultado >= meta;
+          const pct = meta>0 ? Math.round((resultado/meta)*100) : null;
+          const movs = (movsEvento||[]).filter(m=>m.id_evento===ev.id_evento && m.origem==="evento"); // só avulsos
+          const conf = confirmadosPorEvento[ev.id_evento] || { vou:0, talvez:0, nao:0 };
+          const d = ev.data_evento ? new Date(ev.data_evento+"T12:00:00") : null;
+
+          // badge de tipo/situação
+          const badge = encerrado ? { txt:"🏁 Encerrado", bg:C.surf2, cor:C.dim, bd:C.border }
+                       : ehFin    ? { txt:"💰 Arrecadação", bg:C.gold+"22", cor:C.gold, bd:C.gold }
+                                  : { txt:"📋 Presença", bg:C.surf2, cor:C.dim, bd:C.border };
+
+          return (
+            <Card key={ev.id_evento} style={{ padding:14, display:"flex", gap:13, opacity: encerrado ? 0.72 : 1 }}>
+              {/* Tile de data */}
+              <div style={{ width:52, flexShrink:0, borderRadius:10, overflow:"hidden", border:`1px solid ${C.border}`, textAlign:"center", alignSelf:"flex-start" }}>
+                <div style={{ background:C.gold, color:"#0B3D2E", fontSize:10, fontWeight:800, textTransform:"uppercase", padding:"2px 0", letterSpacing:"0.05em" }}>{d ? MESES[d.getMonth()] : "—"}</div>
+                <div style={{ background:C.surf2, color:C.cream, fontSize:22, fontWeight:800, padding:"5px 0 6px" }}>{d ? String(d.getDate()).padStart(2,"0") : "—"}</div>
+              </div>
+
+              <div style={{ flex:1, minWidth:0 }}>
+                {/* Nome + badge */}
+                <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                  <span style={{ fontSize:16, fontWeight:800, color:C.cream }}>{ev.nome}</span>
+                  <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:badge.bg, color:badge.cor, border:`1px solid ${badge.bd}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{badge.txt}</span>
+                </div>
+                <div style={{ fontSize:12, color:C.dim, marginTop:3 }}>
+                  {ev.temporada?.nome || "Sem temporada"}
+                  {ehFin && ` · ${ev.modo==="direto"?"resultado direto":"detalhado"}`}
+                </div>
+
+                {/* Financeiro: barra de progresso da meta */}
+                {ehFin && meta>0 && (
+                  <div style={{ marginTop:11 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:5 }}>
+                      <span style={{ fontSize:17, fontWeight:800, color:C.cream }}>{fmtMoeda(resultado)} <span style={{ fontSize:12, fontWeight:600, color:C.dim }}>/ {fmtMoeda(meta)}</span></span>
+                      <span style={{ fontSize:12, fontWeight:800, color: atingiu?C.win:C.gold }}>{pct}%</span>
+                    </div>
+                    <div style={{ height:9, background:C.surf2, borderRadius:6, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${Math.min(Math.max(pct,0),100)}%`, borderRadius:6, background: atingiu ? "linear-gradient(90deg,#4CAF50,#6FCF73)" : "linear-gradient(90deg,#E8A020,#f0b84a)" }}/>
+                    </div>
+                    <div style={{ fontSize:11, fontWeight:700, marginTop:6, color: atingiu?C.win:C.dim }}>
+                      {atingiu ? (resultado>meta ? `✅ Meta superada em ${fmtMoeda(resultado-meta)}` : "✅ Meta atingida") : `Faltam ${fmtMoeda(meta-resultado)} pra bater a meta`}
+                    </div>
+                  </div>
+                )}
+                {/* Financeiro sem meta definida: mostra só o resultado */}
+                {ehFin && meta<=0 && (
+                  <div style={{ fontSize:18, fontWeight:800, color: resultado>=0?C.win:C.loss, marginTop:8 }}>{fmtMoeda(resultado)} <span style={{ fontSize:11, color:C.dim, fontWeight:600 }}>· sem meta</span></div>
+                )}
+
+                {/* Presença: contador de confirmados */}
+                {!ehFin && (
+                  <div style={{ marginTop:10, fontSize:14, color:C.cream, fontWeight:700, display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+                    {(conf.vou+conf.talvez+conf.nao) === 0
+                      ? <span style={{ color:C.dim, fontWeight:400, fontSize:13 }}>Sem confirmações ainda</span>
+                      : <>
+                          <span>✅ <b style={{ color:C.win }}>{conf.vou}</b> confirmados</span>
+                          {conf.talvez>0 && <span style={{ color:C.dim, fontWeight:400, fontSize:13 }}>🤔 {conf.talvez} talvez</span>}
+                          {conf.nao>0 && <span style={{ color:C.dim, fontWeight:400, fontSize:13 }}>❌ {conf.nao} não</span>}
+                        </>}
+                  </div>
+                )}
+
+                {/* Movimentos do evento (modo detalhado) — só financeiro */}
+                {ehFin && ev.modo==="detalhado" && movs.length>0 && (
+                  <div style={{ marginTop:12, background:C.surf2, borderRadius:8, padding:"10px 14px" }}>
+                    {movs.map(m => (
+                      <div key={m.id_movimento} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"4px 0", fontSize:12 }}>
+                        <span style={{ color:C.dim }}>{m.tipo_movimento?.descricao}{m.observacao?` — ${m.observacao}`:""}</span>
+                        <span style={{ display:"flex", gap:10, alignItems:"center" }}>
+                          <span style={{ color: m.natureza==="receita"?C.win:C.loss, fontWeight:700 }}>{m.natureza==="receita"?"+":"−"} {fmtMoeda(m.valor)}</span>
+                          {!readOnly && !encerrado && <button onClick={()=>removerMov(m)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:14 }}>✕</button>}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Ações */}
+                {!readOnly && (
+                  <div style={{ display:"flex", gap:8, marginTop:13, flexWrap:"wrap", alignItems:"center" }}>
+                    {ehFin && !encerrado && ev.modo==="detalhado" && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>abrirLancar(ev)}>+ Lançar</Btn>}
+                    {ehFin && !encerrado && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>setVendedoresDe(ev)}>🎟️ Vendedores</Btn>}
+                    {ehFin && encerrado && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>setRelatorioDe(ev)}>📊 Relatório</Btn>}
+                    {!ehFin && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={()=>setLinkEvento(ev)}>📲 Link de confirmação</Btn>}
+                    <span style={{ marginLeft:"auto" }}>
+                      <MenuAcoes acoes={[
+                        !encerrado && { label:"✏️ Editar evento", onClick:()=>abrirEditar(ev) },
+                        ehFin && { label:"📲 Link de confirmação", onClick:()=>setLinkEvento(ev) },
+                        ehFin && !encerrado && ev.controla_venda && { label:"📊 Relatório de vendas", onClick:()=>setRelatorioDe(ev) },
+                        ehFin && !encerrado && { label:"🏁 Encerrar evento", onClick:()=>encerrar(ev) },
+                        ehFin && encerrado && { label:"🔓 Reabrir evento", onClick:()=>reabrir(ev) },
+                        (!movs.length && !(movsEvento||[]).some(m=>m.id_evento===ev.id_evento)) && { label:"🗑️ Excluir evento", perigoso:true, onClick:()=>excluir(ev) },
+                      ]}/>
                     </span>
                   </div>
-                ))}
+                )}
               </div>
-            )}
+            </Card>
+          );
+        };
 
-            {/* Ações */}
-            {!readOnly && (
-              <div style={{ display:"flex", gap:8, marginTop:14, flexWrap:"wrap" }}>
-                {ehFin && ev.status!=="encerrado" && ev.modo==="detalhado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>abrirLancar(ev)}>+ Lançar receita/despesa</Btn>}
-                {ehFin && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>setVendedoresDe(ev)}>🎟️ Vendedores</Btn>}
-                {ehFin && ev.controla_venda && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>setRelatorioDe(ev)}>📊 Relatório</Btn>}
-                {ev.status!=="encerrado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>abrirEditar(ev)}>Editar</Btn>}
-                {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>setLinkEvento(ev)}>📲 Confirmação</Btn>}
-                {ehFin && ev.status!=="encerrado" && <Btn style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>encerrar(ev)}>Encerrar</Btn>}
-                {ehFin && ev.status==="encerrado" && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>reabrir(ev)}>🔓 Reabrir</Btn>}
-                {!movs.length && !(movsEvento||[]).some(m=>m.id_evento===ev.id_evento) && <Btn variant="danger" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>excluir(ev)}>Excluir</Btn>}
+        return (
+          <>
+            {emAndamento.length > 0 && (
+              <div>
+                <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Em andamento ({emAndamento.length})</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:12 }}>{emAndamento.map(renderEventoCard)}</div>
               </div>
             )}
-          </Card>
+            {encerrados.length > 0 && (
+              <div>
+                <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Encerrados ({encerrados.length})</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:12 }}>{encerrados.map(renderEventoCard)}</div>
+              </div>
+            )}
+          </>
         );
-      })}
-      {(eventos||[]).length===0 && <Card style={{ padding:24, textAlign:"center", color:C.dim }}>Nenhum evento cadastrado.</Card>}
+      })()}
 
       {/* Modal criar/editar evento */}
       {modal && (
@@ -6066,7 +6507,7 @@ export default function AdminAppCompleto() {
 
   const [partida, setPartida]   = useState(null);
   const [novaPartida, setNovaPartida] = useState(false);
-  const { toast, show }         = useToast();
+  const { toast, show, close }  = useToast();
 
   // Verificar manutenção do sistema
   const { data: todosTimesSuper } = useQuery(() =>
@@ -6183,9 +6624,10 @@ export default function AdminAppCompleto() {
   const { data: _adversarios } = useQuery(() => idTime ? api.get(`adversario?id_time=eq.${idTime}&select=id_adversario&limit=1`) : Promise.resolve([]), [session, idTime]);
   const { data: _jogadores }  = useQuery(() => idTime ? api.get(`jogador?id_time=eq.${idTime}&id_jogador=gt.0&select=id_jogador&limit=1`) : Promise.resolve([]), [session, idTime]);
   const _idsTemp = (temporadas||[]).map(t=>t.id_temporada).join(",");
-  const { data: _partidas }   = useQuery(() => _idsTemp ? api.get(`partida?id_temporada=in.(${_idsTemp})&select=id_partida&limit=1`) : Promise.resolve([]), [_idsTemp]);
+  // Dados ricos (com limite defensivo): alimentam tanto o checklist quanto a Home operacional
+  const { data: _partidas }   = useQuery(() => _idsTemp ? api.get(`partida?id_temporada=in.(${_idsTemp})&select=id_partida,data,cancelada,gols_marcados,gols_sofridos,id_adversario,adversario(nome)&order=data.asc&limit=500`) : Promise.resolve([]), [_idsTemp]);
   const { data: _timesInternos } = useQuery(() => idTime ? api.get(`time_interno?id_time=eq.${idTime}&select=id_time_interno&limit=1`) : Promise.resolve([]), [session, idTime]);
-  const { data: _encontros }  = useQuery(() => _idsTemp ? api.get(`encontro?id_temporada=in.(${_idsTemp})&select=id_encontro&limit=1`) : Promise.resolve([]), [_idsTemp]);
+  const { data: _encontros }  = useQuery(() => _idsTemp ? api.get(`encontro?id_temporada=in.(${_idsTemp})&select=id_encontro,data,status&order=data.asc&limit=500`) : Promise.resolve([]), [_idsTemp]);
   const [temporadaSel, setTemporadaSel] = useState(null);
   useEffect(() => {
     const lista = temporadas || [];
@@ -6193,6 +6635,13 @@ export default function AdminAppCompleto() {
     const aindaValida = temporadaSel && lista.some(t => t.id_temporada === temporadaSel.id_temporada);
     if (!aindaValida) setTemporadaSel(lista[0]);
   }, [temporadas]);
+
+  // Na barra horizontal do mobile, mantém o item ativo visível ao trocar de módulo.
+  // Precisa ficar AQUI (antes dos returns de guarda) — hooks nunca podem vir depois de um return.
+  React.useEffect(() => {
+    const el = document.querySelector('.admin-sidebar [aria-current="page"]');
+    if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [menu]);
 
   if (loadManut) return null;
 
@@ -6274,10 +6723,17 @@ export default function AdminAppCompleto() {
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream, display:"flex", flexDirection:"column" }}>
       <style>{`
+        /* ── Foco visível para navegação por teclado (WCAG 2.4.7) — não aparece no toque/clique ── */
+        :focus-visible{outline:2px solid ${C.gold} !important;outline-offset:2px;border-radius:8px;}
         /* ── Navegação mobile: retrato (largura) OU paisagem de celular (altura baixa) ── */
         @media (max-width:768px), (max-height:600px) and (orientation:landscape){
           .admin-header{padding:0 12px !important; gap:8px !important;}
           .header-time-nome{display:none;}
+          /* Header enxuto no mobile: versão e link do site público saem (acessíveis via menu Ajuda/Visão App) */
+          .header-versao{display:none !important;}
+          .header-link-publico{display:none !important;}
+          /* Colunas secundárias de tabelas densas somem em telas pequenas */
+          .col-ocultar-mobile{display:none !important;}
           .admin-layout{flex-direction:column !important;}
           /* Sidebar vira barra horizontal rolável no topo do conteúdo */
           .admin-sidebar{
@@ -6288,9 +6744,16 @@ export default function AdminAppCompleto() {
           }
           .admin-sidebar .menu-grupo{display:flex; flex-direction:row; align-items:center; flex-shrink:0;}
           .admin-sidebar .menu-grupo-titulo{display:none !important;}
+          /* Separador fino entre grupos: mantém a noção de agrupamento na barra horizontal */
+          .admin-sidebar .menu-grupo + .menu-grupo{border-left:1px solid ${C.border}; margin-left:4px; padding-left:4px;}
           .admin-sidebar button{
             white-space:nowrap; flex-shrink:0; border-left:none !important;
-            border-bottom:3px solid transparent; padding:8px 12px !important; font-size:11px !important;
+            border-bottom:3px solid transparent; padding:10px 14px !important; font-size:12px !important;
+          }
+          /* Fade indicando que a barra rola horizontalmente */
+          .admin-sidebar{
+            mask-image:linear-gradient(to right, black 0, black calc(100% - 28px), transparent 100%);
+            -webkit-mask-image:linear-gradient(to right, black 0, black calc(100% - 28px), transparent 100%);
           }
           .admin-main{padding:16px 12px !important;}
           /* Inputs nativos não excedem o container */
@@ -6312,7 +6775,7 @@ export default function AdminAppCompleto() {
         .form-grid-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
         .form-grid-auto{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px;}
       `}</style>
-      <Toast {...(toast||{msg:null})} />
+      <Toast {...(toast||{msg:null})} onClose={close} />
 
       {/* Header */}
       <header className="admin-header" style={{ background:"#091F15", borderBottom:`3px solid ${C.gold}`, padding:"0 24px", display:"flex", alignItems:"center", gap:16, height:64, position:"sticky", top:0, zIndex:100, boxShadow:"0 4px 20px #00000066" }}>
@@ -6324,7 +6787,7 @@ export default function AdminAppCompleto() {
             🧪 DEV
           </div>
         )}
-        <div style={{ fontSize:10, color:C.dim, letterSpacing:"0.05em" }}>
+        <div className="header-versao" style={{ fontSize:10, color:C.dim, letterSpacing:"0.05em" }}>
           v{APP_VERSION}
         </div>
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
@@ -6369,17 +6832,17 @@ export default function AdminAppCompleto() {
               {(temporadas||[]).map(t=><option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
             </select>
           )}
-          <a href="/" target="_blank" rel="noopener noreferrer" title="Abrir o site público" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:11, fontWeight:700, padding:"6px 12px", textDecoration:"none", whiteSpace:"nowrap" }}>🌐 Ver site público</a>
+          <a className="header-link-publico" href="/" target="_blank" rel="noopener noreferrer" title="Abrir o site público" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:11, fontWeight:700, padding:"6px 12px", textDecoration:"none", whiteSpace:"nowrap" }}>🌐 Ver site público</a>
           <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>Sair</Btn>
         </div>
       </header>
 
       <div className="admin-layout" style={{ display:"flex", flex:1 }}>
         {/* Sidebar */}
-        <aside className="admin-sidebar" style={{ width:210, background:"#091F15", borderRight:`1px solid ${C.border}`, padding:"16px 0", flexShrink:0, position:"sticky", top:64, height:"calc(100vh - 64px)", overflowY:"auto" }}>
+        <nav aria-label="Menu principal" className="admin-sidebar" style={{ width:210, background:"#091F15", borderRight:`1px solid ${C.border}`, padding:"16px 0", flexShrink:0, position:"sticky", top:64, height:"calc(100vh - 64px)", overflowY:"auto" }}>
           {/* Item sem grupo: Início */}
           {MENU.filter(m => m.grupo === "").map(m => (
-            <button key={m.id} onClick={() => navMenu(m.id)} style={{
+            <button key={m.id} onClick={() => navMenu(m.id)} aria-current={menu===m.id ? "page" : undefined} style={{
               display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 20px",
               background: menu===m.id ? C.gold+"22" : "transparent",
               borderLeft: menu===m.id ? `3px solid ${C.gold}` : "3px solid transparent",
@@ -6387,7 +6850,7 @@ export default function AdminAppCompleto() {
               fontFamily:"inherit", fontWeight:700, fontSize:12, textTransform:"uppercase",
               letterSpacing:"0.06em", cursor:"pointer", textAlign:"left", transition:"all 0.15s",
             }}>
-              <span>{m.icon}</span><span>{m.label}</span>
+              <span aria-hidden="true">{m.icon}</span><span>{m.label}</span>
             </button>
           ))}
           <div style={{ height:1, background:C.border, margin:"8px 0" }}/>
@@ -6398,7 +6861,7 @@ export default function AdminAppCompleto() {
               <div key={grupo} className="menu-grupo">
                 <div className="menu-grupo-titulo" style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, padding:"12px 20px 6px" }}>{grupo}</div>
                 {itens.map(m => (
-                  <button key={m.id} onClick={() => navMenu(m.id)} style={{
+                  <button key={m.id} onClick={() => navMenu(m.id)} aria-current={menu===m.id ? "page" : undefined} style={{
                     display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 20px",
                     background: menu===m.id ? C.gold+"22" : "transparent",
                     borderLeft: menu===m.id ? `3px solid ${C.gold}` : "3px solid transparent",
@@ -6406,16 +6869,16 @@ export default function AdminAppCompleto() {
                     fontFamily:"inherit", fontWeight:700, fontSize:12, textTransform:"uppercase",
                     letterSpacing:"0.06em", cursor:"pointer", textAlign:"left", transition:"all 0.15s",
                   }}>
-                    <span>{m.icon}</span><span>{m.label}</span>
+                    <span aria-hidden="true">{m.icon}</span><span>{m.label}</span>
                   </button>
                 ))}
               </div>
             );
           })}
-        </aside>
+        </nav>
 
         {/* Conteúdo */}
-        <main className="admin-main" style={{ flex:1, padding:"28px 28px", minWidth:0 }}>
+        <main className="admin-main" style={{ flex:1, padding:"28px 28px", minWidth:0, maxWidth:1150, margin:"0 auto", width:"100%" }}>
           {isSuperadmin && !idTime ? (
             <div style={{ textAlign:"center", padding:"60px 20px", color:C.dim }}>
               <div style={{ fontSize:48, marginBottom:16 }}>👑</div>
@@ -6527,62 +6990,69 @@ export default function AdminAppCompleto() {
 
 // ── CRUD JOGADORES ────────────────────────────────────────────
 
-function TabelaJogadores({ grupo, lista, sk, asc, onSort, onEditar, onInativar, onReativar, readOnly, mapaPosJog }) {
+// cor determinística p/ avatar sem foto (a partir do nome)
+function _corAvatar(txt) {
+  const cores = ["#c0392b","#2c3e50","#27ae60","#8e44ad","#d35400","#16a085","#2980b9","#b03a5b"];
+  let h = 0; for (const c of String(txt||"?")) h = (h*31 + c.charCodeAt(0)) >>> 0;
+  return cores[h % cores.length];
+}
+function _iniciais(nome) {
+  const p = String(nome||"?").trim().split(/\s+/);
+  return ((p[0]?.[0]||"") + (p[1]?.[0]||"")).toUpperCase() || "?";
+}
+function TabelaJogadores({ grupo, lista, onEditar, onInativar, onReativar, readOnly, mapaPosJog }) {
   if (!lista.length) return null;
-  const S = k => <ThSortable colKey={k} sortKey={sk} asc={asc} onSort={onSort}/>;
+  const inativoGrupo = grupo === "Inativos";
   return (
     <div>
       <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>{grupo} ({lista.length})</div>
-      <Card style={{ padding:0, overflow:"hidden" }}>
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-          <thead><tr style={{ background:C.surf2 }}>
-            <ThSortable colKey="camisa"      sortKey={sk} asc={asc} onSort={onSort}>#</ThSortable>
-            <ThSortable colKey="nome"        sortKey={sk} asc={asc} onSort={onSort}>Nome</ThSortable>
-            <ThSortable colKey="apelido"     sortKey={sk} asc={asc} onSort={onSort}>Apelido</ThSortable>
-            <ThSortable colKey="data_nascimento" sortKey={sk} asc={asc} onSort={onSort}>Nascimento</ThSortable>
-            <ThSortable colKey="idade_sort" sortKey={sk} asc={asc} onSort={onSort}>Idade</ThSortable>
-            <ThSortable colKey="posicao.nome" sortKey={sk} asc={asc} onSort={onSort}>Posição</ThSortable>
-            <ThSortable colKey="forca" sortKey={sk} asc={asc} onSort={onSort}>Força</ThSortable>
-            <ThSortable colKey="telefone"    sortKey={sk} asc={asc} onSort={onSort}>Telefone</ThSortable>
-            <ThSortable colKey="email"       sortKey={sk} asc={asc} onSort={onSort}>E-mail</ThSortable>
-            <ThSortable colKey="data_inicio" sortKey={sk} asc={asc} onSort={onSort}>Início</ThSortable>
-            <ThSortable colKey="data_fim"    sortKey={sk} asc={asc} onSort={onSort}>Saída</ThSortable>
-            <ThSortable sortKey={sk} asc={asc} onSort={()=>{}}>Obs.</ThSortable>
-            <ThSortable sortKey={sk} asc={asc} onSort={()=>{}}></ThSortable>
-          </tr></thead>
-          <tbody>
-            {lista.map((j,i) => (
-              <tr key={j.id_jogador} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:800, color:C.gold, whiteSpace:"nowrap" }}>{j.camisa}</td>
-                <td style={{ padding:"11px 14px", fontWeight:700, whiteSpace:"nowrap" }}>{j.nome}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.apelido || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_nascimento ? new Date(j.data_nascimento + "T00:00:00").toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit", year:"numeric" }) : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{calcularIdade(j.data_nascimento) != null ? `${calcularIdade(j.data_nascimento)} anos` : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.posicao?.nome ? (j.posicao.id_posicao_pai && mapaPosJog[j.posicao.id_posicao_pai] ? `${mapaPosJog[j.posicao.id_posicao_pai]} › ${j.posicao.nome}` : j.posicao.nome) : "—"}</td>
-                <td style={{ padding:"11px 14px", fontSize:12, whiteSpace:"nowrap" }} title={NIVEIS_FORCA[j.forca||2]?.nome}>{NIVEIS_FORCA[j.forca||2]?.estrelas || "⭐⭐"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.telefone || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{j.email || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_inicio ? new Date(j.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{j.data_fim ? new Date(j.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, maxWidth:150, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={j.observacoes||""}>{j.observacoes || "—"}</td>
-                <td style={{ padding:"11px 14px", whiteSpace:"nowrap" }}>
-                  <div style={{ display:"flex", gap:6 }}>
-                    <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onEditar(j)}>Editar</Btn>
-                    {!j.data_fim && !readOnly && <Btn variant="danger" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => onInativar(j)}>Inativar</Btn>}
-                    {j.data_fim && !readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px", color:C.win, borderColor:C.win }} onClick={() => onReativar(j)}>Reativar</Btn>}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
-      </Card>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {lista.map((j) => {
+          const nomeExib = j.apelido || j.nome;
+          const posTxt = j.posicao?.nome ? (j.posicao.id_posicao_pai && mapaPosJog[j.posicao.id_posicao_pai] ? `${mapaPosJog[j.posicao.id_posicao_pai]} › ${j.posicao.nome}` : j.posicao.nome) : null;
+          const idade = calcularIdade(j.data_nascimento);
+          return (
+            <Card key={j.id_jogador} style={{ padding:12, display:"flex", alignItems:"center", gap:13, opacity: inativoGrupo ? 0.65 : 1 }}>
+              {/* Avatar: foto real ou iniciais + camisa como selo */}
+              <div style={{ position:"relative", flexShrink:0 }}>
+                {j.foto_url
+                  ? <img src={j.foto_url} alt={nomeExib} style={{ width:50, height:50, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.border}` }}/>
+                  : <div style={{ width:50, height:50, borderRadius:"50%", background:_corAvatar(j.nome), display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:800, fontSize:17 }}>{_iniciais(j.nome)}</div>}
+                {j.camisa != null && j.camisa !== "" && (
+                  <span style={{ position:"absolute", bottom:-3, right:-3, background:C.gold, color:"#0B3D2E", fontSize:11, fontWeight:800, minWidth:22, height:22, borderRadius:11, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${C.surface}`, padding:"0 4px" }}>{j.camisa}</span>)}
+              </div>
+              {/* Identidade */}
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                  <span style={{ fontWeight:800, fontSize:16, color:C.cream }}>{nomeExib}</span>
+                  {posTxt && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.gold, border:`1px solid ${C.border}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{posTxt}</span>}
+                </div>
+                <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginTop:4, alignItems:"center", fontSize:12, color:C.dim }}>
+                  <span title={NIVEIS_FORCA[j.forca||2]?.nome} style={{ color:C.gold, letterSpacing:"1px" }}>{NIVEIS_FORCA[j.forca||2]?.estrelas || "⭐⭐"}</span>
+                  {j.apelido && j.nome && j.apelido !== j.nome && <span>{j.nome}</span>}
+                  {idade != null && <span>{idade} anos</span>}
+                  {j.telefone && <span>{j.telefone}</span>}
+                  {inativoGrupo && j.data_fim && <span>saiu {new Date(j.data_fim).toLocaleDateString("pt-BR")}</span>}
+                </div>
+              </div>
+              {/* Ações */}
+              <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
+                <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => onEditar(j)}>Editar</Btn>
+                {!j.data_fim && !readOnly && <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => onInativar(j)}>Inativar</Btn>}
+                {j.data_fim && !readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", color:C.win, borderColor:C.win }} onClick={() => onReativar(j)}>Reativar</Btn>}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 
 function CrudJogadores({ idTime, show, readOnly }) {
+  const { confirmar, dialogo } = useConfirm();
+  const [busca, setBusca] = useState("");
   const _idTimeJ = idTime; // recebido por prop (filtrado pelo usuário logado)
   // Tipo de time, para filtrar as posições disponíveis
   const { data: _timeInfo } = useQuery(() => _idTimeJ ? api.get(`time?id_time=eq.${_idTimeJ}&select=id_tipo_time,id_subtipo&limit=1`) : Promise.resolve([]), [_idTimeJ]);
@@ -6650,24 +7120,28 @@ function CrudJogadores({ idTime, show, readOnly }) {
   }
 
   async function inativar(j) {
-    if (!confirm(`Inativar ${j.apelido || j.nome}?`)) return;
+    if (!(await confirmar(`Inativar ${j.apelido || j.nome}?`, { perigoso:true, textoOk:"Inativar" }))) return;
     try { await api.patch(`jogador?id_jogador=eq.${j.id_jogador}`, { data_fim: new Date().toISOString().split("T")[0] }); show("Jogador inativado."); reload(); }
     catch (e) { show(e.message, "error"); }
   }
 
   async function reativar(j) {
-    if (!confirm(`Reativar ${j.apelido || j.nome}?`)) return;
+    if (!(await confirmar(`Reativar ${j.apelido || j.nome}?`, { textoOk:"Reativar" }))) return;
     try { await api.patch(`jogador?id_jogador=eq.${j.id_jogador}`, { data_fim: null }); show("Jogador reativado!"); reload(); }
     catch (e) { show(e.message, "error"); }
   }
 
   if (loading) return <Spinner />;
   const _comIdade = (jogadores||[]).map(j => ({ ...j, idade_sort: calcularIdade(j.data_nascimento) ?? -1 }));
-  const ativos   = _comIdade.filter(j => !j.data_fim);
-  const inativos = _comIdade.filter(j =>  j.data_fim);
+  const _filtrados = busca.trim()
+    ? _comIdade.filter(j => _semAcento(j.nome).includes(_semAcento(busca)) || _semAcento(j.apelido).includes(_semAcento(busca)) || String(j.camisa||"").includes(busca.trim()))
+    : _comIdade;
+  const ativos   = _filtrados.filter(j => !j.data_fim);
+  const inativos = _filtrados.filter(j =>  j.data_fim);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {dialogo}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
         <BotoesImportExport
           onExportar={() => exportarExcel(
@@ -6713,24 +7187,35 @@ function CrudJogadores({ idTime, show, readOnly }) {
         />
         {!readOnly && <Btn onClick={abrirNovo}>+ Novo Jogador</Btn>}
       </div>
+      <Input placeholder="🔍 Buscar por nome..." value={busca} onChange={e => setBusca(e.target.value)}
+        aria-label="Buscar na lista" style={{ maxWidth:320 }} />
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
+      {(ativos.length > 0 || inativos.length > 0) && (
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          <span style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>Ordenar:</span>
+          {[["camisa","Camisa"],["apelido","Nome"],["idade_sort","Idade"],["forca","Força"]].map(([k,lbl]) => (
+            <button key={k} onClick={()=>{ if(_sk===k)_setAsc(a=>!a); else {_setSk(k); _setAsc(true);} }}
+              style={{ background:_sk===k?C.gold:C.surf2, color:_sk===k?"#0B3D2E":C.dim, border:"none", borderRadius:6, padding:"5px 10px", fontFamily:"inherit", fontSize:11, fontWeight:700, cursor:"pointer" }}>
+              {lbl}{_sk===k ? (_asc?" ↑":" ↓") : ""}
+            </button>
+          ))}
+        </div>
+      )}
       {ativos.length === 0 && inativos.length === 0 && !loading && (
         <EstadoVazio icone="👟" titulo="Nenhum jogador ainda"
           texto="Cadastre os jogadores do seu elenco para montar escalações, registrar gols e acompanhar estatísticas. Você pode adicionar um a um ou importar vários de uma planilha."
           acaoLabel={!readOnly ? "+ Cadastrar primeiro jogador" : null} onAcao={!readOnly ? abrirNovo : null}/>
       )}
       {ativos.length > 0 && (
-        <TabelaJogadores grupo="Ativos" lista={sortData(ativos, _sk, _asc)} sk={_sk} asc={_asc}
-          onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
+        <TabelaJogadores grupo="Ativos" lista={sortData(ativos, _sk, _asc)}
           onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly} mapaPosJog={mapaPosJog}/>
       )}
       {inativos.length > 0 && (
-        <TabelaJogadores grupo="Inativos" lista={sortData(inativos, _sk, _asc)} sk={_sk} asc={_asc}
-          onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}
+        <TabelaJogadores grupo="Inativos" lista={sortData(inativos, _sk, _asc)}
           onEditar={abrirEditar} onInativar={inativar} onReativar={reativar} readOnly={readOnly} mapaPosJog={mapaPosJog}/>
       )}
       {modal && (
-        <Modal title={modal === "novo" ? "Novo Jogador" : "Editar Jogador"} onClose={() => setModal(null)}>
+        <Modal title={modal === "novo" ? "Novo Jogador" : "Editar Jogador"} onClose={() => setModal(null)} size="lg">
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <ImageUpload
@@ -6788,12 +7273,13 @@ function CrudJogadores({ idTime, show, readOnly }) {
 
 // ── CRUD ADVERSÁRIOS ──────────────────────────────────────────
 function CrudAdversarios({ idTime, show, readOnly }) {
+  const [busca, setBusca] = useState("");
   const _idTimeA = idTime; // recebido por prop (filtrado pelo usuário logado)
   const { data: adversarios, loading, reload } = useQuery(() => 
     _idTimeA ? api.get(`adversario?id_time=eq.${_idTimeA}&select=*,campo:id_campo(nome),cidade(nome,estado)&order=nome.asc`) : Promise.resolve([]),
     [_idTimeA]
   );
-  const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
+  const [_sk] = useState("nome"); const [_asc] = useState(true);
   const { data: campos }  = useQuery(() => _idTimeA ? api.get(`campo?id_time=eq.${_idTimeA}&select=*&order=nome.asc`) : Promise.resolve([]), [_idTimeA]);
   const [ufAdv, setUfAdv] = useState("RS");
   const { data: cidades } = useQuery(() => ufAdv ? api.get(`cidade?estado=eq.${ufAdv}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufAdv]);
@@ -6871,6 +7357,8 @@ function CrudAdversarios({ idTime, show, readOnly }) {
         />
         {!readOnly && <Btn onClick={abrirNovo}>+ Novo Adversário</Btn>}
       </div>
+      <Input placeholder="🔍 Buscar por nome..." value={busca} onChange={e => setBusca(e.target.value)}
+        aria-label="Buscar na lista" style={{ maxWidth:320 }} />
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
         {(adversarios||[]).length === 0 && !loading && (
@@ -6878,30 +7366,31 @@ function CrudAdversarios({ idTime, show, readOnly }) {
             texto="Cadastre os times que você costuma enfrentar para registrá-los nas partidas. Você também pode deixar para definir o adversário na hora de criar cada jogo."
             acaoLabel={!readOnly ? "+ Cadastrar adversário" : null} onAcao={!readOnly ? abrirNovo : null}/>
         )}
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-          <thead><tr style={{ background:C.surf2 }}>
-                  <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
-                  <ThSortable colKey="campo.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Campo</ThSortable>
-                  <ThSortable colKey="cidade.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Cidade</ThSortable>
-                  <ThSortable colKey="contato" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Contato</ThSortable>
-                  <ThSortable colKey="observacoes" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Observações</ThSortable>
-                  <ThSortable colKey="data_fim" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Inativo em</ThSortable>
-                  <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
-          </tr></thead>
-          <tbody>
-            {(sortData(adversarios, _sk, _asc)||[]).map((a,i) => (
-              <tr key={a.id_adversario} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:700 }}>{a.nome}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{a.campo?.nome || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{a.cidade ? `${a.cidade.nome}/${a.cidade.estado}` : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{a.contato || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={a.observacoes||""}>{a.observacoes || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{a.data_fim ? new Date(a.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(a)}>Editar</Btn>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10, padding:(adversarios||[]).length?14:0 }}>
+          {(sortData((adversarios||[]).filter(a => !busca.trim() || _semAcento(a.nome).includes(_semAcento(busca))), _sk, _asc)||[]).map((a) => {
+            const inativo = !!a.data_fim;
+            return (
+              <Card key={a.id_adversario} style={{ padding:12, display:"flex", alignItems:"center", gap:13, opacity: inativo ? 0.6 : 1 }}>
+                <div style={{ width:48, height:48, borderRadius:12, background:C.surf2, border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>🆚</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:800, fontSize:16, color:C.cream }}>{a.nome}</span>
+                    {a.cidade && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.gold, border:`1px solid ${C.border}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{a.cidade.nome}/{a.cidade.estado}</span>}
+                    {inativo && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.dim, border:`1px solid ${C.border}` }}>Inativo</span>}
+                  </div>
+                  {(a.campo?.nome || a.contato) && (
+                    <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginTop:4, fontSize:12, color:C.dim }}>
+                      {a.campo?.nome && <span>📍 {a.campo.nome}</span>}
+                      {a.contato && <span>📞 {a.contato}</span>}
+                    </div>
+                  )}
+                  {a.observacoes && <div style={{ fontSize:12, color:C.dim, marginTop:3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={a.observacoes}>{a.observacoes}</div>}
+                </div>
+                {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", flexShrink:0 }} onClick={() => abrirEditar(a)}>Editar</Btn>}
+              </Card>
+            );
+          })}
+        </div>
       </Card>
       {modal && (
         <Modal title={modal === "novo" ? "Novo Adversário" : "Editar Adversário"} onClose={() => setModal(null)}>
@@ -6933,13 +7422,14 @@ function CrudAdversarios({ idTime, show, readOnly }) {
 
 // ── CRUD CAMPOS ───────────────────────────────────────────────
 function CrudCampos({ idTime, show, readOnly }) {
+  const [busca, setBusca] = useState("");
   const { data: campos, loading, reload } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=*,cidade(nome,estado)&order=nome.asc`) : Promise.resolve([]), [idTime]);
   const [ufCampo, setUfCampo] = useState("RS");
   const { data: cidades } = useQuery(() => ufCampo ? api.get(`cidade?estado=eq.${ufCampo}&select=id_cidade,nome,estado&order=nome.asc`) : Promise.resolve([]), [ufCampo]);
   // Base nacional completa (para a planilha de referência e validação da importação por nome+UF)
   const [cidadesBR, setCidadesBR] = useState([]);
   useEffect(() => { carregarTodasCidades().then(setCidadesBR).catch(()=>{}); }, []);
-  const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
+  const [_sk] = useState("nome"); const [_asc] = useState(true);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
   const [saving, setSaving] = useState(false);
@@ -7032,6 +7522,8 @@ function CrudCampos({ idTime, show, readOnly }) {
         />
         {!readOnly && <Btn onClick={abrirNovo}>+ Novo Campo</Btn>}
       </div>
+      <Input placeholder="🔍 Buscar por nome..." value={busca} onChange={e => setBusca(e.target.value)}
+        aria-label="Buscar na lista" style={{ maxWidth:320 }} />
       <ModalImportacao resultado={resultadoImport} onClose={() => setResultadoImport(null)} onConfirmar={confirmarImport} salvando={saving}/>
       <Card style={{ padding:0, overflow:"hidden" }}>
         {(campos||[]).length === 0 && !loading && (
@@ -7039,26 +7531,26 @@ function CrudCampos({ idTime, show, readOnly }) {
             texto="Cadastre os campos onde seu time joga. Eles aparecem ao criar partidas e ajudam a galera a saber onde é o jogo."
             acaoLabel={!readOnly ? "+ Cadastrar campo" : null} onAcao={!readOnly ? abrirNovo : null}/>
         )}
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-          <thead><tr style={{ background:C.surf2 }}>
-                  <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
-                  <ThSortable colKey="endereco" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Endereço</ThSortable>
-                  <ThSortable colKey="cidade.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Cidade</ThSortable>
-                  <ThSortable colKey="data_fim" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Inativo em</ThSortable>
-                  <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
-          </tr></thead>
-          <tbody>
-            {(sortData(campos, _sk, _asc)||[]).map((c,i) => (
-              <tr key={c.id_campo} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:700 }}>{c.nome}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{c.endereco || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{c.cidade ? `${c.cidade.nome}/${c.cidade.estado}` : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{c.data_fim ? new Date(c.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(c)}>Editar</Btn>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10, padding:(campos||[]).length?14:0 }}>
+          {(sortData((campos||[]).filter(c => !busca.trim() || _semAcento(c.nome).includes(_semAcento(busca)) || _semAcento(c.cidade?.nome).includes(_semAcento(busca))), _sk, _asc)||[]).map((c) => {
+            const inativo = !!c.data_fim;
+            return (
+              <Card key={c.id_campo} style={{ padding:12, display:"flex", alignItems:"center", gap:13, opacity: inativo ? 0.6 : 1 }}>
+                <div style={{ width:48, height:48, borderRadius:12, background:C.surf2, border:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>📍</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:800, fontSize:16, color:C.cream }}>{c.nome}</span>
+                    {c.cidade && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.gold, border:`1px solid ${C.border}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{c.cidade.nome}/{c.cidade.estado}</span>}
+                    {inativo && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.dim, border:`1px solid ${C.border}` }}>Inativo</span>}
+                  </div>
+                  {c.endereco && <div style={{ fontSize:12, color:C.dim, marginTop:4 }}>{c.endereco}</div>}
+                  {c.link_local && <a href={c.link_local} target="_blank" rel="noreferrer" style={{ fontSize:12, color:C.gold, marginTop:4, display:"inline-block", textDecoration:"none" }}>🔗 Abrir no mapa</a>}
+                </div>
+                {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", flexShrink:0 }} onClick={() => abrirEditar(c)}>Editar</Btn>}
+              </Card>
+            );
+          })}
+        </div>
       </Card>
       {modal && (
         <Modal title={modal === "novo" ? "Novo Campo" : "Editar Campo"} onClose={() => setModal(null)}>
@@ -7196,28 +7688,31 @@ function CrudTimesInternos({ idTime, show, readOnly }) {
             texto="Os times internos são os grupos fixos que se enfrentam nos encontros da turma (ex: Laranja, Preto, Branco). Cadastre-os para montar os jogos."
             acaoLabel={!readOnly ? "+ Cadastrar time interno" : null} onAcao={!readOnly ? abrirNovo : null}/>
         )}
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-          <thead><tr style={{ background:C.surf2 }}>
-            {["Time","Início","Encerrado em","Situação",""].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
-          </tr></thead>
-          <tbody>
-            {(times||[]).map((t,i) => (
-              <tr key={t.id_time_interno} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:700 }}>
-                  <span style={{ display:"inline-block", width:13, height:13, borderRadius:"50%", background:t.cor||C.dim, marginRight:8, verticalAlign:"middle", border:`1px solid ${C.border}` }} />
-                  {t.nome}
-                </td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_inicio ? new Date(t.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_fim ? new Date(t.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", fontSize:12 }}>{t.data_fim ? <span style={{ color:C.dim }}>Encerrado</span> : <span style={{ color:C.win, fontWeight:700 }}>Ativo</span>}</td>
-                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(t)}>Editar</Btn>}</td>
-              </tr>
-            ))}
-            {(times||[]).length === 0 && (
-              <tr><td colSpan={5} style={{ padding:"20px 14px", textAlign:"center", color:C.dim, fontSize:13 }}>Nenhum time interno cadastrado ainda.</td></tr>
-            )}
-          </tbody>
-        </table></div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10, padding:(times||[]).length?14:0 }}>
+          {(times||[]).map((t) => {
+            const inativo = !!t.data_fim;
+            return (
+              <Card key={t.id_time_interno} style={{ padding:12, display:"flex", alignItems:"center", gap:13, opacity: inativo ? 0.6 : 1 }}>
+                {/* Avatar na cor real do time interno */}
+                <div style={{ width:48, height:48, borderRadius:"50%", background:t.cor||C.surf2, border:`2px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>🎽</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:800, fontSize:16, color:C.cream }}>{t.nome}</span>
+                    {inativo
+                      ? <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.dim, border:`1px solid ${C.border}` }}>Encerrado</span>
+                      : <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.win+"22", color:C.win, border:`1px solid ${C.win}` }}>Ativo</span>}
+                  </div>
+                  <div style={{ fontSize:12, color:C.dim, marginTop:4 }}>
+                    {inativo
+                      ? `${t.data_inicio ? new Date(t.data_inicio).toLocaleDateString("pt-BR") : "—"} — ${new Date(t.data_fim).toLocaleDateString("pt-BR")}`
+                      : (t.data_inicio ? `Desde ${new Date(t.data_inicio).toLocaleDateString("pt-BR")}` : "—")}
+                  </div>
+                </div>
+                {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", flexShrink:0 }} onClick={() => abrirEditar(t)}>Editar</Btn>}
+              </Card>
+            );
+          })}
+        </div>
       </Card>
       {modal && (
         <Modal title={modal === "novo" ? "Novo Time Interno" : "Editar Time Interno"} onClose={() => setModal(null)}>
@@ -7852,14 +8347,15 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
               <CompartilharPresenca tipo="encontro" idRef={idEncontro} idTime={idTime} titulo="" data={cabecalho.data ? `${cabecalho.data}T${cabecalho.hora || "12:00"}` : null} linkLocal={cabecalho.link_local} time={_timeEnc?.[0]} show={show} />
             </div>
           )}
+          {/* Ordem do ritual da pelada: 1) quem veio (presença) → 2) sortear os times → 3) lançar os jogos */}
+          <PresencaEncontro idEncontro={idEncontro} parts={parts||[]} jogadores={jogadores||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadParts} show={show} readOnly={readOnly}
+            totais={{ totalPlacares, totalGolsJog, totalAssist, totalGolsContra, somaConfere, assistExcede }} statusAtual={encontro?.status} />
           {!readOnly && idEncontro && (timesInternos||[]).length >= 2 && (
             <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
               <SorteioTimes idEncontro={idEncontro} idTime={idTime} timesInternos={timesInternos||[]} jogadores={jogadores||[]} posicoes={posicoesEnc||[]} parts={parts||[]} reloadParts={reloadParts} encontro={encontro} reloadEncontro={reloadParts} show={show} readOnly={readOnly} />
             </div>
           )}
           <JogosEncontro idEncontro={idEncontro} jogos={jogos||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadJogos} show={show} readOnly={readOnly} totalPlacares={totalPlacares} />
-          <PresencaEncontro idEncontro={idEncontro} parts={parts||[]} jogadores={jogadores||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadParts} show={show} readOnly={readOnly}
-            totais={{ totalPlacares, totalGolsJog, totalAssist, totalGolsContra, somaConfere, assistExcede }} statusAtual={encontro?.status} />
         </>
       )}
     </div>
@@ -7868,6 +8364,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
 
 // Jogos do rodízio (placar entre times internos)
 function JogosEncontro({ idEncontro, jogos, timesInternos, mapaTI, reload, show, readOnly, totalPlacares }) {
+  const { confirmar, dialogo } = useConfirm();
   const [form, setForm] = useState({ a:"", b:"", pa:"0", pb:"0" });
   const [saving, setSaving] = useState(false);
   const [loadingImport, setLoadingImport] = useState(null);
@@ -7925,13 +8422,14 @@ function JogosEncontro({ idEncontro, jogos, timesInternos, mapaTI, reload, show,
     } catch (e) { show(e.message, "error"); } finally { setSaving(false); }
   }
   async function removerJogo(id) {
-    if (!confirm("Remover este jogo?")) return;
+    if (!(await confirmar("Remover este jogo?", { perigoso:true, textoOk:"Remover" }))) return;
     try { await api.delete(`encontro_jogo?id_encontro_jogo=eq.${id}`); show("Jogo removido."); reload(); }
     catch (e) { show(e.message, "error"); }
   }
 
   return (
     <Card>
+      {dialogo}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:14 }}>
         <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>Jogos do dia (rodízio)</div>
         {!readOnly && (
@@ -7994,6 +8492,7 @@ function JogosEncontro({ idEncontro, jogos, timesInternos, mapaTI, reload, show,
 
 // Presença + estatísticas agregadas do jogador no dia
 function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI, reload, show, readOnly, totais, statusAtual }) {
+  const { confirmar, dialogo } = useConfirm();
   const [addJog, setAddJog] = useState("");
   const [saving, setSaving] = useState(false);
   const [loadingImport, setLoadingImport] = useState(null);
@@ -8086,7 +8585,7 @@ function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI,
     catch (e) { show(e.message, "error"); }
   }
   async function removerPresenca(id) {
-    if (!confirm("Remover este jogador do encontro?")) return;
+    if (!(await confirmar("Remover este jogador do encontro?", { perigoso:true, textoOk:"Remover" }))) return;
     try { await api.delete(`encontro_participacao?id_encontro_part=eq.${id}`); show("Removido."); reload(); }
     catch (e) { show(e.message, "error"); }
   }
@@ -8105,6 +8604,7 @@ function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI,
 
   return (
     <Card>
+      {dialogo}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8, marginBottom:14 }}>
         <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>Presença e estatísticas do dia</div>
         {!readOnly && (
@@ -8196,6 +8696,7 @@ function PresencaEncontro({ idEncontro, parts, jogadores, timesInternos, mapaTI,
 
 // ── CRUD POSIÇÕES ─────────────────────────────────────────────
 function CrudPosicoes({ idTime, show, readOnly }) {
+  const { confirmar, dialogo } = useConfirm();
   // Tela de CONSULTA: o admin apenas visualiza as posições do tipo do seu time.
   // A gestão de posições é feita pelo super admin (no cadastro do Tipo de Time).
   const { data: _timeInfoP } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=id_tipo_time,id_subtipo&limit=1`) : Promise.resolve([]), [idTime]);
@@ -8211,7 +8712,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
     (posicoes||[]).forEach(p => { m[p.id_posicao] = p.nome; });
     return m;
   }, [posicoes]);
-  const [_sk, _setSk] = useState("nome"); const [_asc, _setAsc] = useState(true);
+  const [_sk] = useState("nome"); const [_asc] = useState(true);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
   const [saving, setSaving] = useState(false);
@@ -8247,7 +8748,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
   }
 
   async function inativar(p) {
-    if (!confirm(`Inativar a posição "${p.nome}"?`)) return;
+    if (!(await confirmar(`Inativar a posição "${p.nome}"?`, { perigoso:true, textoOk:"Inativar" }))) return;
     try { await api.patch(`posicao?id_posicao=eq.${p.id_posicao}`, { data_fim: new Date().toISOString().split("T")[0] }); show("Inativado."); reload(); }
     catch (e) { show(e.message, "error"); }
   }
@@ -8259,6 +8760,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      {dialogo}
       <div style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 14px", fontSize:13, color:C.dim }}>
         ℹ️ As posições são definidas pelo tipo de time{_tipoNomeP ? <> (<b style={{color:C.cream}}>{_tipoNomeP}</b>)</> : ""} e são iguais para todos os times desse tipo. Esta tela é apenas para consulta. Para alterações, fale com o suporte.
       </div>
@@ -8269,30 +8771,24 @@ function CrudPosicoes({ idTime, show, readOnly }) {
           <div key={titulo}>
             <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:10, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>{titulo}</div>
             <Card style={{ padding:0, overflow:"hidden" }}>
-              <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-                <thead><tr style={{ background:C.surf2 }}>
-                  <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Nome</ThSortable>
-                  <ThSortable colKey="descricao" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Descrição</ThSortable>
-                  <ThSortable colKey="ordem" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Ordem</ThSortable>
-                  <th style={{ padding:"12px 14px", textAlign:"left", fontSize:11, textTransform:"uppercase", letterSpacing:"0.08em", color:C.dim, fontWeight:700, whiteSpace:"nowrap" }}>Grupo pai</th>
-                  <ThSortable colKey="data_fim" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Inativo em</ThSortable>
-                  <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
-                </tr></thead>
-                <tbody>
-                  {lista.map((p, i) => (
-                    <tr key={p.id_posicao} style={{ background: i%2===0?C.surface:C.bg }}>
-                      <td style={{ padding:"11px 14px", fontWeight:700 }}>{p.nome}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:13 }}>{p.descricao || "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, textAlign:"center" }}>{p.ordem ?? "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{mapaPosicoes[p.id_posicao_pai] || "—"}</td>
-                      <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{p.data_fim ? new Date(p.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                      <td style={{ padding:"11px 14px", display:"flex", gap:8 }}>
-                        {/* Tela de consulta: edição é feita pelo super admin no tipo de time */}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8, padding:14 }}>
+                {lista.map((p) => {
+                  const inativo = !!p.data_fim;
+                  return (
+                    <div key={p.id_posicao} style={{ display:"flex", alignItems:"center", gap:12, background:C.surface, border:`1px solid ${C.border}`, borderRadius:10, padding:"10px 12px", opacity: inativo ? 0.55 : 1 }}>
+                      <div style={{ width:28, height:28, borderRadius:7, background:C.surf2, border:`1px solid ${C.border}`, color:C.gold, fontWeight:800, fontSize:14, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>{p.ordem ?? "—"}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                          <span style={{ fontWeight:700, fontSize:15, color:C.cream }}>{p.nome}</span>
+                          {mapaPosicoes[p.id_posicao_pai] && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.gold, border:`1px solid ${C.border}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{mapaPosicoes[p.id_posicao_pai]}</span>}
+                          {inativo && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.dim, border:`1px solid ${C.border}` }}>Inativa</span>}
+                        </div>
+                        {p.descricao && <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>{p.descricao}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </Card>
           </div>
         );
@@ -8324,7 +8820,7 @@ function CrudPosicoes({ idTime, show, readOnly }) {
 // ── CRUD TEMPORADAS ───────────────────────────────────────────
 function CrudTemporadas({ idTime, show, readOnly, ehTurmaFechada }) {
   const { data: temporadas, loading, reload } = useQuery(() =>
-    idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*,time(nome)&order=data_inicio.desc`) : Promise.resolve([]),
+    idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*&order=data_inicio.desc`) : Promise.resolve([]),
     [idTime]
   );
   const { data: times } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=*&order=nome.asc`) : Promise.resolve([]), [idTime]);
@@ -8371,7 +8867,7 @@ function CrudTemporadas({ idTime, show, readOnly, ehTurmaFechada }) {
     if (!form.nome || !form.data_inicio || !form.data_fim) { show("Nome e datas são obrigatórios.", "error"); return; }
     setSaving(true);
     try {
-      const body = { nome: form.nome, id_time: form.id_time ? Number(form.id_time) : null, data_inicio: form.data_inicio, data_fim: form.data_fim, publico: form.publico !== false, uniforme_1_url: form.uniforme_1_url||null, uniforme_2_url: form.uniforme_2_url||null, uniforme_3_url: form.uniforme_3_url||null, escudo_url: form.escudo_url||null, tecnico: form.tecnico||null, presidente: form.presidente||null, vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null, vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null, resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null, observacoes: form.observacoes||null };
+      const body = { nome: form.nome, id_time: idTime || (form.id_time ? Number(form.id_time) : null), data_inicio: form.data_inicio, data_fim: form.data_fim, publico: form.publico !== false, uniforme_1_url: form.uniforme_1_url||null, uniforme_2_url: form.uniforme_2_url||null, uniforme_3_url: form.uniforme_3_url||null, escudo_url: form.escudo_url||null, tecnico: form.tecnico||null, presidente: form.presidente||null, vice_presidente: form.vice_presidente||null, financeiro: form.financeiro||null, vice_financeiro: form.vice_financeiro||null, marca_jogos: form.marca_jogos||null, resp_redes_sociais: form.resp_redes_sociais||null, resp_eventos: form.resp_eventos||null, observacoes: form.observacoes||null };
       if (modal === "novo") await api.post("temporada", body);
       else await api.patch(`temporada?id_temporada=eq.${form.id_temporada}`, body);
       show("Salvo!"); setModal(null); reload();
@@ -8434,67 +8930,87 @@ function CrudTemporadas({ idTime, show, readOnly, ehTurmaFechada }) {
             texto="A temporada organiza suas partidas e estatísticas por período. Crie a primeira para começar a registrar jogos."
             acaoLabel={!readOnly ? "+ Criar temporada" : null} onAcao={!readOnly ? abrirNovo : null}/>
         )}
-        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
-          <thead><tr style={{ background:C.surf2 }}>
-                  <ThSortable colKey="nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Temporada</ThSortable>
-                  <ThSortable colKey="time.nome" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Time</ThSortable>
-                  <ThSortable colKey="data_inicio" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Início</ThSortable>
-                  <ThSortable colKey="data_fim" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Fim</ThSortable>
-                  <ThSortable colKey="tecnico" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Técnico</ThSortable>
-                  <ThSortable colKey="presidente" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Presidente</ThSortable>
-                  <ThSortable colKey="vice_presidente" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Vice-Pres.</ThSortable>
-                  <ThSortable colKey="financeiro" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Financeiro</ThSortable>
-                  <ThSortable colKey="vice_financeiro" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Vice-Fin.</ThSortable>
-                  <ThSortable colKey="marca_jogos" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Marca Jogos</ThSortable>
-                  <ThSortable colKey="resp_redes_sociais" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Redes</ThSortable>
-                  <ThSortable colKey="resp_eventos" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Eventos</ThSortable>
-                  <ThSortable colKey="fardamento_titular_url" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Fardamentos</ThSortable>
-                  <ThSortable colKey="publico" sortKey={_sk} asc={_asc} onSort={k=>{if(_sk===k)_setAsc(a=>!a);else{_setSk(k);_setAsc(true);}}}>Público</ThSortable>
-                  <ThSortable sortKey={_sk} asc={_asc} onSort={()=>{}}></ThSortable>
-          </tr></thead>
-          <tbody>
-            {(sortData(temporadas, _sk, _asc)||[]).map((t,i) => (
-              <tr key={t.id_temporada} style={{ background: i%2===0?C.surface:C.bg }}>
-                <td style={{ padding:"11px 14px", fontWeight:700, color:C.gold, whiteSpace:"nowrap" }}>{t.nome}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.time?.nome || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_inicio ? new Date(t.data_inicio).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{t.data_fim ? new Date(t.data_fim).toLocaleDateString("pt-BR") : "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.tecnico || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.presidente || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.vice_presidente || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.financeiro || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.vice_financeiro || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.marca_jogos || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.resp_redes_sociais || "—"}</td>
-                <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{t.resp_eventos || "—"}</td>
-                <td style={{ padding:"11px 14px", textAlign:"center" }}>
-                  <div style={{ display:"flex", gap:4, justifyContent:"center" }}>
-                    {t.escudo_url      && <img src={t.escudo_url}      alt="Escudo"    style={{ width:24, height:24, objectFit:"contain", borderRadius:"50%" }} title="Escudo"/>}
-                    {t.uniforme_1_url  && <img src={t.uniforme_1_url}  alt="Uniforme 1" style={{ width:24, height:24, objectFit:"contain" }} title="Uniforme 1"/>}
-                    {t.uniforme_2_url  && <img src={t.uniforme_2_url}  alt="Uniforme 2" style={{ width:24, height:24, objectFit:"contain" }} title="Uniforme 2"/>}
-                    {t.uniforme_3_url  && <img src={t.uniforme_3_url}  alt="Uniforme 3" style={{ width:24, height:24, objectFit:"contain" }} title="Uniforme 3"/>}
-                    {!t.escudo_url && !t.uniforme_1_url && !t.uniforme_2_url && !t.uniforme_3_url && <span style={{ color:C.dim, fontSize:11 }}>—</span>}
+        {/* Ordenação compacta */}
+        {(temporadas||[]).length > 1 && (
+          <div style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 16px", borderBottom:`1px solid ${C.border}` }}>
+            <span style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>Ordenar:</span>
+            <button onClick={()=>{_setSk("data_inicio"); _setAsc(false);}} style={{ background: _sk==="data_inicio"&&!_asc?C.gold:C.surf2, color: _sk==="data_inicio"&&!_asc?"#0B3D2E":C.dim, border:"none", borderRadius:6, padding:"5px 10px", fontFamily:"inherit", fontSize:11, fontWeight:700, cursor:"pointer" }}>Mais recentes</button>
+            <button onClick={()=>{_setSk("data_inicio"); _setAsc(true);}} style={{ background: _sk==="data_inicio"&&_asc?C.gold:C.surf2, color: _sk==="data_inicio"&&_asc?"#0B3D2E":C.dim, border:"none", borderRadius:6, padding:"5px 10px", fontFamily:"inherit", fontSize:11, fontWeight:700, cursor:"pointer" }}>Mais antigas</button>
+            <button onClick={()=>{_setSk("nome"); _setAsc(true);}} style={{ background: _sk==="nome"?C.gold:C.surf2, color: _sk==="nome"?"#0B3D2E":C.dim, border:"none", borderRadius:6, padding:"5px 10px", fontFamily:"inherit", fontSize:11, fontWeight:700, cursor:"pointer" }}>Nome</button>
+          </div>
+        )}
+
+        {/* Lista de temporadas em cards (2 linhas cada) */}
+        <div style={{ display:"flex", flexDirection:"column", gap:12, padding:16 }}>
+          {(sortData(temporadas, _sk, _asc)||[]).map((t) => {
+            const h = new Date().toISOString().split("T")[0];
+            const ini = t.data_inicio ? String(t.data_inicio).split("T")[0] : null;
+            const fim = t.data_fim ? String(t.data_fim).split("T")[0] : null;
+            const atual = ini && ini <= h && (!fim || fim >= h);
+            const fmt = (d) => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+            const uniformes = [
+              { url: t.uniforme_1_url, label:"Uniforme 1" },
+              { url: t.uniforme_2_url, label:"Uniforme 2" },
+              { url: t.uniforme_3_url, label:"Uniforme 3" },
+            ].filter(u => u.url);
+            const comissao = [
+              ["Técnico", t.tecnico], ["Presidente", t.presidente], ["Vice-Pres.", t.vice_presidente],
+              ["Financeiro", t.financeiro], ["Vice-Fin.", t.vice_financeiro], ["Marca Jogos", t.marca_jogos],
+              ["Redes", t.resp_redes_sociais], ["Eventos", t.resp_eventos],
+            ].filter(([,v]) => v);
+            return (
+              <div key={t.id_temporada} style={{ background:C.surface, border:`1px solid ${atual?C.gold:C.border}`, borderRadius:12, overflow:"hidden" }}>
+                {/* Linha 1 — identidade: escudo + nome + período + ações */}
+                <div style={{ display:"flex", alignItems:"center", gap:14, padding:14, background: atual ? C.gold+"11" : "transparent" }}>
+                  {t.escudo_url
+                    ? <img src={t.escudo_url} alt={`Escudo ${t.nome}`} style={{ width:56, height:56, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }}/>
+                    : <div style={{ width:56, height:56, borderRadius:"50%", background:C.surf2, border:`2px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, flexShrink:0 }}>🏆</div>
+                  }
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                      <span style={{ fontWeight:800, fontSize:17, color:C.gold }}>{t.nome}</span>
+                      {atual && <span style={{ fontSize:10, background:C.gold+"22", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:4, padding:"1px 6px", fontWeight:700 }}>ATUAL</span>}
+                      <span title={t.publico !== false ? "Pública" : "Privada"} style={{ fontSize:13 }}>{t.publico !== false ? "🌐" : "🔒"}</span>
+                    </div>
+                    <div style={{ fontSize:12, color:C.dim, marginTop:3 }}>{fmt(t.data_inicio)} &nbsp;—&nbsp; {fmt(t.data_fim)}</div>
                   </div>
-                </td>
-                <td style={{ padding:"11px 14px", textAlign:"center" }}>
-                  <span style={{ color: t.publico !== false ? C.win : C.dim, fontWeight:700, fontSize:12 }}>{t.publico !== false ? "🌐" : "🔒"}</span>
-                </td>
-                <td style={{ padding:"11px 14px" }}>{!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 10px" }} onClick={() => abrirEditar(t)}>Editar</Btn>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
+                  {!readOnly && <Btn variant="secondary" style={{ fontSize:12, padding:"7px 14px", flexShrink:0 }} onClick={() => abrirEditar(t)}>Editar</Btn>}
+                </div>
+
+                {/* Linha 2 — uniformes em destaque + comissão */}
+                {(uniformes.length > 0 || comissao.length > 0) && (
+                  <div style={{ display:"flex", gap:16, flexWrap:"wrap", padding:"12px 14px", borderTop:`1px solid ${C.border}`, alignItems:"flex-start" }}>
+                    {uniformes.length > 0 && (
+                      <div style={{ display:"flex", gap:12 }}>
+                        {uniformes.map((u,ui) => (
+                          <div key={ui} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
+                            <img src={u.url} alt={u.label} style={{ width:46, height:46, objectFit:"contain", background:C.surf2, borderRadius:8, border:`1px solid ${C.border}`, padding:3 }}/>
+                            <span style={{ fontSize:9, color:C.dim }}>{u.label.replace("Uniforme ","Unif. ")}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {comissao.length > 0 && (
+                      <div style={{ flex:1, minWidth:180, display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:"6px 14px" }}>
+                        {comissao.map(([label,val]) => (
+                          <div key={label} style={{ minWidth:0 }}>
+                            <span style={{ fontSize:9, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, display:"block" }}>{label}</span>
+                            <span style={{ fontSize:13, color:C.cream, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", display:"block" }} title={val}>{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </Card>
       {modal && (
-        <Modal title={modal === "novo" ? "Nova Temporada" : "Editar Temporada"} onClose={() => setModal(null)}>
+        <Modal title={modal === "novo" ? "Nova Temporada" : "Editar Temporada"} onClose={() => setModal(null)} size="lg">
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-              <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} placeholder="ex: Temporada 2026" />
-              <Select label="Time *" value={form.id_time||""} onChange={e => set("id_time", e.target.value)}>
-                <option value="">Selecione...</option>
-                {(times||[]).map(t => <option key={t.id_time} value={t.id_time}>{t.nome}</option>)}
-              </Select>
-            </div>
+            <Input label="Nome *" value={form.nome||""} onChange={e => set("nome", e.target.value)} placeholder="ex: Temporada 2026" />
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
               <Input label="Data Início *" type="date" value={form.data_inicio||""} onChange={e => set("data_inicio", e.target.value)} />
               <Input label="Data Fim *"   type="date" value={form.data_fim||""}    onChange={e => set("data_fim",    e.target.value)} />
@@ -8606,7 +9122,8 @@ function ConfigTime({ idTime, show, readOnly }) {
   const [subtipoOriginal, setSubtipoOriginal] = useState("");
   const [confirmaTroca, setConfirmaTroca] = useState(null); // {qtd, motivo:'tipo'|'subtipo'} quando precisa confirmar
   const [textoConfirma, setTextoConfirma] = useState("");
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [dirty, setDirty] = useState(false); // há alterações não salvas?
+  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setDirty(true); };
   // É turma fechada? (pelo tipo selecionado no form)
   const tipoSelecionado = (tipos||[]).find(t => String(t.id_tipo_time) === String(form?.id_tipo_time));
   const ehTurmaFechada = !!tipoSelecionado?.eh_turma_fechada;
@@ -8630,6 +9147,7 @@ function ConfigTime({ idTime, show, readOnly }) {
   function aplicarTipo(id_tipo) {
     const tipo = (tipos||[]).find(t => String(t.id_tipo_time) === String(id_tipo));
     if (!tipo) return;
+    setDirty(true);
     setForm(f => ({ ...f,
       id_tipo_time: String(id_tipo),
       numero_titulares: tipo.numero_titulares,
@@ -8711,6 +9229,7 @@ function ConfigTime({ idTime, show, readOnly }) {
         }
       } else {
         show("Configurações salvas!");
+        setDirty(false);
       }
       setTipoOriginal(form.id_tipo_time ? String(form.id_tipo_time) : "");
       setSubtipoOriginal(form.id_subtipo ? String(form.id_subtipo) : "");
@@ -8811,17 +9330,21 @@ function ConfigTime({ idTime, show, readOnly }) {
           </Select>
         </div>
 
-        <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginTop:4, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Comissão Atual</div>
-        <div className="cfg-grid-2">
-          <Input label="Técnico"         value={form.tecnico||""}         onChange={e => set("tecnico",          e.target.value)} />
-          <Input label="Presidente"      value={form.presidente||""}      onChange={e => set("presidente",       e.target.value)} />
-          <Input label="Vice-Presidente" value={form.vice_presidente||""} onChange={e => set("vice_presidente",  e.target.value)} />
-          <Input label="Financeiro"      value={form.financeiro||""}      onChange={e => set("financeiro",       e.target.value)} />
-          <Input label="Vice-Financeiro" value={form.vice_financeiro||""} onChange={e => set("vice_financeiro",  e.target.value)} />
-          <Input label="Marca Jogos"     value={form.marca_jogos||""}     onChange={e => set("marca_jogos",      e.target.value)} />
-          <Input label="Resp. Redes"     value={form.resp_redes_sociais||""} onChange={e => set("resp_redes_sociais", e.target.value)} />
-          <Input label="Resp. Eventos"   value={form.resp_eventos||""}    onChange={e => set("resp_eventos",     e.target.value)} />
-        </div>
+        <details open={!!(form.tecnico||form.presidente||form.vice_presidente||form.financeiro||form.vice_financeiro||form.marca_jogos||form.resp_redes_sociais||form.resp_eventos)}>
+          <summary style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginTop:4, borderLeft:`3px solid ${C.gold}`, paddingLeft:10, cursor:"pointer", listStyle:"none" }}>
+            Comissão Atual <span style={{ color:C.dim, fontWeight:400, textTransform:"none" }}>(toque para expandir)</span>
+          </summary>
+          <div className="cfg-grid-2" style={{ marginTop:14 }}>
+            <Input label="Técnico"         value={form.tecnico||""}         onChange={e => set("tecnico",          e.target.value)} />
+            <Input label="Presidente"      value={form.presidente||""}      onChange={e => set("presidente",       e.target.value)} />
+            <Input label="Vice-Presidente" value={form.vice_presidente||""} onChange={e => set("vice_presidente",  e.target.value)} />
+            <Input label="Financeiro"      value={form.financeiro||""}      onChange={e => set("financeiro",       e.target.value)} />
+            <Input label="Vice-Financeiro" value={form.vice_financeiro||""} onChange={e => set("vice_financeiro",  e.target.value)} />
+            <Input label="Marca Jogos"     value={form.marca_jogos||""}     onChange={e => set("marca_jogos",      e.target.value)} />
+            <Input label="Resp. Redes"     value={form.resp_redes_sociais||""} onChange={e => set("resp_redes_sociais", e.target.value)} />
+            <Input label="Resp. Eventos"   value={form.resp_eventos||""}    onChange={e => set("resp_eventos",     e.target.value)} />
+          </div>
+        </details>
         <Input label="Observações" value={form.observacoes||""} onChange={e => set("observacoes", e.target.value)} />
         {/* Toggle público/privado */}
         <div style={{ background: form.publico !== false ? C.win+"11" : C.loss+"11", border:`1px solid ${form.publico !== false ? C.win+"44" : C.loss+"44"}`, borderRadius:10, padding:"16px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:16 }}>
@@ -8842,9 +9365,20 @@ function ConfigTime({ idTime, show, readOnly }) {
           </button>
         </div>
 
-        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
-          <Btn onClick={salvar} disabled={saving || readOnly}>{saving ? "Salvando..." : readOnly ? "Somente Leitura" : "Salvar Configurações"}</Btn>
-        </div>
+        {/* Barra de salvar: fica visível (sticky) assim que houver alteração — sem precisar rolar até o fim */}
+        {(dirty || saving) && !readOnly ? (
+          <div style={{ position:"sticky", bottom:0, background:"#091F15ee", backdropFilter:"blur(4px)",
+            borderTop:`1px solid ${C.gold}`, borderRadius:"0 0 12px 12px", padding:"12px 16px",
+            display:"flex", alignItems:"center", justifyContent:"flex-end", gap:10, zIndex:50,
+            margin:"8px -24px -24px -24px" }}>
+            <span style={{ marginRight:"auto", fontSize:12, color:C.gold, fontWeight:700 }}>● Alterações não salvas</span>
+            <Btn onClick={salvar} disabled={saving}>{saving ? "Salvando..." : "Salvar Configurações"}</Btn>
+          </div>
+        ) : (
+          <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
+            <Btn onClick={salvar} disabled={saving || readOnly}>{readOnly ? "Somente Leitura" : "Salvar Configurações"}</Btn>
+          </div>
+        )}
       </div>
 
       {confirmaTroca && (
