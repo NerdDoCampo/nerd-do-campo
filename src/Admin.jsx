@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.0";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.1";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -6724,30 +6724,36 @@ export default function AdminAppCompleto() {
         /* ── Navegação mobile: retrato (largura) OU paisagem de celular (altura baixa) ── */
         @media (max-width:768px), (max-height:600px) and (orientation:landscape){
           .admin-header{padding:0 12px !important; gap:8px !important;}
-          .header-time-nome{display:none;}
-          /* Header enxuto no mobile: versão e link do site público saem (acessíveis via menu Ajuda/Visão App) */
+          .header-time-nome{display:none !important;}
+          /* Header enxuto no mobile: título, versão, badges e link do site saem */
           .header-versao{display:none !important;}
           .header-link-publico{display:none !important;}
+          .header-titulo{display:none !important;}
+          .header-badge{display:none !important;}
+          .header-sair-desktop{display:none !important;}
+          /* Seletor de time (super/meus times) não pode empurrar nada pra fora */
+          .header-time-select{max-width:150px !important;}
           /* Colunas secundárias de tabelas densas somem em telas pequenas */
           .col-ocultar-mobile{display:none !important;}
           .admin-layout{flex-direction:column !important;}
-          /* Mostra o botão ☰ e o cabeçalho da gaveta */
+          /* Botão ☰, cabeçalho e rodapé da gaveta */
           .menu-toggle{display:flex !important; align-items:center; justify-content:center;}
           .menu-gaveta-head{display:flex !important;}
-          .header-titulo{display:none !important;}
-          /* Menu vira GAVETA que desliza da esquerda — sem rolagem lateral em lugar nenhum */
+          .menu-gaveta-footer{display:block !important;}
+          /* GAVETA: coluna estreita que desliza da esquerda. Tudo empilhado, largura travada. */
           .admin-sidebar{
-            position:fixed !important; left:0; top:0; height:100dvh !important; max-height:none !important;
-            width:min(84vw, 300px) !important; padding:16px 0 !important;
+            position:fixed !important; left:0 !important; top:0 !important;
+            height:100dvh !important; max-height:none !important; width:82vw !important; max-width:300px !important;
+            display:block !important; padding:14px 0 !important;
             transform:translateX(-100%); transition:transform .25s ease; z-index:200;
-            border-right:1px solid ${C.border}; overflow-y:auto; overflow-x:hidden;
+            border-right:1px solid ${C.border}; overflow-y:auto !important; overflow-x:hidden !important;
+            box-shadow:4px 0 24px #0009;
           }
           .admin-sidebar.aberta{transform:translateX(0);}
-          /* Itens do menu ficam empilhados (vertical), grupos com título visível */
-          .admin-sidebar .menu-grupo{display:block;}
-          .admin-sidebar button{width:100% !important; white-space:normal;}
+          .admin-sidebar .menu-grupo{display:block !important; width:100% !important;}
+          .admin-sidebar .menu-grupo-titulo{display:block !important;}
+          .admin-sidebar button{width:100% !important; white-space:normal !important; flex-shrink:0;}
           .admin-main{padding:16px 12px !important;}
-          /* Nada de tabela/elemento estourando a largura da tela */
           .admin-main table{max-width:100%;}
           input, select, textarea{max-width:100% !important; box-sizing:border-box !important;}
         }
@@ -6775,9 +6781,9 @@ export default function AdminAppCompleto() {
           style={{ display:"none", background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontSize:20, lineHeight:1, padding:"5px 11px", cursor:"pointer", flexShrink:0 }}>☰</button>
         <img src="/logo.png" alt="Nerd do Campo" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
         <div className="header-titulo" style={{ fontSize:18, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream }}>Nerd do Campo</div>
-        <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"2px 8px" }}>Admin</div>
+        <div className="header-badge" style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", background:C.gold+"22", border:`1px solid ${C.gold}44`, borderRadius:6, padding:"2px 8px" }}>Admin</div>
         {process.env.REACT_APP_ENV === "development" && (
-          <div style={{ fontSize:10, color:"#ff6b6b", textTransform:"uppercase", letterSpacing:"0.1em", background:"#ff6b6b22", border:"1px solid #ff6b6b44", borderRadius:6, padding:"2px 8px", fontWeight:700 }}>
+          <div className="header-badge" style={{ fontSize:10, color:"#ff6b6b", textTransform:"uppercase", letterSpacing:"0.1em", background:"#ff6b6b22", border:"1px solid #ff6b6b44", borderRadius:6, padding:"2px 8px", fontWeight:700 }}>
             🧪 DEV
           </div>
         )}
@@ -6787,8 +6793,8 @@ export default function AdminAppCompleto() {
         <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:12 }}>
           {isSuperadmin && (
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-              <span style={{ fontSize:11, color:C.gold, fontWeight:700, textTransform:"uppercase" }}>👑 Super</span>
-              <select value={idTime||""} onChange={e => { const v=e.target.value; setIdTime(v?Number(v):null); setTemporadaSel(null); setMenu("inicio"); setPartida(null); setNovaPartida(false); }}
+              <span className="header-badge" style={{ fontSize:11, color:C.gold, fontWeight:700, textTransform:"uppercase" }}>👑 Super</span>
+              <select className="header-time-select" value={idTime||""} onChange={e => { const v=e.target.value; setIdTime(v?Number(v):null); setTemporadaSel(null); setMenu("inicio"); setPartida(null); setNovaPartida(false); }}
                 style={{ background:C.surf2, color: idTime?C.cream:C.gold, border:`1px solid ${idTime?C.border:C.gold}`, borderRadius:8, padding:"6px 10px", fontFamily:"inherit", fontSize:12, fontWeight:700 }}>
                 <option value="">— Selecione um time —</option>
                 {(todosTimesSuper||[]).map(t=>{
@@ -6801,8 +6807,8 @@ export default function AdminAppCompleto() {
           )}
           {!isSuperadmin && meusTimes.length > 1 && (
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-              <span style={{ fontSize:11, color:C.gold, fontWeight:700, textTransform:"uppercase" }}>Meus times</span>
-              <select value={idTime||""} onChange={e => { const v=e.target.value; setIdTime(v?Number(v):null); setTemporadaSel(null); setMenu("inicio"); setPartida(null); setNovaPartida(false); }}
+              <span className="header-badge" style={{ fontSize:11, color:C.gold, fontWeight:700, textTransform:"uppercase" }}>Meus times</span>
+              <select className="header-time-select" value={idTime||""} onChange={e => { const v=e.target.value; setIdTime(v?Number(v):null); setTemporadaSel(null); setMenu("inicio"); setPartida(null); setNovaPartida(false); }}
                 style={{ background:C.surf2, color: idTime?C.cream:C.gold, border:`1px solid ${idTime?C.border:C.gold}`, borderRadius:8, padding:"6px 10px", fontFamily:"inherit", fontSize:12, fontWeight:700 }}>
                 <option value="">— Selecione um time —</option>
                 {meusTimes.map(ut=><option key={ut.id_time} value={ut.id_time}>{ut.time?.nome || `Time ${ut.id_time}`}</option>)}
@@ -6821,7 +6827,7 @@ export default function AdminAppCompleto() {
             </span>
           )}
           <a className="header-link-publico" href="/" target="_blank" rel="noopener noreferrer" title="Abrir o site público" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:11, fontWeight:700, padding:"6px 12px", textDecoration:"none", whiteSpace:"nowrap" }}>🌐 Ver site público</a>
-          <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>Sair</Btn>
+          <span className="header-sair-desktop"><Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>Sair</Btn></span>
         </div>
       </header>
 
@@ -6871,6 +6877,12 @@ export default function AdminAppCompleto() {
               </div>
             );
           })}
+          {/* Rodapé da gaveta: Sair sempre acessível no mobile (no desktop fica no header) */}
+          <div className="menu-gaveta-footer" style={{ display:"none", padding:"14px 16px", borderTop:`1px solid ${C.border}`, marginTop:8 }}>
+            {time?.nome && <div style={{ fontSize:12, color:C.dim, marginBottom:10 }}>Time: <span style={{ color:C.cream, fontWeight:700 }}>{time.nome}</span></div>}
+            <a href="/" target="_blank" rel="noopener noreferrer" style={{ display:"block", textAlign:"center", background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontSize:12, fontWeight:700, padding:"9px 12px", textDecoration:"none", marginBottom:8 }}>🌐 Ver site público</a>
+            <Btn variant="danger" style={{ width:"100%", fontSize:12 }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>Sair</Btn>
+          </div>
         </nav>
 
         {/* Conteúdo */}
