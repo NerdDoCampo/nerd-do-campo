@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.6";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.23.9";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -6826,12 +6826,6 @@ export default function AdminAppCompleto() {
               📝 {time.observacao_super}
             </span>
           )}
-          {(temporadas||[]).length > 1 && (
-            <select value={temporadaSel?.id_temporada||""} onChange={e => setTemporadaSel(temporadas.find(t=>t.id_temporada===Number(e.target.value)))}
-              style={{ background:C.surf2, color:C.cream, border:`1px solid ${C.border}`, borderRadius:8, padding:"6px 10px", fontFamily:"inherit", fontSize:12 }}>
-              {(temporadas||[]).map(t=><option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
-            </select>
-          )}
           <a className="header-link-publico" href="/" target="_blank" rel="noopener noreferrer" title="Abrir o site público" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:11, fontWeight:700, padding:"6px 12px", textDecoration:"none", whiteSpace:"nowrap" }}>🌐 Ver site público</a>
           <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>Sair</Btn>
         </div>
@@ -6921,6 +6915,7 @@ export default function AdminAppCompleto() {
           )}
           {/* Turma fechada: "Partidas" vira "Encontros" */}
           {menu === "partidas" && ehTurmaFechada && (<>{secTitle("Encontros")}
+            <SeletorTemporada temporadas={temporadas} temporadaSel={temporadaSel} onSelect={setTemporadaSel}/>
             <ListaEncontros idTime={idTime} temporada={temporadaSel} show={show} readOnly={!canEdit("partidas")} />
           </>)}
           {menu === "partidas" && !ehTurmaFechada && !temporadaSel && (
@@ -6936,7 +6931,8 @@ export default function AdminAppCompleto() {
             </Card>
           )}
           {menu === "partidas" && !ehTurmaFechada && !partida && !novaPartida && temporadaSel && (<>
-            {secTitle(`Partidas — ${temporadaSel.nome}`)}
+            {secTitle("Partidas")}
+            <SeletorTemporada temporadas={temporadas} temporadaSel={temporadaSel} onSelect={setTemporadaSel}/>
             <ListaPartidasWrapper temporada={temporadaSel} onSelect={p=>{setPartida(p);}} onNova={()=>setNovaPartida(true)} show={show} />
           </>)}
 
@@ -7000,6 +6996,37 @@ function _iniciais(nome) {
   const p = String(nome||"?").trim().split(/\s+/);
   return ((p[0]?.[0]||"") + (p[1]?.[0]||"")).toUpperCase() || "?";
 }
+// Seletor de temporada usado dentro das telas que dependem dela (Partidas/Encontros).
+// Regra: até 4 temporadas mostra pílulas; acima disso, dropdown compacto.
+function SeletorTemporada({ temporadas, temporadaSel, onSelect }) {
+  const lista = temporadas || [];
+  if (lista.length === 0) return null;
+  if (lista.length <= 4) {
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:16 }}>
+        <span style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, marginRight:2 }}>Temporada:</span>
+        {lista.map(t => {
+          const on = temporadaSel?.id_temporada === t.id_temporada;
+          return (
+            <button key={t.id_temporada} onClick={() => onSelect(t)} aria-current={on ? "true" : undefined}
+              style={{ background: on?C.gold:C.surf2, color: on?"#0B3D2E":C.cream, border:`1px solid ${on?C.gold:C.border}`, borderRadius:20, padding:"7px 16px", fontFamily:"inherit", fontSize:13, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
+              {t.publico !== false ? "🌐" : "🔒"} {t.nome}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16, flexWrap:"wrap" }}>
+      <span style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>Temporada:</span>
+      <select value={temporadaSel?.id_temporada||""} onChange={e => onSelect(lista.find(t=>t.id_temporada===Number(e.target.value)))} aria-label="Selecionar temporada"
+        style={{ background:C.surf2, color:C.cream, border:`1px solid ${C.gold}`, borderRadius:10, padding:"8px 14px", fontFamily:"inherit", fontSize:14, fontWeight:700 }}>
+        {lista.map(t => <option key={t.id_temporada} value={t.id_temporada}>{t.nome}</option>)}
+      </select>
+    </div>
+  );
+}
 function TabelaJogadores({ grupo, lista, onEditar, onInativar, onReativar, readOnly, mapaPosJog }) {
   if (!lista.length) return null;
   const inativoGrupo = grupo === "Inativos";
@@ -7011,35 +7038,59 @@ function TabelaJogadores({ grupo, lista, onEditar, onInativar, onReativar, readO
           const nomeExib = j.apelido || j.nome;
           const posTxt = j.posicao?.nome ? (j.posicao.id_posicao_pai && mapaPosJog[j.posicao.id_posicao_pai] ? `${mapaPosJog[j.posicao.id_posicao_pai]} › ${j.posicao.nome}` : j.posicao.nome) : null;
           const idade = calcularIdade(j.data_nascimento);
+          const fmtData = (d) => { if (!d) return "—"; const s = String(d); return new Date(s.length === 10 ? s + "T12:00:00" : s).toLocaleDateString("pt-BR"); };
+          const forcaTxt = `${NIVEIS_FORCA[j.forca||2]?.estrelas || "⭐⭐"} ${NIVEIS_FORCA[j.forca||2]?.nome || ""}`.trim();
+          // Todos os campos do cadastro — sempre exibidos, na mesma ordem, independente da ordenação
+          const campos = [
+            ["Nome completo", j.nome || "—"],
+            ["Apelido", j.apelido || "—"],
+            ["Nº camisa", (j.camisa != null && j.camisa !== "") ? j.camisa : "—"],
+            ["Posição", posTxt || "—"],
+            ["Força", forcaTxt],
+            ["Nascimento", j.data_nascimento ? `${fmtData(j.data_nascimento)}${idade != null ? ` · ${idade} anos` : ""}` : "—"],
+            ["Telefone", j.telefone || "—"],
+            ["E-mail", j.email || "—"],
+            ["Entrada", fmtData(j.data_inicio)],
+          ];
+          if (j.data_fim) campos.push(["Saída", fmtData(j.data_fim)]);
           return (
-            <Card key={j.id_jogador} style={{ padding:12, display:"flex", alignItems:"center", gap:13, opacity: inativoGrupo ? 0.65 : 1 }}>
-              {/* Avatar: foto real ou iniciais + camisa como selo */}
-              <div style={{ position:"relative", flexShrink:0 }}>
-                {j.foto_url
-                  ? <img src={j.foto_url} alt={nomeExib} style={{ width:50, height:50, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.border}` }}/>
-                  : <div style={{ width:50, height:50, borderRadius:"50%", background:_corAvatar(j.nome), display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:800, fontSize:17 }}>{_iniciais(j.nome)}</div>}
-                {j.camisa != null && j.camisa !== "" && (
-                  <span style={{ position:"absolute", bottom:-3, right:-3, background:C.gold, color:"#0B3D2E", fontSize:11, fontWeight:800, minWidth:22, height:22, borderRadius:11, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${C.surface}`, padding:"0 4px" }}>{j.camisa}</span>)}
-              </div>
-              {/* Identidade */}
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
-                  <span style={{ fontWeight:800, fontSize:16, color:C.cream }}>{nomeExib}</span>
-                  {posTxt && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.gold, border:`1px solid ${C.border}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{posTxt}</span>}
+            <Card key={j.id_jogador} style={{ padding:12, opacity: inativoGrupo ? 0.7 : 1 }}>
+              {/* Topo: identidade rápida + ações */}
+              <div style={{ display:"flex", alignItems:"center", gap:13 }}>
+                <div style={{ position:"relative", flexShrink:0 }}>
+                  {j.foto_url
+                    ? <img src={j.foto_url} alt={nomeExib} style={{ width:50, height:50, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.border}` }}/>
+                    : <div style={{ width:50, height:50, borderRadius:"50%", background:_corAvatar(j.nome), display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:800, fontSize:17 }}>{_iniciais(j.nome)}</div>}
+                  {j.camisa != null && j.camisa !== "" && (
+                    <span style={{ position:"absolute", bottom:-3, right:-3, background:C.gold, color:"#0B3D2E", fontSize:11, fontWeight:800, minWidth:22, height:22, borderRadius:11, display:"flex", alignItems:"center", justifyContent:"center", border:`2px solid ${C.surface}`, padding:"0 4px" }}>{j.camisa}</span>)}
                 </div>
-                <div style={{ display:"flex", gap:12, flexWrap:"wrap", marginTop:4, alignItems:"center", fontSize:12, color:C.dim }}>
-                  <span title={NIVEIS_FORCA[j.forca||2]?.nome} style={{ color:C.gold, letterSpacing:"1px" }}>{NIVEIS_FORCA[j.forca||2]?.estrelas || "⭐⭐"}</span>
-                  {j.apelido && j.nome && j.apelido !== j.nome && <span>{j.nome}</span>}
-                  {idade != null && <span>{idade} anos</span>}
-                  {j.telefone && <span>{j.telefone}</span>}
-                  {inativoGrupo && j.data_fim && <span>saiu {new Date(j.data_fim).toLocaleDateString("pt-BR")}</span>}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
+                    <span style={{ fontWeight:800, fontSize:16, color:C.cream }}>{nomeExib}</span>
+                    {posTxt && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.gold, border:`1px solid ${C.border}`, textTransform:"uppercase", letterSpacing:"0.04em" }}>{posTxt}</span>}
+                    <span title={NIVEIS_FORCA[j.forca||2]?.nome} style={{ color:C.gold, letterSpacing:"1px", fontSize:12 }}>{NIVEIS_FORCA[j.forca||2]?.estrelas || "⭐⭐"}</span>
+                  </div>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
+                  <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => onEditar(j)}>Editar</Btn>
+                  {!j.data_fim && !readOnly && <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => onInativar(j)}>Inativar</Btn>}
+                  {j.data_fim && !readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", color:C.win, borderColor:C.win }} onClick={() => onReativar(j)}>Reativar</Btn>}
                 </div>
               </div>
-              {/* Ações */}
-              <div style={{ display:"flex", flexDirection:"column", gap:6, flexShrink:0 }}>
-                <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => onEditar(j)}>Editar</Btn>
-                {!j.data_fim && !readOnly && <Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => onInativar(j)}>Inativar</Btn>}
-                {j.data_fim && !readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", color:C.win, borderColor:C.win }} onClick={() => onReativar(j)}>Reativar</Btn>}
+
+              {/* Todos os dados do cadastro — sempre visíveis */}
+              <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}`, display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(150px, 1fr))", gap:"8px 14px" }}>
+                {campos.map(([label, valor]) => (
+                  <div key={label} style={{ minWidth:0 }}>
+                    <span style={{ fontSize:9, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, display:"block" }}>{label}</span>
+                    <span style={{ fontSize:13, color:C.cream, display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={String(valor)}>{valor}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Observações em largura cheia */}
+              <div style={{ marginTop:8 }}>
+                <span style={{ fontSize:9, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, display:"block" }}>Observações</span>
+                <span style={{ fontSize:13, color: j.observacoes ? C.cream : C.dim, display:"block" }}>{j.observacoes || "—"}</span>
               </div>
             </Card>
           );
@@ -8712,7 +8763,6 @@ function CrudPosicoes({ idTime, show, readOnly }) {
     (posicoes||[]).forEach(p => { m[p.id_posicao] = p.nome; });
     return m;
   }, [posicoes]);
-  const [_sk] = useState("nome"); const [_asc] = useState(true);
   const [modal, setModal]   = useState(null);
   const [form, setForm]     = useState({});
   const [saving, setSaving] = useState(false);
@@ -8755,8 +8805,8 @@ function CrudPosicoes({ idTime, show, readOnly }) {
 
   if (loading) return <Spinner />;
 
-  const grupos = (sortData(posicoes, _sk, _asc)||[]).filter(p => !p.id_posicao_pai);
-  const filhas  = (sortData(posicoes, _sk, _asc)||[]).filter(p =>  p.id_posicao_pai);
+  const grupos = (posicoes||[]).filter(p => !p.id_posicao_pai);
+  const filhas  = (posicoes||[]).filter(p =>  p.id_posicao_pai);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
