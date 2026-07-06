@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.9";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.10";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1910,30 +1910,42 @@ function CompartilharResultado({ partida, gols, jogadores, time, temporada, idTi
     () => temporada?.id_temporada ? api.get(`vw_stats_temporada?id_temporada=eq.${temporada.id_temporada}&select=*&order=gols_marcados.desc&limit=3`) : Promise.resolve([]),
     [temporada?.id_temporada]
   );
+  // Modo simplificado grava gols/assistências em participacao (não cria registros na tabela gol).
+  const { data: participacoesPartida } = useQuery(
+    () => partida?.id_partida ? api.get(`participacao?id_partida=eq.${partida.id_partida}&id_jogador=gt.0&select=gols,assistencias,jogador(nome,apelido)`) : Promise.resolve([]),
+    [partida?.id_partida]
+  );
 
   function nomeCurto(j) { return (j?.apelido || j?.nome || "").trim(); }
 
   // agrupa gols e assistências do jogo por jogador → "Fulano (2), Beltrano"
   function listaGols() {
     const cont = {};
-    (gols||[]).forEach(g => {
-      // autor do gol = jogador da participação (g.jogador é o ASSISTENTE, via id_assistente)
-      const n = nomeCurto(g.participacao?.jogador);
-      if (n) cont[n] = (cont[n]||0) + 1;
-    });
+    if ((gols||[]).length > 0) {
+      // modo detalhado: um registro por gol (autor = participacao.jogador)
+      (gols||[]).forEach(g => { const n = nomeCurto(g.participacao?.jogador); if (n) cont[n] = (cont[n]||0) + 1; });
+    } else {
+      // modo simplificado: total de gols por jogador em participacao.gols
+      (participacoesPartida||[]).forEach(p => { const q = Number(p.gols)||0; if (q>0) { const n = nomeCurto(p.jogador); if (n) cont[n] = (cont[n]||0) + q; } });
+    }
     return Object.entries(cont).map(([n,q]) => q>1 ? `${n} (${q})` : n).join(", ");
   }
   function listaAssist() {
-    const mapaJog = {};
-    (jogadores||[]).forEach(j => { mapaJog[j.id_jogador] = j; });
     const cont = {};
-    (gols||[]).forEach(g => {
-      const a = g.id_assistente;
-      if (!a) return;
-      const j = mapaJog[a];
-      const nome = j ? nomeCurto(j) : null;
-      if (nome) cont[nome] = (cont[nome]||0) + 1;
-    });
+    if ((gols||[]).length > 0) {
+      // modo detalhado: assistente via id_assistente do registro de gol
+      const mapaJog = {};
+      (jogadores||[]).forEach(j => { mapaJog[j.id_jogador] = j; });
+      (gols||[]).forEach(g => {
+        const a = g.id_assistente;
+        if (!a) return;
+        const nome = nomeCurto(mapaJog[a]);
+        if (nome) cont[nome] = (cont[nome]||0) + 1;
+      });
+    } else {
+      // modo simplificado: total de assistências por jogador em participacao.assistencias
+      (participacoesPartida||[]).forEach(p => { const q = Number(p.assistencias)||0; if (q>0) { const n = nomeCurto(p.jogador); if (n) cont[n] = (cont[n]||0) + q; } });
+    }
     return Object.entries(cont).map(([n,q]) => q>1 ? `${n} (${q})` : n).join(", ");
   }
 
