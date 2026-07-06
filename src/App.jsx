@@ -1373,9 +1373,10 @@ function ModalSolicitacao({ onClose }) {
           Recebemos os dados do <b style={{ color:C.cream }}>{form.nome_time}</b>.
           Nossa equipe irá analisar e, em alguns dias, enviar o acesso para o e-mail <b style={{ color:C.gold }}>{form.email_responsavel}</b>.
         </div>
-        <div style={{ fontSize:12, color:C.cream, lineHeight:1.6, marginBottom:24, background:C.gold+"15", border:`1px solid ${C.gold}44`, borderRadius:10, padding:"12px 14px", textAlign:"left" }}>
-          <b style={{ color:C.gold }}>📬 Fique de olho no seu e-mail nos próximos dias!</b><br/>
-          Confira também as pastas de <b>spam</b>, <b>lixo eletrônico</b> e <b>quarentena</b> — às vezes a mensagem com seu login pode cair ali. Se encontrar, marque como <b>"não é spam"</b> para receber os próximos avisos normalmente.
+        <div style={{ fontSize:12, color:C.cream, lineHeight:1.6, marginBottom:24, background:C.loss+"18", border:`1px solid ${C.loss}66`, borderRadius:10, padding:"14px 16px", textAlign:"left" }}>
+          <b style={{ color:C.loss, fontSize:13 }}>⚠️ Importante: procure no SPAM!</b><br/>
+          O e-mail com seu login <b>quase sempre cai na caixa de spam / lixo eletrônico</b> na primeira vez — é normal, por ser uma mensagem automática com dados de acesso.<br/><br/>
+          👉 Nos próximos dias, <b>abra a pasta de spam</b> e busque por <b style={{ color:C.gold }}>"Nerd do Campo"</b>. Ao encontrar, toque em <b>"Não é spam"</b> (ou "Marcar como confiável") para que os próximos avisos cheguem direto na sua caixa de entrada.
         </div>
         <button onClick={onClose}
           style={{ background:C.gold, color:"#0B3D2E", border:"none", borderRadius:10, padding:"12px 32px", fontFamily:"inherit", fontWeight:800, fontSize:14, cursor:"pointer", textTransform:"uppercase" }}>

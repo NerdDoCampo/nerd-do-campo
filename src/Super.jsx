@@ -1378,6 +1378,8 @@ Uma dica: a plataforma é bem completa, mas você não precisa usar tudo de uma 
 Pra te ajudar nos primeiros passos, preparei um manual completo no módulo de Ajuda do sistema.
 Qualquer dúvida, é só responder este e-mail que a gente te dá uma força.
 
+P.S.: se este e-mail caiu na sua caixa de spam ou lixo eletrônico, marca ele como "não é spam" (ou "confiável"). Assim os próximos avisos do sistema chegam direto na tua caixa de entrada. 👍
+
 Bom jogo e bons números! ⚽
 
 Abraço,
@@ -3022,7 +3024,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.1";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.2";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
