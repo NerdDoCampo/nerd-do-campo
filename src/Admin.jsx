@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.8";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.9";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1917,7 +1917,8 @@ function CompartilharResultado({ partida, gols, jogadores, time, temporada, idTi
   function listaGols() {
     const cont = {};
     (gols||[]).forEach(g => {
-      const n = nomeCurto(g.jogador || g.participacao?.jogador);
+      // autor do gol = jogador da participação (g.jogador é o ASSISTENTE, via id_assistente)
+      const n = nomeCurto(g.participacao?.jogador);
       if (n) cont[n] = (cont[n]||0) + 1;
     });
     return Object.entries(cont).map(([n,q]) => q>1 ? `${n} (${q})` : n).join(", ");
