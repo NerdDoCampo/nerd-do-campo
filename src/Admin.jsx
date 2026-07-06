@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.7";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.8";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -2011,20 +2011,31 @@ function CompartilharResultado({ partida, gols, jogadores, time, temporada, idTi
     ctx.fillText(`${dataFmt}${partida.campo?.nome ? " · "+partida.campo.nome : ""}`.slice(0,40), W/2, cy+62);
 
     // gols e assistências — encolhe a fonte pra caber na largura do card (nunca vaza a borda)
-    const maxLinha = W - PAD*2 - 56;
-    function linhaCabe(txt, base) {
-      let size = base; ctx.font = `${size}px Arial`;
-      while (ctx.measureText(txt).width > maxLinha && size > 13) { size--; ctx.font = `${size}px Arial`; }
-      if (ctx.measureText(txt).width > maxLinha) {
-        while (txt.length > 4 && ctx.measureText(txt + "…").width > maxLinha) txt = txt.slice(0, -1);
-        txt = txt + "…";
+    const maxLinha = W - PAD*2 - 100;
+    // Desenha "Rótulo valor" centralizado (rótulo dourado, valor creme), encolhendo pra caber.
+    // Sem emoji nas duas linhas: o measureText não é confiável com emoji (🅰️ vaza no iPhone).
+    function linhaRotulada(rotulo, valor, base, cyy) {
+      let s = base;
+      const larg = (t) => { ctx.font = `${s}px Arial`; return ctx.measureText(t).width; };
+      while (s > 13 && larg(`${rotulo} ${valor}`) > maxLinha) s--;
+      let v = valor;
+      if (larg(`${rotulo} ${v}`) > maxLinha) {
+        while (v.length > 2 && larg(`${rotulo} ${v}…`) > maxLinha) v = v.slice(0, -1);
+        v = v + "…";
       }
-      return txt;
+      ctx.font = `${s}px Arial`;
+      const rotL = `${rotulo} `;
+      const totalW = ctx.measureText(rotL + v).width;
+      const rotW = ctx.measureText(rotL).width;
+      const x0 = W/2 - totalW/2;
+      ctx.textAlign = "left";
+      ctx.fillStyle = GOLD; ctx.font = `700 ${s}px Arial`; ctx.fillText(rotL, x0, cyy);
+      ctx.fillStyle = CREAM; ctx.font = `${s}px Arial`; ctx.fillText(v, x0 + rotW, cyy);
     }
-    ctx.fillStyle = CREAM; ctx.textAlign = "center";
     const g = listaGols(); const a = listaAssist();
-    if (g) { ctx.fillText(linhaCabe(`⚽ Gols: ${g}`, 22), W/2, y+blocoH-46); }
-    if (a) { ctx.fillText(linhaCabe(`🅰️ Assist.: ${a}`, 22), W/2, y+blocoH-16); }
+    if (g) linhaRotulada("⚽ Gols:", g, 22, y+blocoH-46);
+    if (a) linhaRotulada("Assist.:", a, 22, y+blocoH-16);
+    ctx.textAlign = "center";
     y += blocoH + 28;
 
     // título temporada
