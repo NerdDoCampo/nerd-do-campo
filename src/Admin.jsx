@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.2";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.7";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1994,20 +1994,37 @@ function CompartilharResultado({ partida, gols, jogadores, time, temporada, idTi
     const cy = y + 150;
     ctx.fillStyle = GOLD; ctx.font = "800 92px Arial"; ctx.textAlign = "center";
     ctx.fillText(`${golsCasa} × ${golsVis}`, W/2, cy+20);
-    ctx.fillStyle = CREAM; ctx.font = "800 32px Arial";
-    ctx.fillText(mandante.slice(0,18), W*0.23, cy-10);
-    ctx.fillText(visitante.slice(0,18), W*0.77, cy-10);
+    // nomes ajustados por pixel para não encostar no placar
+    const caberNome = (txt, base, maxW) => {
+      let s = base; ctx.font = `800 ${s}px Arial`;
+      while (ctx.measureText(txt).width > maxW && s > 16) { s--; ctx.font = `800 ${s}px Arial`; }
+      if (ctx.measureText(txt).width > maxW) { while (txt.length > 2 && ctx.measureText(txt + "…").width > maxW) txt = txt.slice(0,-1); txt += "…"; }
+      return txt;
+    };
+    ctx.fillStyle = CREAM; ctx.textAlign = "center";
+    ctx.fillText(caberNome(mandante, 32, 300), W*0.23, cy-10);
+    ctx.fillText(caberNome(visitante, 32, 300), W*0.77, cy-10);
     ctx.fillStyle = DIM; ctx.font = "18px Arial";
     ctx.fillText("mandante", W*0.23, cy+22);
     ctx.fillText("visitante", W*0.77, cy+22);
     const dataFmt = partida.data ? new Date(partida.data).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) : "";
     ctx.fillText(`${dataFmt}${partida.campo?.nome ? " · "+partida.campo.nome : ""}`.slice(0,40), W/2, cy+62);
 
-    // gols e assistências
-    ctx.font = "22px Arial"; ctx.fillStyle = CREAM;
+    // gols e assistências — encolhe a fonte pra caber na largura do card (nunca vaza a borda)
+    const maxLinha = W - PAD*2 - 56;
+    function linhaCabe(txt, base) {
+      let size = base; ctx.font = `${size}px Arial`;
+      while (ctx.measureText(txt).width > maxLinha && size > 13) { size--; ctx.font = `${size}px Arial`; }
+      if (ctx.measureText(txt).width > maxLinha) {
+        while (txt.length > 4 && ctx.measureText(txt + "…").width > maxLinha) txt = txt.slice(0, -1);
+        txt = txt + "…";
+      }
+      return txt;
+    }
+    ctx.fillStyle = CREAM; ctx.textAlign = "center";
     const g = listaGols(); const a = listaAssist();
-    if (g) ctx.fillText(`⚽ Gols: ${g}`.slice(0,52), W/2, y+blocoH-46);
-    if (a) ctx.fillText(`🅰️ Assist.: ${a}`.slice(0,52), W/2, y+blocoH-16);
+    if (g) { ctx.fillText(linhaCabe(`⚽ Gols: ${g}`, 22), W/2, y+blocoH-46); }
+    if (a) { ctx.fillText(linhaCabe(`🅰️ Assist.: ${a}`, 22), W/2, y+blocoH-16); }
     y += blocoH + 28;
 
     // título temporada
@@ -2053,7 +2070,10 @@ function CompartilharResultado({ partida, gols, jogadores, time, temporada, idTi
       ctx.fillStyle = "#0B3D2E"; ctx.font = "800 20px Arial"; ctx.textAlign = "center";
       ctx.fillText(String(i+1), PAD+50, ay-1);
       ctx.fillStyle = CREAM; ctx.font = "700 28px Arial"; ctx.textAlign = "left";
-      ctx.fillText((art.apelido||art.nome||"").slice(0,22), PAD+85, ay);
+      // A view vw_stats_temporada expõe o nome em `jogador` (não apelido/nome)
+      const nomeArt = (art.jogador || art.apelido || art.nome || "—").trim();
+      const rotuloArt = art.camisa ? `${nomeArt} (#${art.camisa})` : nomeArt;
+      ctx.fillText(rotuloArt.slice(0,24), PAD+85, ay);
       ctx.fillStyle = GOLD; ctx.font = "800 24px Arial"; ctx.textAlign = "right";
       ctx.fillText(`${art.gols_marcados||0} gols`, W-PAD-130, ay);
       ctx.fillStyle = DIM; ctx.font = "18px Arial";
@@ -2180,9 +2200,16 @@ function ConvocarPartida({ partida, time, idTime, show }) {
     const blocoH = 230;
     ctx.fillStyle = SURF; rr(PAD, y, W-PAD*2, blocoH, 28); ctx.fill();
     ctx.strokeStyle = GOLD; ctx.lineWidth = 3; rr(PAD, y, W-PAD*2, blocoH, 28); ctx.stroke();
-    ctx.fillStyle = CREAM; ctx.font = "800 38px Arial";
-    ctx.fillText(mandante.slice(0,16), W*0.27, y+105);
-    ctx.fillText(visitante.slice(0,16), W*0.73, y+105);
+    // ajusta texto para caber numa largura (encolhe fonte, depois trunca)
+    const caber = (txt, base, maxW, weight="") => {
+      let s = base; ctx.font = `${weight}${s}px Arial`;
+      while (ctx.measureText(txt).width > maxW && s > 14) { s--; ctx.font = `${weight}${s}px Arial`; }
+      if (ctx.measureText(txt).width > maxW) { while (txt.length > 2 && ctx.measureText(txt + "…").width > maxW) txt = txt.slice(0,-1); txt += "…"; }
+      return txt;
+    };
+    ctx.fillStyle = CREAM; ctx.textAlign = "center";
+    ctx.fillText(caber(mandante, 38, 340, "800 "), W*0.27, y+105);
+    ctx.fillText(caber(visitante, 38, 340, "800 "), W*0.73, y+105);
     ctx.fillStyle = GOLD; ctx.font = "800 54px Arial"; ctx.fillText("×", W/2, y+118);
     ctx.fillStyle = DIM; ctx.font = "20px Arial";
     ctx.fillText(emCasa?"🏠 mandante":"visitante", W*0.27, y+150);
@@ -2203,7 +2230,7 @@ function ConvocarPartida({ partida, time, idTime, show }) {
       ctx.fillStyle = CREAM; ctx.font = "30px Arial"; ctx.textAlign = "center"; ctx.fillText(ic, PAD+58, y+59);
       ctx.textAlign = "left";
       ctx.fillStyle = DIM; ctx.font = "19px Arial"; ctx.fillText(lbl, PAD+115, y+38);
-      ctx.fillStyle = CREAM; ctx.font = "800 32px Arial"; ctx.fillText(String(val).slice(0,30), PAD+115, y+72);
+      ctx.fillStyle = CREAM; ctx.textAlign = "left"; ctx.fillText(caber(String(val), 32, W-PAD*2-160, "800 "), PAD+115, y+72);
       y += 112;
     });
     y += 8;
@@ -2372,6 +2399,12 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
     if (temHora && dt) infos.push(["⏰","HORÁRIO", dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"}).replace(":","h")]);
     if (local && local.trim()) infos.push(["📍","LOCAL", local.trim()]);
 
+    const caber = (txt, base, maxW, weight="") => {
+      let s = base; ctx.font = `${weight}${s}px Arial`;
+      while (ctx.measureText(txt).width > maxW && s > 14) { s--; ctx.font = `${weight}${s}px Arial`; }
+      if (ctx.measureText(txt).width > maxW) { while (txt.length > 2 && ctx.measureText(txt + "…").width > maxW) txt = txt.slice(0,-1); txt += "…"; }
+      return txt;
+    };
     infos.forEach(([ic,lbl,val]) => {
       ctx.fillStyle = SURF; rr(PAD, y, W-PAD*2, 100, 18); ctx.fill();
       ctx.fillStyle = "#0B3D2E"; ctx.beginPath(); ctx.arc(PAD+60, y+50, 34, 0, Math.PI*2); ctx.fill();
@@ -2379,7 +2412,7 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
       ctx.fillStyle = CREAM; ctx.font = "32px Arial"; ctx.textAlign = "center"; ctx.fillText(ic, PAD+60, y+62);
       ctx.textAlign = "left";
       ctx.fillStyle = DIM; ctx.font = "20px Arial"; ctx.fillText(lbl, PAD+120, y+40);
-      ctx.fillStyle = CREAM; ctx.font = "800 34px Arial"; ctx.fillText(String(val).slice(0,28), PAD+120, y+76);
+      ctx.fillStyle = CREAM; ctx.textAlign = "left"; ctx.fillText(caber(String(val), 34, W-PAD*2-170, "800 "), PAD+120, y+76);
       y += 120;
     });
     y += 20;
@@ -6715,10 +6748,11 @@ export default function AdminAppCompleto() {
   );
 
   return (
-    <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream, display:"flex", flexDirection:"column", overflowX:"hidden", maxWidth:"100vw" }}>
+    <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif", color:C.cream, display:"flex", flexDirection:"column", overflowX:"clip", maxWidth:"100vw" }}>
       <style>{`
-        /* Nada rola a página inteira de lado: a largura fica presa à da tela */
-        html, body { overflow-x:hidden; max-width:100vw; }
+        /* Nada rola a página inteira de lado. 'clip' (não 'hidden') impede a rolagem lateral
+           SEM criar container de rolagem — assim o header 'sticky' continua fixo no topo. */
+        html, body { overflow-x:clip; max-width:100vw; }
         /* ── Foco visível para navegação por teclado (WCAG 2.4.7) — não aparece no toque/clique ── */
         :focus-visible{outline:2px solid ${C.gold} !important;outline-offset:2px;border-radius:8px;}
         /* ── Navegação mobile: retrato (largura) OU paisagem de celular (altura baixa) ── */
@@ -6735,6 +6769,7 @@ export default function AdminAppCompleto() {
           .header-time-select{max-width:150px !important;}
           /* Colunas secundárias de tabelas densas somem em telas pequenas */
           .col-ocultar-mobile{display:none !important;}
+          .footer-tip-desktop{display:none !important;}
           .admin-layout{flex-direction:column !important;}
           /* Botão ☰, cabeçalho e rodapé da gaveta */
           .menu-toggle{display:flex !important; align-items:center; justify-content:center;}
@@ -6880,6 +6915,7 @@ export default function AdminAppCompleto() {
           {/* Rodapé da gaveta: Sair sempre acessível no mobile (no desktop fica no header) */}
           <div className="menu-gaveta-footer" style={{ display:"none", padding:"14px 16px", borderTop:`1px solid ${C.border}`, marginTop:8 }}>
             {time?.nome && <div style={{ fontSize:12, color:C.dim, marginBottom:10 }}>Time: <span style={{ color:C.cream, fontWeight:700 }}>{time.nome}</span></div>}
+            <div style={{ fontSize:11, color:C.dim, lineHeight:1.5, marginBottom:10 }}>💬 Bug ou <b style={{color:C.cream}}>sugestão de melhoria</b>? Sua ideia ajuda a evoluir o sistema — escreve pra gente:<br/><a href="mailto:nerddocampo10@gmail.com?subject=Feedback%20Nerd%20do%20Campo" style={{ color:C.gold, fontWeight:700, textDecoration:"none" }}>nerddocampo10@gmail.com</a></div>
             <a href="/" target="_blank" rel="noopener noreferrer" style={{ display:"block", textAlign:"center", background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontSize:12, fontWeight:700, padding:"9px 12px", textDecoration:"none", marginBottom:8 }}>🌐 Ver site público</a>
             <Btn variant="danger" style={{ width:"100%", fontSize:12 }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>Sair</Btn>
           </div>
@@ -6988,10 +7024,16 @@ export default function AdminAppCompleto() {
         </main>
       </div>
       <footer style={{ position:"sticky", bottom:0, zIndex:90, background:"#091F15", borderTop:`1px solid ${C.border}`,
-        padding:"8px 20px", textAlign:"center", fontSize:12, color:C.dim, lineHeight:1.4 }}>
-        👥 Seu time pode ter <b style={{color:C.cream}}>vários administradores</b>, cada um com acesso aos módulos que você definir — e, em cada módulo, é possível liberar <b style={{color:C.cream}}>só visualização</b> ou também <b style={{color:C.cream}}>edição</b>.
-        <span style={{color:C.gold}}> A quantidade de usuários não altera o valor da mensalidade do time.</span>
-        {canEdit("time") && <> Fale com o suporte para adicionar novos acessos.</>}
+        padding:"8px 20px", textAlign:"center", fontSize:12, color:C.dim, lineHeight:1.5 }}>
+        <div>
+          💬 Achou um bug ou tem uma <b style={{color:C.cream}}>sugestão de melhoria</b>? Manda pra gente — a sua ideia ajuda a evoluir o sistema:{" "}
+          <a href="mailto:nerddocampo10@gmail.com?subject=Feedback%20Nerd%20do%20Campo" style={{ color:C.gold, fontWeight:700, textDecoration:"none" }}>nerddocampo10@gmail.com</a>
+        </div>
+        <div className="footer-tip-desktop" style={{ marginTop:6, paddingTop:6, borderTop:`1px solid ${C.border}66` }}>
+          👥 Seu time pode ter <b style={{color:C.cream}}>vários administradores</b>, cada um com acesso aos módulos que você definir — e, em cada módulo, é possível liberar <b style={{color:C.cream}}>só visualização</b> ou também <b style={{color:C.cream}}>edição</b>.
+          <span style={{color:C.gold}}> A quantidade de usuários não altera o valor da mensalidade do time.</span>
+          {canEdit("time") && <> Fale com o suporte para adicionar novos acessos.</>}
+        </div>
       </footer>
     </div>
   );
@@ -8148,15 +8190,32 @@ function SorteioTimes({ idEncontro, idTime, timesInternos, jogadores, posicoes, 
         const bw = colW - 20;
         ctx.fillRect(x, y, bw, 480);
         ctx.strokeRect(x, y, bw, 480);
-        // nome do time
-        ctx.fillStyle = ti?.cor || GOLD; ctx.font = "800 40px Arial"; ctx.textAlign = "center";
-        ctx.fillText(ti?.nome || "Time", x + bw/2, y + 56);
-        // jogadores
-        ctx.fillStyle = CREAM; ctx.font = "30px Arial"; ctx.textAlign = "left";
+        // ajusta um texto para caber numa largura (encolhe fonte, depois trunca com …)
+        const caber = (txt, base, maxW, weight="") => {
+          let s = base; ctx.font = `${weight}${s}px Arial`;
+          while (ctx.measureText(txt).width > maxW && s > 15) { s--; ctx.font = `${weight}${s}px Arial`; }
+          if (ctx.measureText(txt).width > maxW) { while (txt.length > 2 && ctx.measureText(txt + "…").width > maxW) txt = txt.slice(0,-1); txt += "…"; }
+          return txt;
+        };
+        // nome do time (cabe na caixa)
+        ctx.fillStyle = ti?.cor || GOLD; ctx.textAlign = "center";
+        ctx.fillText(caber(ti?.nome || "Time", 40, bw - 30, "800 "), x + bw/2, y + 56);
+        // jogadores (apelido de preferência; nome truncado pra não vazar)
+        ctx.fillStyle = CREAM; ctx.textAlign = "left";
+        const cabemNaCaixa = Math.floor((470 - 110) / 42); // quantos cabem antes de estourar a caixa
         time.jogadores.forEach((j, i) => {
           const jy = y + 110 + i * 42;
-          if (jy < y + 470) ctx.fillText("• " + j.nome, x + 30, jy);
+          if (i < cabemNaCaixa - (time.jogadores.length > cabemNaCaixa ? 1 : 0)) {
+            const nomeJ = (j.apelido || j.nome || "").trim();
+            ctx.fillText("• " + caber(nomeJ, 30, bw - 60), x + 30, jy);
+          }
         });
+        // se sobraram jogadores além do que cabe, indica "+N"
+        const cabemReal = cabemNaCaixa - (time.jogadores.length > cabemNaCaixa ? 1 : 0);
+        if (time.jogadores.length > cabemReal) {
+          ctx.fillStyle = DIM; ctx.font = "italic 26px Arial"; ctx.textAlign = "left";
+          ctx.fillText(`+${time.jogadores.length - cabemReal} jogador(es)`, x + 30, y + 110 + cabemReal * 42);
+        }
       });
       // selo de ajuste manual (causa intriga)
       const mostrarSelo = ajustadoManual || (timesParaCard && encontro?.times_ajustados_manual);
