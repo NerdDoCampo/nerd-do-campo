@@ -818,6 +818,29 @@ function FichaPartidaPublica({ partida, onVoltar }) {
         </Card>
       )}
 
+      {/* Gols — modo simplificado: totais por jogador (a tabela gol fica vazia nesse modo) */}
+      {(gols||[]).length === 0 && (participacoes||[]).some(p => Number(p.gols)>0 || Number(p.assistencias)>0) && (
+        <Card>
+          <SecTitle accent>⚽ Gols</SecTitle>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {(participacoes||[]).filter(p => Number(p.gols)>0 || Number(p.assistencias)>0).map((p,i,arr) => {
+              const nome = p.jogador?.apelido || p.jogador?.nome || "—";
+              return (
+                <div key={p.id_participacao} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none" }}>
+                  <span style={{ fontSize:20 }}>⚽</span>
+                  <div style={{ flex:1 }}><span style={{ fontWeight:700, color:C.gold }}>{nome}</span></div>
+                  <span style={{ fontSize:13, color:C.dim }}>
+                    {Number(p.gols)>0 ? `${p.gols} gol${Number(p.gols)>1?"s":""}` : ""}
+                    {Number(p.gols)>0 && Number(p.assistencias)>0 ? " · " : ""}
+                    {Number(p.assistencias)>0 ? `${p.assistencias} assist.` : ""}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* Escalação */}
       {titulares.length > 0 && (
         <Card>

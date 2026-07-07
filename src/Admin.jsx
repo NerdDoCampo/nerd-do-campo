@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.10";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.11";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -532,6 +532,28 @@ function FichaPartidaPublica({ partida, onVoltar }) {
         </Card>
       )}
 
+      {/* Gols — modo simplificado: totais por jogador (a tabela gol fica vazia nesse modo) */}
+      {(gols||[]).length === 0 && (participacoes||[]).some(p => Number(p.gols)>0 || Number(p.assistencias)>0) && (
+        <Card>
+          <div style={{fontSize:11,color:C.gold,textTransform:"uppercase",fontWeight:700,marginBottom:14,borderLeft:"3px solid "+C.gold,paddingLeft:10}}>⚽ Gols</div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {(participacoes||[]).filter(p => Number(p.gols)>0 || Number(p.assistencias)>0).map((p,i,arr) => {
+              const nome = p.jogador?.apelido || p.jogador?.nome || "—";
+              return (
+                <div key={p.id_participacao} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none" }}>
+                  <span style={{ fontSize:20 }}>⚽</span>
+                  <div style={{ flex:1 }}><span style={{ fontWeight:700, color:C.gold }}>{nome}</span></div>
+                  <span style={{ fontSize:13, color:C.dim }}>
+                    {Number(p.gols)>0 ? `${p.gols} gol${Number(p.gols)>1?"s":""}` : ""}
+                    {Number(p.gols)>0 && Number(p.assistencias)>0 ? " · " : ""}
+                    {Number(p.assistencias)>0 ? `${p.assistencias} assist.` : ""}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
       {/* Escalação */}
       {titulares.length > 0 && (
         <Card>
