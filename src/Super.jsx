@@ -275,6 +275,7 @@ function BadgePendentes() {
 function LoginSuper({ onLogin, aviso }) {
   const [email, setEmail]   = useState("");
   const [senha, setSenha]   = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro]     = useState(aviso || "");
   const [loading, setLoading] = useState(false);
 
@@ -308,7 +309,14 @@ function LoginSuper({ onLogin, aviso }) {
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
           <Input label="E-mail" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="seu@email.com"/>
-          <Input label="Senha" type="password" value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleLogin()}/>
+          <div style={{ position:"relative" }}>
+            <Input label="Senha" type={mostrarSenha ? "text" : "password"} value={senha} onChange={e=>setSenha(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleLogin()} style={{ width:"100%" }}/>
+            <button type="button" onClick={() => setMostrarSenha(v => !v)}
+              aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+              style={{ position:"absolute", right:10, bottom:7, background:"none", border:"none", cursor:"pointer", fontSize:17, padding:4, lineHeight:1, color:C.dim }}>
+              {mostrarSenha ? "🙈" : "👁️"}
+            </button>
+          </div>
           {erro && <div style={{ color:C.loss, fontSize:13, textAlign:"center" }}>{erro}</div>}
           <Btn onClick={handleLogin} disabled={loading} style={{ marginTop:8, padding:"12px" }}>{loading?"Entrando...":"Entrar"}</Btn>
         </div>
@@ -682,6 +690,21 @@ function DashboardSuper() {
                     }}>
                     {t.destaque ? "★ Destaque" : "☆ Destaque"}
                   </Btn>
+                  <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px", color:C.gold }}
+                      onClick={async () => {
+                        const msg = `E aí! Tudo certo? 👋\n\nAqui é o Anderson, do *Nerd do Campo* ⚽\n\nNotei que o *${t.nome}* deu uma sumida do sistema (ou ainda não deu as caras) e fiquei na dúvida do que houve. Uma causa bem comum: *o e-mail com os dados de acesso cai direto no spam* 📬 — pode ser que você nem tenha recebido o login!\n\nSe for isso, relaxa: te mando os dados de acesso aqui pelo zap. 👇\n\nAgora, se você chegou a entrar e algo te travou, me conta que me ajuda demais:\n\n🔧 Se algo *não funcionou* ou ficou confuso, eu arrumo — o sistema evolui com esse retorno.\n\n🧭 Se pareceu *coisa demais*, dá pra usar bem simples: só o calendário de jogos, ou só a presença da galera. O resto liga quando quiser.\n\n💬 E se o time deu uma parada ou resolveram não usar, sem problema — só me diz que eu não te encho mais. 😄\n\nQualquer coisa, responde aqui mesmo. Abraço!`;
+                        const dig = String(t.telefone||"").replace(/\D/g, "");
+                        if (dig.length >= 10) {
+                          const num = dig.startsWith("55") ? dig : "55" + dig;
+                          window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
+                        } else {
+                          (await copiarTexto(msg))
+                            ? show("Time sem telefone cadastrado — mensagem copiada, cole no WhatsApp.", "error")
+                            : show("Time sem telefone e não foi possível copiar — selecione o texto manualmente.", "error");
+                        }
+                      }}>
+                      📲 Win-back
+                    </Btn>
                 </td>
               </tr>
             ))}
@@ -3024,7 +3047,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.11";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.14";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
