@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.11";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.14";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -1534,6 +1534,7 @@ function VitrineCaptacao() {
 function Login({ onLogin, aviso }) {
   const [email, setEmail]   = useState("");
   const [senha, setSenha]   = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro]     = useState(aviso || "");
   const [loading, setLoading] = useState(false);
   const [modalRecuperar, setModalRecuperar] = useState(false);
@@ -1590,8 +1591,15 @@ function Login({ onLogin, aviso }) {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <Input label="E-mail" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@seutime.com" />
-          <Input label="Senha" type="password" value={senha} onChange={e => setSenha(e.target.value)} placeholder="••••••••"
-            onKeyDown={e => e.key === "Enter" && handleLogin()} />
+          <div style={{ position:"relative" }}>
+            <Input label="Senha" type={mostrarSenha ? "text" : "password"} value={senha} onChange={e => setSenha(e.target.value)} placeholder="••••••••"
+              onKeyDown={e => e.key === "Enter" && handleLogin()} style={{ width:"100%" }} />
+            <button type="button" onClick={() => setMostrarSenha(v => !v)}
+              aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+              style={{ position:"absolute", right:10, bottom:7, background:"none", border:"none", cursor:"pointer", fontSize:17, padding:4, lineHeight:1, color:C.dim }}>
+              {mostrarSenha ? "🙈" : "👁️"}
+            </button>
+          </div>
           {erro && <div style={{ color: C.loss, fontSize: 13, textAlign: "center" }}>{erro}</div>}
           <Btn onClick={handleLogin} disabled={loading} style={{ marginTop: 8, padding: "12px" }}>
             {loading ? "Entrando..." : "Entrar"}
