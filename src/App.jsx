@@ -1348,7 +1348,7 @@ function ModalSolicitacao({ onClose }) {
     if (!form.nome_responsavel.trim())   return "Nome do responsável é obrigatório.";
     if (!form.email_responsavel.trim())  return "E-mail é obrigatório.";
     if (!/\S+@\S+\.\S+/.test(form.email_responsavel)) return "E-mail inválido.";
-    if (!form.telefone.trim())           return "Telefone é obrigatório.";
+    if (form.telefone.replace(/\D/g, "").length < 10) return "Telefone inválido — informe DDD + número (só dígitos).";
     {
       if (!modoJogo) return "Escolha como seu time joga.";
       if (!form.id_tipo_time) return "Escolha a modalidade.";
@@ -1374,7 +1374,7 @@ function ModalSolicitacao({ onClose }) {
         id_cidade:          form.id_cidade ? Number(form.id_cidade) : null,
         nome_responsavel:   form.nome_responsavel.trim(),
         email_responsavel:  form.email_responsavel.trim().toLowerCase(),
-        telefone:           form.telefone.trim(),
+        telefone:           form.telefone.replace(/\D/g, ""),
       };
       const res = await fetch(`${SUPABASE_URL}/rest/v1/solicitacao_time`, {
         method:"POST",
@@ -1559,8 +1559,9 @@ function ModalSolicitacao({ onClose }) {
 
             <div>
               <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Telefone / WhatsApp *</div>
-              <input value={form.telefone} onChange={e => set("telefone", e.target.value)}
-                placeholder="(51) 99999-9999"
+              <input value={form.telefone} onChange={e => set("telefone", e.target.value.replace(/\D/g, ""))}
+                inputMode="numeric" maxLength={13}
+                placeholder="51999999999 (só números, com DDD)"
                 style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
             </div>
 

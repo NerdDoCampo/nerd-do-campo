@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.14";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.20";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -3659,16 +3659,74 @@ function EscolherModoGol({ idTime, time, show, onDefinido, compacto }) {
     } finally { setSalvando(false); }
   }
 
-  const Opcao = ({ modo, titulo, desc }) => (
+  const Opcao = ({ modo, titulo, desc, arte }) => (
     <button onClick={() => definir(modo)} disabled={salvando}
-      style={{ flex:1, minWidth:200, textAlign:"left", padding:"16px 18px", borderRadius:12,
+      style={{ flex:1, minWidth:230, textAlign:"left", padding:"16px 18px", borderRadius:12,
         border:`1px solid ${C.border}`, background:C.surf2, color:C.cream, cursor: salvando?"wait":"pointer",
         fontFamily:"inherit", transition:"all 0.15s" }}
       onMouseEnter={e=>{ if(!salvando){ e.currentTarget.style.borderColor=C.gold; e.currentTarget.style.background=C.gold+"15"; }}}
       onMouseLeave={e=>{ e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background=C.surf2; }}>
       <div style={{ fontSize:15, fontWeight:800, color:C.gold, marginBottom:6 }}>{titulo}</div>
-      <div style={{ fontSize:13, color:C.dim, lineHeight:1.5 }}>{desc}</div>
+      <div style={{ fontSize:13, color:C.dim, lineHeight:1.5, marginBottom:12 }}>{desc}</div>
+      {arte}
     </button>
+  );
+
+  // Ilustração do modo SIMPLES: uma mini tabela de totais por jogador
+  const linhasSimples = [["Dudu","2","1"],["Pedrinho","1","—"],["Sidnei","1","2"]];
+  const arteSimples = (
+    <svg viewBox="0 0 300 172" width="100%" style={{ display:"block", borderRadius:8 }} role="img" aria-label="Exemplo do modo simples: total de gols e assistências por jogador">
+      <rect x="0" y="0" width="300" height="172" rx="10" fill={C.bg}/>
+      <rect x="10" y="10" width="280" height="30" rx="6" fill={C.surf2}/>
+      <text x="22" y="30" fill={C.dim} fontSize="12" fontWeight="700" fontFamily="Arial">JOGADOR</text>
+      <text x="212" y="30" fill={C.gold} fontSize="14" fontFamily="Arial" textAnchor="middle">⚽</text>
+      <text x="262" y="30" fill={C.gold} fontSize="12" fontWeight="700" fontFamily="Arial" textAnchor="middle">🅰️</text>
+      {linhasSimples.map((r,i) => {
+        const y = 58 + i*32;
+        return (
+          <g key={i}>
+            <text x="22" y={y+4} fill={C.cream} fontSize="13" fontWeight="600" fontFamily="Arial">{r[0]}</text>
+            <text x="212" y={y+4} fill={C.cream} fontSize="14" fontWeight="800" fontFamily="Arial" textAnchor="middle">{r[1]}</text>
+            <text x="262" y={y+4} fill={r[2]==="—"?C.dim:C.cream} fontSize="14" fontWeight="800" fontFamily="Arial" textAnchor="middle">{r[2]}</text>
+            {i<linhasSimples.length-1 && <line x1="10" y1={y+16} x2="290" y2={y+16} stroke={C.border} strokeWidth="1"/>}
+          </g>
+        );
+      })}
+      <text x="150" y="164" fill={C.gold} fontSize="11" fontWeight="700" fontFamily="Arial" textAnchor="middle">Só o total de cada um no jogo</text>
+    </svg>
+  );
+
+  // Ilustração do modo DETALHADO: linha do tempo de cada gol
+  const golsDet = [
+    { t:"1º", min:"12'", nome:"Dudu", tag:"assist. Pedrinho" },
+    { t:"1º", min:"33'", nome:"Sidnei", tag:"" },
+    { t:"2º", min:"25'", nome:"Dudu", tag:"pênalti" },
+  ];
+  const arteDetalhado = (
+    <svg viewBox="0 0 300 172" width="100%" style={{ display:"block", borderRadius:8 }} role="img" aria-label="Exemplo do modo detalhado: cada gol com minuto, período e assistência">
+      <rect x="0" y="0" width="300" height="172" rx="10" fill={C.bg}/>
+      {(() => {
+        let y = 24; const nodes = []; let tempoAtual = "";
+        golsDet.forEach((g,i) => {
+          if (g.t !== tempoAtual) {
+            tempoAtual = g.t;
+            nodes.push(<text key={"h"+i} x="16" y={y} fill={C.gold} fontSize="10" fontWeight="700" fontFamily="Arial" letterSpacing="0.5">{g.t} TEMPO</text>);
+            y += 20;
+          }
+          nodes.push(
+            <g key={"g"+i}>
+              <rect x="16" y={y-13} width="38" height="20" rx="5" fill={C.surf2} stroke={C.gold} strokeWidth="1"/>
+              <text x="35" y={y+1} fill={C.gold} fontSize="12" fontWeight="800" fontFamily="Arial" textAnchor="middle">{g.min}</text>
+              <text x="64" y={y+1} fill={C.cream} fontSize="13" fontWeight="700" fontFamily="Arial">⚽ {g.nome}</text>
+              {g.tag && <text x="150" y={y+1} fill={C.dim} fontSize="11" fontFamily="Arial">· {g.tag}</text>}
+            </g>
+          );
+          y += 30;
+        });
+        return nodes;
+      })()}
+      <text x="150" y="164" fill={C.gold} fontSize="11" fontWeight="700" fontFamily="Arial" textAnchor="middle">Cada gol, com minuto e detalhes</text>
+    </svg>
   );
 
   return (
@@ -3677,12 +3735,12 @@ function EscolherModoGol({ idTime, time, show, onDefinido, compacto }) {
         ⚽ Antes de começar: como seu time vai registrar os gols?
       </div>
       <div style={{ fontSize:13, color:C.dim, marginBottom:16, lineHeight:1.5 }}>
-        Escolha como prefere lançar gols e assistências. Você pode mudar isso depois a qualquer momento, sem perder nem afetar as estatísticas já registradas.
+        Escolha como prefere lançar gols e assistências. Veja no exemplo de cada opção como fica na prática. Você pode mudar isso depois a qualquer momento, sem perder nem afetar as estatísticas já registradas.
       </div>
       <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-        <Opcao modo="simples" titulo="Simples"
+        <Opcao modo="simples" titulo="Simples" arte={arteSimples}
           desc="Informe o total de gols e assistências de cada jogador por jogo. Mais rápido de preencher." />
-        <Opcao modo="detalhado" titulo="Detalhado"
+        <Opcao modo="detalhado" titulo="Detalhado" arte={arteDetalhado}
           desc="Registre cada gol com minuto, período, pênalti e assistência. Mais informação por jogo." />
       </div>
     </Card>
@@ -4868,7 +4926,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.20.1" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.24.19" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -9287,6 +9345,100 @@ function CrudTemporadas({ idTime, show, readOnly, ehTurmaFechada }) {
 }
 
 // ── CONFIGURAÇÕES DO TIME ─────────────────────────────────────
+const MODULOS_ADMIN = [
+  { id:"inicio",       label:"🏠 Início" },
+  { id:"app",          label:"👁️ Visão App" },
+  { id:"partidas",     label:"📅 Partidas" },
+  { id:"jogadores",    label:"👕 Jogadores" },
+  { id:"adversarios",  label:"⚔️ Adversários" },
+  { id:"campos",       label:"🏟️ Campos" },
+  { id:"posicoes",     label:"🎯 Posições" },
+  { id:"temporadas",   label:"📆 Temporadas" },
+  { id:"time",         label:"⚙️ Meu Time" },
+  { id:"mensalidades", label:"💰 Mensalidades" },
+  { id:"caixa",        label:"💵 Caixa" },
+  { id:"eventos",      label:"🎉 Eventos" },
+  { id:"tiposmov",     label:"🏷️ Tipos de Movimento" },
+];
+
+// Admin logado solicita um novo administrador para o time (com permissões por módulo).
+// Vira uma solicitação pendente que o Super aprova no painel dele.
+function ModalSolicitarAdmin({ idTime, onClose, show }) {
+  const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [perms, setPerms] = useState(() => {
+    const m = {}; MODULOS_ADMIN.forEach(x => { m[x.id] = { pode_ver: true, pode_editar: true }; }); return m;
+  });
+  function toggle(modulo, campo) {
+    setPerms(prev => ({ ...prev, [modulo]: {
+      ...prev[modulo], [campo]: !prev[modulo][campo],
+      ...(campo === "pode_ver" && prev[modulo].pode_ver ? { pode_editar: false } : {}),
+      ...(campo === "pode_editar" && !prev[modulo].pode_editar ? { pode_ver: true } : {}),
+    }}));
+  }
+  function todos(ver, editar) {
+    const m = {}; MODULOS_ADMIN.forEach(x => { m[x.id] = { pode_ver: ver, pode_editar: editar }; }); setPerms(m);
+  }
+  async function enviar() {
+    const em = email.trim().toLowerCase();
+    const tel = telefone.replace(/\D/g, "");
+    if (!/\S+@\S+\.\S+/.test(em)) { show("Informe um e-mail válido para o novo admin.", "error"); return; }
+    if (tel.length < 10) { show("Informe o telefone do novo admin (DDD + número, só dígitos).", "error"); return; }
+    setSaving(true);
+    try {
+      await api.post("solicitacao_admin", {
+        id_time: idTime,
+        email: em,
+        telefone: tel,
+        permissoes: MODULOS_ADMIN.map(m => ({ modulo: m.id, pode_ver: perms[m.id].pode_ver, pode_editar: perms[m.id].pode_editar })),
+        status: "pendente",
+        solicitado_por: emailUsuarioLogado() || null,
+      });
+      show("✅ Solicitação enviada! Assim que for aprovada, o novo admin recebe o acesso.");
+      onClose();
+    } catch (e) { show("Erro ao enviar solicitação: " + e.message, "error"); }
+    finally { setSaving(false); }
+  }
+  const Sw = ({ on, onClick }) => (
+    <button type="button" onClick={onClick} aria-pressed={on}
+      style={{ width:38, height:22, borderRadius:11, border:"none", cursor:"pointer", position:"relative", background: on ? C.win : C.surf2, transition:"background .15s" }}>
+      <span style={{ position:"absolute", top:2, left: on ? 18 : 2, width:18, height:18, borderRadius:"50%", background:"#fff", transition:"left .15s" }}/>
+    </button>
+  );
+  return (
+    <Modal title="Solicitar novo administrador" onClose={onClose}>
+      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        <div style={{ fontSize:13, color:C.dim, lineHeight:1.5 }}>
+          O acesso é criado após a aprovação da nossa equipe. Escolha o que esse admin poderá <b style={{color:C.cream}}>ver</b> e <b style={{color:C.cream}}>editar</b> em cada módulo.
+        </div>
+        <Input label="E-mail do novo admin *" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="email@exemplo.com"/>
+        <Input label="Telefone / WhatsApp *" value={telefone} onChange={e=>setTelefone(e.target.value.replace(/\D/g, ""))} inputMode="numeric" maxLength={13} placeholder="51999999999 (só números, com DDD)"/>
+        <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+          <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={()=>todos(true,true)}>✅ Liberar tudo</Btn>
+          <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px", color:C.loss }} onClick={()=>todos(false,false)}>🔒 Bloquear tudo</Btn>
+        </div>
+        <div style={{ border:`1px solid ${C.border}`, borderRadius:10, overflow:"hidden" }}>
+          <div style={{ display:"flex", background:C.surf2, padding:"8px 12px", fontSize:11, color:C.dim, textTransform:"uppercase", fontWeight:700 }}>
+            <span style={{ flex:1 }}>Módulo</span><span style={{ width:60, textAlign:"center" }}>Ver</span><span style={{ width:60, textAlign:"center" }}>Editar</span>
+          </div>
+          {MODULOS_ADMIN.map((m,i) => (
+            <div key={m.id} style={{ display:"flex", alignItems:"center", padding:"9px 12px", background: i%2===0?C.surface:C.bg, borderTop:`1px solid ${C.border}` }}>
+              <span style={{ flex:1, fontSize:13, color:C.cream, fontWeight:600 }}>{m.label}</span>
+              <span style={{ width:60, display:"flex", justifyContent:"center" }}><Sw on={perms[m.id].pode_ver} onClick={()=>toggle(m.id,"pode_ver")}/></span>
+              <span style={{ width:60, display:"flex", justifyContent:"center" }}><Sw on={perms[m.id].pode_editar} onClick={()=>toggle(m.id,"pode_editar")}/></span>
+            </div>
+          ))}
+        </div>
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
+          <Btn onClick={enviar} disabled={saving}>{saving ? "Enviando..." : "Enviar solicitação"}</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function ConfigTime({ idTime, show, readOnly }) {
   const { data: times, loading, reload } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=*&limit=1`) : Promise.resolve([]), [idTime]);
   const { data: campos  } = useQuery(() => idTime ? api.get(`campo?id_time=eq.${idTime}&select=*&order=nome.asc`) : Promise.resolve([]), [idTime]);
@@ -9300,6 +9452,7 @@ function ConfigTime({ idTime, show, readOnly }) {
   const [confirmaTroca, setConfirmaTroca] = useState(null); // {qtd, motivo:'tipo'|'subtipo'} quando precisa confirmar
   const [textoConfirma, setTextoConfirma] = useState("");
   const [dirty, setDirty] = useState(false); // há alterações não salvas?
+  const [pedirAdmin, setPedirAdmin] = useState(false); // modal de solicitar novo admin
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setDirty(true); };
   // É turma fechada? (pelo tipo selecionado no form)
   const tipoSelecionado = (tipos||[]).find(t => String(t.id_tipo_time) === String(form?.id_tipo_time));
@@ -9585,6 +9738,16 @@ function ConfigTime({ idTime, show, readOnly }) {
           </div>
         </Modal>
       )}
+      {!readOnly && (
+        <div style={{ marginTop:24, paddingTop:20, borderTop:`1px solid ${C.border}` }}>
+          <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700, marginBottom:8, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Administradores do time</div>
+          <div style={{ fontSize:13, color:C.dim, lineHeight:1.5, marginBottom:12 }}>
+            Precisa de mais alguém ajudando a gerir o time? Solicite um novo administrador e escolha o que ele poderá ver e editar em cada módulo. O acesso é liberado após aprovação da nossa equipe.
+          </div>
+          <Btn onClick={() => setPedirAdmin(true)}>➕ Solicitar novo administrador</Btn>
+        </div>
+      )}
+      {pedirAdmin && <ModalSolicitarAdmin idTime={idTime} show={show} onClose={() => setPedirAdmin(false)}/>}
     </Card>
   );
 }

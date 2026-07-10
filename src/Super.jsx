@@ -479,7 +479,14 @@ function DashboardSuper() {
   const { data: totalTimesData } = useQuery(() => api.get(`time?select=id_time&limit=100000`), []);
   const { data: usuarios } = useQuery(() => api.get(`usuario_time?select=*&order=criado_em.desc&limit=2000`));
   const { data: solPendentes, reload: reloadPendentes } = useQuery(() => api.get(`solicitacao_time?select=id&status=eq.pendente`));
+  const { data: solAdminPend, reload: reloadSolAdmin } = useQuery(() => api.get(`solicitacao_admin?select=id&status=eq.pendente`));
   const { data: avalPendentes, reload: reloadAvalPend } = useQuery(() => api.get(`avaliacao?select=id&status=eq.pendente`));
+  // Telefone da solicitação original (fallback p/ times antigos sem telefone gravado)
+  const { data: _solTelefones } = useQuery(() => api.get(`solicitacao_time?select=telefone,id_time_criado&id_time_criado=not.is.null&telefone=not.is.null&limit=2000`));
+  const mapaSolTel = useMemo(() => {
+    const m = {}; (_solTelefones||[]).forEach(s => { if (s.id_time_criado && s.telefone) m[s.id_time_criado] = s.telefone; });
+    return m;
+  }, [_solTelefones]);
   const { toast, show, close } = useToast();
   const [modalNovoTime, setModalNovoTime]     = useState(false);
   const [modalNovoUser, setModalNovoUser]     = useState(false);
@@ -531,6 +538,7 @@ function DashboardSuper() {
           { id:"times",        label:"🏆 Times" },
           { id:"mensalidades", label:"💵 Mensalidades" },
           { id:"solicitacoes", label:`📋 Solicitações${(solPendentes||[]).length > 0 ? ` (${(solPendentes||[]).length})` : ""}` },
+          { id:"solic_admin",  label:`👥 Novos Admins${(solAdminPend||[]).length > 0 ? ` (${(solAdminPend||[]).length})` : ""}` },
           { id:"avaliacoes",   label:`⭐ Avaliações${(avalPendentes||[]).length > 0 ? ` (${(avalPendentes||[]).length})` : ""}` },
           { id:"tipos",        label:"⚽ Tipos de Time" },
           { id:"cidades",      label:"📍 Cidades" },
@@ -538,6 +546,7 @@ function DashboardSuper() {
           { id:"ajuda",        label:"❓ Ajuda" },
         ].map(a => {
           const temPendentes = (a.id === "solicitacoes" && (solPendentes||[]).length > 0)
+                            || (a.id === "solic_admin" && (solAdminPend||[]).length > 0)
                             || (a.id === "avaliacoes" && (avalPendentes||[]).length > 0);
           const corFundo = aba===a.id ? (temPendentes ? C.lossBg : C.gold)
                                        : (temPendentes ? C.lossBg+"22" : C.surface);
@@ -562,6 +571,7 @@ function DashboardSuper() {
       {aba === "ajuda"        && <AjudaSuper/>}
       {aba === "mensalidades" && <CrudMensalidadeTimes show={show}/>}
       {aba === "solicitacoes" && <CrudSolicitacoes show={show} onMudou={reloadPendentes}/>}
+      {aba === "solic_admin"  && <CrudSolicitacoesAdmin show={show} onMudou={reloadSolAdmin}/>}
       {aba === "avaliacoes"   && <GestaoAvaliacoes show={show} onMudou={reloadAvalPend}/>}
       {aba === "times" && <>
 
@@ -628,7 +638,7 @@ function DashboardSuper() {
         </div>
         <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
           <thead><tr style={{ background:C.surf2 }}>
-            {[["Time","nome"],["Status","status"],["Nível","nivel_mensalidade"],["Temporadas",null],["Admins",null],["Atividade","ultima_atividade"],["Fundação","data_fundacao"],["Observação",null],["Ações",null]].map(([h,campo]) => (
+            {[["Time","nome"],["Status","status"],["Nível","nivel_mensalidade"],["Temporadas",null],["Admins",null],["Telefone",null],["Atividade","ultima_atividade"],["Fundação","data_fundacao"],["Observação",null],["Ações",null]].map(([h,campo]) => (
               <th key={h} onClick={campo ? () => alternarOrdem(campo) : undefined}
                 style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color: ordemCampo===campo ? C.gold : C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700, cursor: campo ? "pointer" : "default", userSelect:"none" }}>
                 {h}{campo && (ordemCampo===campo ? <span style={{ marginLeft:4 }}>{ordemDir==="asc"?"▲":"▼"}</span> : <span style={{ marginLeft:4, opacity:0.4 }}>⇅</span>)}
@@ -653,6 +663,13 @@ function DashboardSuper() {
                 </td>
                 <td style={{ padding:"13px 16px", color:C.dim }}>{t.temporada?.length||0}</td>
                 <td style={{ padding:"13px 16px", color:C.dim }}>{(t.usuario_time||[]).filter(u=>u.role==="admin").length}</td>
+                <td style={{ padding:"13px 16px", whiteSpace:"nowrap", fontSize:13 }}>{(() => {
+                  const tel = t.telefone || mapaSolTel[t.id_time];
+                  if (!tel) return <span style={{ color:C.dim }}>—</span>;
+                  const dig = String(tel).replace(/\D/g, "");
+                  const num = dig.startsWith("55") ? dig : "55" + dig;
+                  return <a href={`https://wa.me/${num}`} target="_blank" rel="noopener noreferrer" style={{ color:C.win, textDecoration:"none", fontWeight:700 }}>📱 {tel}</a>;
+                })()}</td>
                 <td style={{ padding:"13px 16px", fontSize:13 }}>{(() => {
                   if (!t.ultima_atividade) return <span style={{ color:C.dim }}>—</span>;
                   const dias = Math.floor((Date.now() - new Date(t.ultima_atividade).getTime()) / (24*60*60*1000));
@@ -692,14 +709,21 @@ function DashboardSuper() {
                   </Btn>
                   <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px", color:C.gold }}
                       onClick={async () => {
-                        const msg = `E aí! Tudo certo? 👋\n\nAqui é o Anderson, do *Nerd do Campo* ⚽\n\nNotei que o *${t.nome}* deu uma sumida do sistema (ou ainda não deu as caras) e fiquei na dúvida do que houve. Uma causa bem comum: *o e-mail com os dados de acesso cai direto no spam* 📬 — pode ser que você nem tenha recebido o login!\n\nSe for isso, relaxa: te mando os dados de acesso aqui pelo zap. 👇\n\nAgora, se você chegou a entrar e algo te travou, me conta que me ajuda demais:\n\n🔧 Se algo *não funcionou* ou ficou confuso, eu arrumo — o sistema evolui com esse retorno.\n\n🧭 Se pareceu *coisa demais*, dá pra usar bem simples: só o calendário de jogos, ou só a presença da galera. O resto liga quando quiser.\n\n💬 E se o time deu uma parada ou resolveram não usar, sem problema — só me diz que eu não te encho mais. 😄\n\nQualquer coisa, responde aqui mesmo. Abraço!`;
-                        const dig = String(t.telefone||"").replace(/\D/g, "");
+                        const msg = `E aí! Tudo certo? 👋\n\nAqui é o *Nerd do Campo* ⚽\n\nNotei que o teu time deu uma sumida do sistema (ou ainda não deu as caras) e fiquei na dúvida do que houve.\n\nSe você chegou a entrar e algo te travou, me conta que me ajuda demais:\n\n🔧 Se algo *não funcionou* ou ficou confuso, eu arrumo — o sistema evolui com esse retorno.\n\n🧭 Se pareceu *coisa demais*, dá pra usar bem simples: só o calendário de jogos, ou só a presença da galera. O resto liga quando quiser.\n\n💬 E se o time deu uma parada ou resolveram não usar, sem problema — só me diz que eu não te encho mais. 😄\n\nQualquer coisa, responde aqui mesmo. Abraço do Nerd!`;
+                        // telefone do time, com fallback no telefone da solicitação original
+                        const telSol = mapaSolTel[t.id_time];
+                        const telEfetivo = t.telefone || telSol || "";
+                        const dig = String(telEfetivo).replace(/\D/g, "");
                         if (dig.length >= 10) {
+                          // backfill: se veio da solicitação, grava no cadastro do time pra próxima vez
+                          if (!t.telefone && telSol) {
+                            try { await api.patch(`time?id_time=eq.${t.id_time}`, { telefone: telSol }); reload(); } catch {}
+                          }
                           const num = dig.startsWith("55") ? dig : "55" + dig;
                           window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
                         } else {
                           (await copiarTexto(msg))
-                            ? show("Time sem telefone cadastrado — mensagem copiada, cole no WhatsApp.", "error")
+                            ? show("Time sem telefone (nem na solicitação) — mensagem copiada, cole no WhatsApp.", "error")
                             : show("Time sem telefone e não foi possível copiar — selecione o texto manualmente.", "error");
                         }
                       }}>
@@ -767,6 +791,20 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
   const { data: vinculos, loading, reload: reloadVinculos } = useQuery(() =>
     api.post(`rpc/listar_usuarios_time`, {})
   );
+  // Telefone por admin (usuario_time.telefone) com fallback no telefone do time / da solicitação
+  const { data: _telAdmins } = useQuery(() => api.get(`usuario_time?select=id,telefone&telefone=not.is.null&limit=5000`));
+  const { data: _telTimes } = useQuery(() => api.get(`time?select=id_time,telefone&telefone=not.is.null&limit=2000`));
+  const { data: _telSol } = useQuery(() => api.get(`solicitacao_time?select=telefone,id_time_criado&id_time_criado=not.is.null&telefone=not.is.null&limit=2000`));
+  const mapaTelAdmin = useMemo(() => {
+    const m = {}; (_telAdmins||[]).forEach(u => { if (u.telefone) m[u.id] = u.telefone; });
+    return m;
+  }, [_telAdmins]);
+  const mapaTelUsu = useMemo(() => {
+    const m = {};
+    (_telSol||[]).forEach(s => { m[s.id_time_criado] = s.telefone; });
+    (_telTimes||[]).forEach(t => { m[t.id_time] = t.telefone; }); // telefone do time prevalece
+    return m;
+  }, [_telTimes, _telSol]);
   const [filtroEmail, setFiltroEmail] = useState("");
   const { confirmar, dialogo } = useConfirm();
 
@@ -795,7 +833,7 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
       </div>
       <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:14 }}>
       <thead><tr style={{ background:C.surf2 }}>
-        {["E-mail","Último Acesso","Time","Role","Criado em","Ações"].map(h => <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
+        {["E-mail","Último Acesso","Time","Telefone","Role","Criado em","Ações"].map(h => <th key={h} style={{ padding:"10px 16px", textAlign:"left", fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:700 }}>{h}</th>)}
       </tr></thead>
       <tbody>
         {(vinculos||[]).filter(v => !filtroEmail || (v.email||"").toLowerCase().includes(filtroEmail.toLowerCase())).map((v,i) => (
@@ -803,6 +841,13 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
             <td style={{ padding:"12px 16px", color:C.cream, fontSize:13 }}>{v.email || v.user_id?.substring(0,8)+"..."}</td>
             <td style={{ padding:"12px 16px", color:C.dim, fontSize:12 }}>{v.last_sign_in_at ? new Date(v.last_sign_in_at).toLocaleDateString("pt-BR") : "Nunca"}</td>
             <td style={{ padding:"12px 16px", fontWeight:700, color:C.cream }}>{v.nome_time||"—"}</td>
+            <td style={{ padding:"12px 16px", whiteSpace:"nowrap", fontSize:12 }}>{(() => {
+              const tel = mapaTelAdmin[v.id] || mapaTelUsu[v.id_time];
+              if (!tel) return <span style={{ color:C.dim }}>—</span>;
+              const dig = String(tel).replace(/\D/g, "");
+              const num = dig.startsWith("55") ? dig : "55" + dig;
+              return <a href={`https://wa.me/${num}`} target="_blank" rel="noopener noreferrer" style={{ color:C.win, textDecoration:"none", fontWeight:700 }}>📱 {tel}</a>;
+            })()}</td>
             <td style={{ padding:"12px 16px" }}>
               <span style={{ background:v.role==="superadmin"?C.gold+"33":v.role==="admin"?C.win+"33":C.surf2, color:v.role==="superadmin"?C.gold:v.role==="admin"?C.win:C.dim, border:`1px solid ${v.role==="superadmin"?C.gold:v.role==="admin"?C.win:C.border}55`, borderRadius:6, padding:"2px 10px", fontSize:11, fontWeight:700, textTransform:"uppercase" }}>
                 {v.role}
@@ -902,6 +947,7 @@ function FormNovoTime({ onSalvo, show }) {
 function FormNovoAdmin({ time, onSalvo, show }) {
   const [step, setStep]     = useState(1); // 1=instrucoes, 2=vincular
   const [email, setEmail]   = useState("");
+  const [telefone, setTelefone] = useState("");
   const [saving, setSaving] = useState(false);
   const [vinculado, setVinculado] = useState(null);
 
@@ -920,6 +966,11 @@ function FormNovoAdmin({ time, onSalvo, show }) {
       });
       const result = await res.json();
       if (result.success) {
+        // grava o telefone (só dígitos) no vínculo do admin, se informado
+        const telNorm = telefone.replace(/\D/g, "");
+        if (telNorm && result.user_id) {
+          try { await api.patch(`usuario_time?user_id=eq.${result.user_id}&id_time=eq.${time.id_time}`, { telefone: telNorm }); } catch {}
+        }
         setVinculado({ email, time: time.nome });
       } else {
         show(result.error || "Erro ao vincular usuário.", "error");
@@ -981,6 +1032,7 @@ function FormNovoAdmin({ time, onSalvo, show }) {
         Vinculando admin ao time <strong style={{color:C.cream}}>{time.nome}</strong>.
       </div>
       <Input label="E-mail do Admin *" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="email@exemplo.com"/>
+      <Input label="Telefone / WhatsApp" value={telefone} onChange={e=>setTelefone(e.target.value.replace(/\D/g, ""))} inputMode="numeric" maxLength={13} placeholder="51999999999 (só números, com DDD)"/>
       <div style={{ display:"flex", justifyContent:"space-between", gap:10, marginTop:8 }}>
         <Btn variant="secondary" onClick={() => setStep(1)}>← Voltar</Btn>
         <Btn onClick={vincular} disabled={saving}>{saving?"Vinculando...":"Vincular ao Time"}</Btn>
@@ -1246,6 +1298,203 @@ function GestaoAvaliacoes({ show, onMudou }) {
   );
 }
 
+function CrudSolicitacoesAdmin({ show, onMudou }) {
+  const { data: solicitacoes, reload } = useQuery(() =>
+    api.get(`solicitacao_admin?select=*,time(nome)&order=criado_em.desc&limit=500`)
+  );
+  const [modalSol, setModalSol] = useState(null);
+  const [obs, setObs] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [filtro, setFiltro] = useState("pendente");
+  const [senhaInicial, setSenhaInicial] = useState("");
+  const [emailPronto, setEmailPronto] = useState(null);
+
+  function abrirAprovar(s) {
+    setObs("");
+    setSenhaInicial("nerd" + Math.floor(1000 + Math.random() * 9000));
+    setModalSol(s);
+  }
+
+  async function aprovar() {
+    setSaving(true);
+    try {
+      const email = String(modalSol.email || "").trim().toLowerCase();
+      const id_time = modalSol.id_time;
+      if (!email || !id_time) throw new Error("Solicitação sem e-mail ou time.");
+
+      // 1. Criar o usuário no Auth (Edge Function). Best-effort: se o e-mail já existe,
+      //    o passo de vínculo resolve pelo e-mail (o usuário já tem senha própria).
+      const efRes = await fetch(`${SUPABASE_URL}/functions/v1/criar-usuario-time`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SESSION_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ email, senha: senhaInicial }),
+      });
+      let efData = {}; try { efData = await efRes.json(); } catch {}
+      const usuarioNovo = !!(efData && efData.user_id);
+
+      // 2. Vincular ao time (role admin). O user_id do vínculo é a fonte da verdade.
+      const vincRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/criar_admin_time`, {
+        method: "POST",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SESSION_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ p_email: email, p_id_time: id_time, p_role: "admin" }),
+      });
+      const vincData = await vincRes.json();
+      if (!vincData || vincData.success === false || !vincData.user_id) {
+        throw new Error(`Não foi possível vincular o admin ao time: ${vincData?.error || efData?.error || "erro"}`);
+      }
+      const user_id = vincData.user_id;
+
+      // 3. Telefone no vínculo (só dígitos)
+      try {
+        const tel = String(modalSol.telefone || "").replace(/\D/g, "");
+        if (tel) await api.patch(`usuario_time?user_id=eq.${user_id}&id_time=eq.${id_time}`, { telefone: tel });
+      } catch {}
+
+      // 4. Permissões escolhidas pelo admin solicitante (limpa antes p/ retentativa)
+      try { await api.delete(`usuario_permissao?user_id=eq.${user_id}&id_time=eq.${id_time}`); } catch {}
+      const permsPedidas = Array.isArray(modalSol.permissoes) ? modalSol.permissoes : [];
+      for (const m of MODULOS_ADMIN) {
+        const p = permsPedidas.find(x => x.modulo === m.id);
+        await api.post(`usuario_permissao`, {
+          user_id, id_time, modulo: m.id,
+          pode_ver:    p ? !!p.pode_ver    : true,
+          pode_editar: p ? !!p.pode_editar : false,
+        });
+      }
+
+      // 5. Status
+      await api.patch(`solicitacao_admin?id=eq.${modalSol.id}`, { status: "aprovado", observacoes_admin: obs || null });
+
+      // 6. E-mail pronto para copiar
+      const timeNome = (modalSol.time?.nome || "seu time").toUpperCase();
+      setEmailPronto({
+        assunto: "Seu acesso ao Nerd do Campo tá pronto ⚽",
+        corpo:
+`E aí! Tudo certo?
+
+Você foi adicionado como administrador do ${timeNome} no Nerd do Campo. 🎉
+
+Pra entrar no painel:
+
+🔗 Acesso: https://nerddocampo.com.br/admin
+📧 Login: ${email}
+${usuarioNovo ? `🔑 Senha provisória: ${senhaInicial}\n\nNo primeiro acesso, recomendo trocar a senha por uma sua.` : `🔑 Senha: use a mesma senha que você já usa no Nerd do Campo (você já tinha cadastro).`}
+
+P.S.: se este e-mail caiu no spam, marca como "não é spam" pra receber os próximos avisos na caixa de entrada. 👍
+
+Abraço do Nerd!`,
+      });
+
+      show(`✅ Admin aprovado! Acesso criado para ${email}.`);
+      setModalSol(null); reload(); if (onMudou) onMudou();
+    } catch (e) { show("Erro ao aprovar: " + e.message, "error"); }
+    finally { setSaving(false); }
+  }
+
+  async function recusar(s) {
+    setSaving(true);
+    try {
+      await api.patch(`solicitacao_admin?id=eq.${s.id}`, { status: "recusado", observacoes_admin: obs || null });
+      show("Solicitação recusada."); setModalSol(null); reload(); if (onMudou) onMudou();
+    } catch (e) { show("Erro ao recusar: " + e.message, "error"); }
+    finally { setSaving(false); }
+  }
+
+  const lista = (solicitacoes||[]).filter(s => filtro === "todos" || s.status === filtro);
+  const STATUS_SOL = {
+    pendente:  { label:"⏳ Pendente",  cor:"#E8A020" },
+    aprovado:  { label:"✅ Aprovado",  cor:"#4CAF50" },
+    recusado:  { label:"❌ Recusado",  cor:"#F44336" },
+  };
+  const fmtTel = (t) => { const d = String(t||"").replace(/\D/g,""); if (d.length < 10) return t||"—"; const ddd = d.slice(0, d.length-9 > 0 ? 2 : 2); return `(${d.slice(0,2)}) ${d.slice(2)}`; };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+        {[["todos","Todos"],["pendente","⏳ Pendentes"],["aprovado","✅ Aprovados"],["recusado","❌ Recusados"]].map(([k,l]) => (
+          <button key={k} onClick={() => setFiltro(k)}
+            style={{ background: filtro===k ? C.gold : C.surface, color: filtro===k ? "#0B3D2E" : C.dim,
+              border:`1px solid ${filtro===k ? C.gold : C.border}`, borderRadius:8, padding:"7px 14px", fontFamily:"inherit", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+            {l} {k !== "todos" && `(${(solicitacoes||[]).filter(s=>s.status===k).length})`}
+          </button>
+        ))}
+      </div>
+
+      {lista.length === 0 ? (
+        <Card style={{ padding:30, textAlign:"center", color:C.dim, fontSize:14 }}>Nenhuma solicitação de admin {filtro !== "todos" ? "nesse status" : "ainda"}.</Card>
+      ) : lista.map(s => (
+        <Card key={s.id} style={{ padding:18 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+            <div>
+              <div style={{ fontSize:16, fontWeight:800, color:C.cream }}>{s.email}</div>
+              <div style={{ fontSize:12, color:C.dim, marginTop:3 }}>
+                Time: <b style={{color:C.cream}}>{s.time?.nome || "—"}</b> · 📱 {fmtTel(s.telefone)}
+              </div>
+              <div style={{ fontSize:11, color:C.dim, marginTop:2 }}>
+                Pedido por {s.solicitado_por || "—"} · {s.criado_em ? new Date(s.criado_em).toLocaleDateString("pt-BR") : ""}
+              </div>
+            </div>
+            <span style={{ fontSize:11, fontWeight:700, color: STATUS_SOL[s.status]?.cor, border:`1px solid ${STATUS_SOL[s.status]?.cor}55`, background:`${STATUS_SOL[s.status]?.cor}18`, borderRadius:6, padding:"3px 10px", whiteSpace:"nowrap" }}>{STATUS_SOL[s.status]?.label || s.status}</span>
+          </div>
+          {/* Resumo das permissões pedidas */}
+          <div style={{ marginTop:12, fontSize:12, color:C.dim }}>
+            Permissões pedidas: {(Array.isArray(s.permissoes)?s.permissoes:[]).filter(p=>p.pode_ver).length} de {MODULOS_ADMIN.length} módulos visíveis, {(Array.isArray(s.permissoes)?s.permissoes:[]).filter(p=>p.pode_editar).length} com edição.
+          </div>
+          {s.status === "pendente" && (
+            <div style={{ display:"flex", gap:8, marginTop:14 }}>
+              <Btn onClick={() => abrirAprovar(s)}>✅ Aprovar e criar acesso</Btn>
+              <Btn variant="danger" onClick={() => recusar(s)} disabled={saving}>❌ Recusar</Btn>
+            </div>
+          )}
+        </Card>
+      ))}
+
+      {/* Modal de aprovação */}
+      {modalSol && (
+        <Modal title="Aprovar novo administrador" onClose={() => setModalSol(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{ fontSize:13, color:C.dim }}>
+              E-mail: <b style={{color:C.cream}}>{modalSol.email}</b><br/>
+              Time: <b style={{color:C.cream}}>{modalSol.time?.nome || "—"}</b> · Telefone: <b style={{color:C.cream}}>{fmtTel(modalSol.telefone)}</b>
+            </div>
+            <div style={{ background:C.surf2, borderRadius:8, padding:"10px 12px", fontSize:12, color:C.dim, maxHeight:200, overflowY:"auto" }}>
+              {MODULOS_ADMIN.map(m => {
+                const p = (Array.isArray(modalSol.permissoes)?modalSol.permissoes:[]).find(x=>x.modulo===m.id);
+                const ver = p ? p.pode_ver : true; const ed = p ? p.pode_editar : false;
+                return <div key={m.id} style={{ display:"flex", justifyContent:"space-between", padding:"2px 0" }}>
+                  <span style={{color:C.cream}}>{m.label}</span>
+                  <span>{ver ? (ed ? "✏️ editar" : "👁️ ver") : <span style={{color:C.loss}}>bloqueado</span>}</span>
+                </div>;
+              })}
+            </div>
+            <Input label="Senha provisória do novo admin *" value={senhaInicial} onChange={e=>setSenhaInicial(e.target.value)}/>
+            <Input label="Observação (opcional)" value={obs} onChange={e=>setObs(e.target.value)} placeholder="Anotação interna"/>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <Btn variant="secondary" onClick={() => setModalSol(null)}>Cancelar</Btn>
+              <Btn onClick={aprovar} disabled={saving || senhaInicial.length < 4}>{saving ? "Criando..." : "Aprovar e criar acesso"}</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* E-mail pronto após aprovar */}
+      {emailPronto && (
+        <Modal title="Acesso criado! Envie os dados" onClose={() => setEmailPronto(null)}>
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            <div style={{ fontSize:13, color:C.dim }}>Copie e envie por e-mail/WhatsApp para o novo admin:</div>
+            <div style={{ fontSize:12, color:C.gold, fontWeight:700 }}>{emailPronto.assunto}</div>
+            <textarea readOnly value={emailPronto.corpo} style={{ width:"100%", minHeight:220, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:13, padding:12, boxSizing:"border-box" }}/>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <Btn onClick={async () => { (await copiarTexto(emailPronto.corpo)) ? show("Copiado!") : show("Selecione e copie manualmente.", "error"); }}>📋 Copiar mensagem</Btn>
+              <Btn variant="secondary" onClick={() => setEmailPronto(null)}>Fechar</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 function CrudSolicitacoes({ show, onMudou }) {
   const { data: solicitacoes, reload } = useQuery(() =>
     api.get(`solicitacao_time?select=*&order=criado_em.desc&limit=500`)
@@ -1361,6 +1610,12 @@ function CrudSolicitacoes({ show, onMudou }) {
         const motivo = vincData?.error || "não foi possível vincular o usuário ao time.";
         throw new Error(`Usuário criado, mas o vínculo com o time falhou: ${motivo}`);
       }
+
+      // 3c. Gravar o telefone (da solicitação) no vínculo do admin — só dígitos.
+      try {
+        const telAdmin = String(modalSol.telefone || "").replace(/\D/g, "");
+        if (telAdmin) await api.patch(`usuario_time?user_id=eq.${user_id}&id_time=eq.${id_time}`, { telefone: telAdmin });
+      } catch {}
 
       // 4. Salvar permissões (limpa antes, caso seja uma retentativa)
       try { await api.delete(`usuario_permissao?user_id=eq.${user_id}&id_time=eq.${id_time}`); } catch {}
@@ -2677,7 +2932,7 @@ function AjudaSuper() {
           Guia completo de gestão do sistema: times, mensalidades, solicitações,
           tipos, configurações, permissões e os fluxos do dia a dia.
         </div>
-        <a href="/manual-super.pdf?v=1.20.1" target="_blank" rel="noopener noreferrer"
+        <a href="/manual-super.pdf?v=1.24.19" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -3047,7 +3302,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.14";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.20";
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
