@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.20";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.21";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -7028,6 +7028,7 @@ export default function AdminAppCompleto() {
           <div className="menu-gaveta-footer" style={{ display:"none", padding:"14px 16px", borderTop:`1px solid ${C.border}`, marginTop:8 }}>
             {time?.nome && <div style={{ fontSize:12, color:C.dim, marginBottom:10 }}>Time: <span style={{ color:C.cream, fontWeight:700 }}>{time.nome}</span></div>}
             <div style={{ fontSize:11, color:C.dim, lineHeight:1.5, marginBottom:10 }}>💬 Bug ou <b style={{color:C.cream}}>sugestão de melhoria</b>? Sua ideia ajuda a evoluir o sistema — escreve pra gente:<br/><a href="mailto:nerddocampo10@gmail.com?subject=Feedback%20Nerd%20do%20Campo" style={{ color:C.gold, fontWeight:700, textDecoration:"none" }}>nerddocampo10@gmail.com</a></div>
+            <div style={{ fontSize:11, color:C.dim, lineHeight:1.5, marginBottom:10 }}>📱 WhatsApp: <a href="https://wa.me/5551994418950" target="_blank" rel="noopener noreferrer" style={{ color:C.win, fontWeight:700, textDecoration:"none" }}>(51) 99441-8950</a></div>
             <a href="/" target="_blank" rel="noopener noreferrer" style={{ display:"block", textAlign:"center", background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontSize:12, fontWeight:700, padding:"9px 12px", textDecoration:"none", marginBottom:8 }}>🌐 Ver site público</a>
             <Btn variant="danger" style={{ width:"100%", fontSize:12 }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>Sair</Btn>
           </div>
@@ -7140,6 +7141,10 @@ export default function AdminAppCompleto() {
         <div>
           💬 Achou um bug ou tem uma <b style={{color:C.cream}}>sugestão de melhoria</b>? Manda pra gente — a sua ideia ajuda a evoluir o sistema:{" "}
           <a href="mailto:nerddocampo10@gmail.com?subject=Feedback%20Nerd%20do%20Campo" style={{ color:C.gold, fontWeight:700, textDecoration:"none" }}>nerddocampo10@gmail.com</a>
+        </div>
+        <div style={{ marginTop:5 }}>
+          📱 Fale com a gente no WhatsApp:{" "}
+          <a href="https://wa.me/5551994418950" target="_blank" rel="noopener noreferrer" style={{ color:C.win, fontWeight:700, textDecoration:"none" }}>(51) 99441-8950</a>
         </div>
         <div className="footer-tip-desktop" style={{ marginTop:6, paddingTop:6, borderTop:`1px solid ${C.border}66` }}>
           👥 Seu time pode ter <b style={{color:C.cream}}>vários administradores</b>, cada um com acesso aos módulos que você definir — e, em cada módulo, é possível liberar <b style={{color:C.cream}}>só visualização</b> ou também <b style={{color:C.cream}}>edição</b>.
