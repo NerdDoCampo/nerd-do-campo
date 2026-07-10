@@ -1,4 +1,17 @@
 
+import { useState, useEffect } from "react";
+
+// ── Supabase (leitura pública: avaliações aprovadas) ──
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
+const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54enRmZnVsbXZvaGR1dnVkYmhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODY5ODMsImV4cCI6MjA5NTA2Mjk4M30.CwEmjukApMTJhkbKh1jlp4Q-IYrM26u-5SYx9p20nsg";
+async function sb(path) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 const C = {
   bg: "#0B3D2E", surface: "#103D2A", surf2: "#174D36",
   border: "#1F5C3E", gold: "#E8A020", cream: "#F0E8D0",
@@ -12,6 +25,8 @@ const SECOES = [
     itens: [
       ["📅", "Calendário completo de partidas", "Monte a agenda da temporada e ainda procure adversários pelo próprio app, na sua região."],
       ["📋", "Ficha completa da partida", "Registre o esquema tático do jogo, mande o link de confirmação pré-jogo, e depois compartilhe placar, artilheiros e estatísticas. Tudo num lugar só."],
+      ["🙋", "Confirmação de presença sem cadastro", "Manda um link no grupo e cada jogador toca no próprio nome: Vou, Talvez ou Não vou. Sem login, sem app pra instalar. Você já sabe quem vem antes de sair de casa."],
+      ["📲", "Cards prontos pra mandar no grupo", "Resultado, convocação, escalação sorteada — o sistema gera a imagem com a marca do seu time, prontinha pra jogar no WhatsApp. Seu time com cara de profissional."],
       ["💸", "Gastos jogo a jogo", "Lançou o juiz, o transporte, a água? Cada partida tem seu controle de gastos, que já cai no caixa do time."],
     ],
   },
@@ -27,6 +42,7 @@ const SECOES = [
     titulo: "Feito pra qualquer time",
     itens: [
       ["🔒", "Seus dados, suas regras", "Está tendo uma temporada de altos e baixos e não quer compartilhar aqui? Deixe os dados privados. A escolha é sua."],
+      ["🌐", "A vitrine pública do seu time", "Escudo, uniformes, elenco, artilheiros e resultados numa página que qualquer torcedor acessa. Seu time no mapa, com a cara que ele merece."],
       ["🔁", "É turma fechada? Tem também", "Times internos, rodízio, controle por total — o sistema entende quem joga entre amigos toda semana."],
       ["🎲", "Sorteio de times que acaba com a treta", "Cansou de ouvir que você montou o time pra ganhar? Deixe o sistema sortear, equilibrando posição e nível dos jogadores. Foi o sistema, não você. 😎"],
       ["👥", "Vários times, um login só", "Quer controlar mais de um time com o mesmo acesso? Sem problemas. Troque de time num clique."],
@@ -41,9 +57,80 @@ const SECOES = [
       ["✅", "Barra de progresso do setup", "O sistema te mostra o quanto já está pronto pra usar, passo a passo, pra você não se perder no começo."],
       ["📖", "Manual e dicas dentro do app", "Um espaço só de ajuda, com o manual do usuário e dicas — sem precisar procurar em lugar nenhum."],
       ["🧩", "Sistema dinâmico", "Tudo funciona a partir dos cadastros que você mesmo faz nos dados do time. Quanto mais você preenche, mais o sistema trabalha por você."],
+      ["📱", "Vira app no seu celular", "Não precisa baixar nada da loja: adicione à tela de início e o Nerd do Campo abre como um app, em tela cheia. Leve, rápido e sempre à mão."],
     ],
   },
 ];
+
+// Perguntas que todo gestor faz antes de começar
+const FAQ = [
+  ["É de graça mesmo?", "É. O Nerd do Campo é gratuito pra usar. Sem mensalidade escondida, sem pegadinha — é só cadastrar o time e começar."],
+  ["Preciso instalar algum aplicativo?", "Não. Funciona direto no navegador do celular ou do computador. Se quiser, dá pra adicionar à tela de início e usar como um app, mas é opcional."],
+  ["Meus dados ficam seguros?", "Ficam. Cada time só enxerga os próprios dados, e você decide o que é público e o que é privado — inclusive temporada por temporada. Tudo salvo na nuvem, acessível de qualquer aparelho."],
+  ["Serve pra turma fechada (a pelada dos amigos)?", "Serve! O sistema se adapta: times internos, rodízio, sorteio equilibrado e controle por total. Não precisa ter adversário de fora pra usar."],
+];
+
+// Depoimentos reais — avaliações aprovadas (só aparece com 3+, mesma regra do site)
+function BlocoDepoimentos() {
+  const [lista, setLista] = useState(null);
+  const [verTodas, setVerTodas] = useState(false);
+  useEffect(() => {
+    sb(`avaliacao?status=eq.aprovado&select=id,nota,texto,publicar_identidade,nome_exibicao,nome_time,criado_em,time(nome,escudo_url)&order=criado_em.desc`)
+      .then(setLista).catch(() => setLista([]));
+  }, []);
+  if (!lista || lista.length < 3) return null;
+
+  const media = (lista.reduce((s, a) => s + a.nota, 0) / lista.length).toFixed(1);
+  const mostrar = verTodas ? lista.slice(0, 30) : lista.slice(0, 3);
+  const estrelas = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+  const tempoRel = (iso) => {
+    const dias = Math.floor((new Date() - new Date(iso)) / 86400000);
+    if (dias <= 0) return "hoje";
+    if (dias === 1) return "há 1 dia";
+    if (dias < 30) return `há ${dias} dias`;
+    return new Date(iso).toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+  };
+
+  return (
+    <div style={{ marginBottom:40 }}>
+      <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:800, marginBottom:18, borderBottom:`1px solid ${C.border}`, paddingBottom:10 }}>O que os gestores estão achando</div>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginBottom:20 }}>
+        <div style={{ fontSize:52, fontWeight:900, color:C.gold, lineHeight:1 }}>{media}</div>
+        <div>
+          <div style={{ fontSize:24, color:C.gold, letterSpacing:2 }}>{estrelas(Math.round(media))}</div>
+          <div style={{ fontSize:14, color:C.dim, marginTop:3 }}>{lista.length} avaliações de gestores</div>
+        </div>
+      </div>
+      {mostrar.map(av => {
+        const escudo = av.time?.escudo_url;
+        return (
+          <div key={av.id} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 18px", marginBottom:12 }}>
+            <div style={{ fontSize:16, color:C.gold, letterSpacing:1, marginBottom:9 }}>{estrelas(av.nota)}</div>
+            <div style={{ fontSize:14, color:C.cream, lineHeight:1.55, marginBottom:12 }}>"{av.texto}"</div>
+            <div style={{ display:"flex", alignItems:"center", gap:11 }}>
+              {av.publicar_identidade && escudo
+                ? <img src={escudo} alt="" style={{ width:40, height:40, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }} onError={e=>{e.currentTarget.style.display="none";}}/>
+                : <div style={{ width:40, height:40, borderRadius:"50%", background:C.surf2, border:`2px solid ${C.dim}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:900, color:C.cream, flexShrink:0 }}>{av.publicar_identidade ? (av.nome_time?.[0]||"?").toUpperCase() : "?"}</div>}
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:800, color:C.cream }}>{av.publicar_identidade ? (av.nome_exibicao || "Gestor") : "Gestor de time amador"}</div>
+                <div style={{ fontSize:13, color:C.dim }}>{av.publicar_identidade ? (av.nome_time || av.time?.nome || "") : "identidade não divulgada"}</div>
+              </div>
+              <div style={{ fontSize:12, color:C.dim, whiteSpace:"nowrap" }}>{tempoRel(av.criado_em)}</div>
+            </div>
+          </div>
+        );
+      })}
+      {lista.length > 3 && !verTodas && (
+        <div style={{ textAlign:"center", marginTop:8 }}>
+          <button onClick={() => setVerTodas(true)}
+            style={{ background:"none", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:10, fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"11px 26px", cursor:"pointer" }}>
+            Ver todas as {lista.length} avaliações
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Conheca() {
 
@@ -87,6 +174,9 @@ export default function Conheca() {
           </div>
         ))}
 
+        {/* depoimentos reais (só aparece com 3+ avaliações aprovadas) */}
+        <BlocoDepoimentos/>
+
         {/* destaque do preço */}
         <div style={{ background:`linear-gradient(135deg, ${C.surf2}, ${C.surface})`, border:`2px solid ${C.gold}`, borderRadius:18, padding:"40px 28px", textAlign:"center", margin:"48px 0" }}>
           <div style={{ fontSize:15, color:C.dim, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, marginBottom:14 }}>E quanto custa tudo isso?</div>
@@ -103,7 +193,7 @@ export default function Conheca() {
 
         {/* Manual do usuário — disponível para quem quer se aprofundar antes */}
         <div style={{ textAlign:"center", marginBottom:40 }}>
-          <a href={`/manual.pdf?v=1.20.1`} target="_blank" rel="noopener noreferrer"
+          <a href={`/manual.pdf?v=1.24.19`} target="_blank" rel="noopener noreferrer"
             style={{ display:"inline-flex", alignItems:"center", gap:10, background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 24px", color:C.cream, textDecoration:"none", fontSize:14, fontWeight:700 }}>
             <span style={{ fontSize:24 }}>📖</span>
             <span style={{ textAlign:"left" }}>
@@ -111,6 +201,17 @@ export default function Conheca() {
               <span style={{ display:"block", fontSize:12, color:C.dim, fontWeight:400 }}>Abra o manual completo do usuário (PDF)</span>
             </span>
           </a>
+        </div>
+
+        {/* FAQ — dúvidas que travam a decisão */}
+        <div style={{ marginBottom:44 }}>
+          <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:800, marginBottom:18, borderBottom:`1px solid ${C.border}`, paddingBottom:10 }}>Perguntas frequentes</div>
+          {FAQ.map(([q, a]) => (
+            <div key={q} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 18px", marginBottom:12 }}>
+              <div style={{ fontSize:15, fontWeight:800, color:C.cream, marginBottom:6 }}>{q}</div>
+              <div style={{ fontSize:14, color:C.dim, lineHeight:1.6 }}>{a}</div>
+            </div>
+          ))}
         </div>
 
         {/* CTA final */}
