@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.21";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.22";
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -4962,6 +4962,9 @@ function PaginaAjuda() {
         <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginTop:6 }}>
           nerddocampo10@gmail.com
         </div>
+        <div style={{ fontSize:13, color:C.win, fontWeight:700, marginTop:6 }}>
+          📱 WhatsApp: <a href="https://wa.me/5551994418950" target="_blank" rel="noopener noreferrer" style={{ color:C.win, textDecoration:"none" }}>(51) 99441-8950</a>
+        </div>
       </Card>
     </div>
   );
@@ -6818,8 +6821,11 @@ export default function AdminAppCompleto() {
             O acesso do seu time está temporariamente <b style={{ color:C.loss }}>inativo</b>.
             Entre em contato com o administrador do sistema para regularizar a situação.
           </div>
-          <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:24 }}>
+          <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:8 }}>
             nerddocampo10@gmail.com
+          </div>
+          <div style={{ fontSize:13, color:C.win, fontWeight:700, marginBottom:24 }}>
+            📱 WhatsApp: <a href="https://wa.me/5551994418950" target="_blank" rel="noopener noreferrer" style={{ color:C.win, textDecoration:"none" }}>(51) 99441-8950</a>
           </div>
           <button onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); setTimeInativo(false); }}
             style={{ background:C.gold, color:"#0B3D2E", border:"none", borderRadius:10, padding:"12px 32px", fontFamily:"inherit", fontWeight:800, fontSize:14, cursor:"pointer", textTransform:"uppercase" }}>

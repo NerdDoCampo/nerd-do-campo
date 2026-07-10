@@ -123,7 +123,7 @@ export default function Conheca() {
         {/* contato */}
         <div style={{ textAlign:"center", marginTop:44, paddingTop:24, borderTop:`1px solid ${C.border}`, fontSize:13, color:C.dim }}>
           Dúvidas ou sugestões? Fale com a gente pelo e-mail{" "}
-          <a href="mailto:nerddocampo10@gmail.com" style={{ color:C.gold, textDecoration:"none", fontWeight:700 }}>nerddocampo10@gmail.com</a>
+          <a href="mailto:nerddocampo10@gmail.com" style={{ color:C.gold, textDecoration:"none", fontWeight:700 }}>nerddocampo10@gmail.com</a>{" "}ou no WhatsApp{" "}<a href="https://wa.me/5551994418950" target="_blank" rel="noopener noreferrer" style={{ color:"#4CAF50", textDecoration:"none", fontWeight:700 }}>(51) 99441-8950</a>
         </div>
 
       </div>

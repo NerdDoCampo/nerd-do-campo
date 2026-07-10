@@ -448,7 +448,7 @@ function SeletorTimes({ onSelect }) {
         <div style={{ marginBottom:8 }}>⚽ Nerd do Campo — Estatísticas de Futebol Amador</div>
         <div style={{ marginBottom:10, fontSize:13 }}>
           Dúvidas ou sugestões? Fale com a gente pelo e-mail{" "}
-          <a href="mailto:nerddocampo10@gmail.com" style={{ color:C.gold, textDecoration:"none", fontWeight:700 }}>nerddocampo10@gmail.com</a>
+          <a href="mailto:nerddocampo10@gmail.com" style={{ color:C.gold, textDecoration:"none", fontWeight:700 }}>nerddocampo10@gmail.com</a>{" "}ou no WhatsApp{" "}<a href="https://wa.me/5551994418950" target="_blank" rel="noopener noreferrer" style={{ color:"#4CAF50", textDecoration:"none", fontWeight:700 }}>(51) 99441-8950</a>
         </div>
         <div style={{ marginBottom:10 }}>
           <a href="/admin" style={{ color:C.gold, textDecoration:"none", fontWeight:700, fontSize:13, border:`1px solid ${C.gold}`, borderRadius:8, padding:"8px 18px", display:"inline-block" }}>🔑 Área do gestor — acessar o painel</a>
