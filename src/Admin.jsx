@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.26.0";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.26.1";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -1602,7 +1602,7 @@ function Login({ onLogin, aviso }) {
             <button type="button" onClick={() => setMostrarSenha(v => !v)}
               aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
               style={{ position:"absolute", right:10, bottom:7, background:"none", border:"none", cursor:"pointer", fontSize:17, padding:4, lineHeight:1, color:C.dim }}>
-              {mostrarSenha ? "🙈" : "👁️"}
+              {mostrarSenha ? "🧤" : "⚽"}
             </button>
           </div>
           {erro && <div style={{ color: C.loss, fontSize: 13, textAlign: "center" }}>{erro}</div>}

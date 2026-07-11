@@ -1614,7 +1614,7 @@ function ModalSolicitacao({ onClose }) {
                 <button type="button" onClick={() => setMostrarSenha(v => !v)}
                   aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
                   style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", fontSize:17, padding:4, lineHeight:1 }}>
-                  {mostrarSenha ? "🙈" : "👁️"}
+                  {mostrarSenha ? "🧤" : "⚽"}
                 </button>
               </div>
             </div>
@@ -1650,7 +1650,7 @@ function ModalSolicitacao({ onClose }) {
                   borderRadius:10, padding:"13px", fontFamily:"inherit",
                   fontWeight:800, fontSize:14, cursor: saving ? "not-allowed" : "pointer",
                   textTransform:"uppercase" }}>
-                {saving ? "Enviando..." : "✅ Enviar Solicitação"}
+                {saving ? "Criando seu time..." : "🏆 Criar meu time agora"}
               </button>
             </div>
           </div>

@@ -314,7 +314,7 @@ function LoginSuper({ onLogin, aviso }) {
             <button type="button" onClick={() => setMostrarSenha(v => !v)}
               aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
               style={{ position:"absolute", right:10, bottom:7, background:"none", border:"none", cursor:"pointer", fontSize:17, padding:4, lineHeight:1, color:C.dim }}>
-              {mostrarSenha ? "🙈" : "👁️"}
+              {mostrarSenha ? "🧤" : "⚽"}
             </button>
           </div>
           {erro && <div style={{ color:C.loss, fontSize:13, textAlign:"center" }}>{erro}</div>}
@@ -3416,7 +3416,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.26.0";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.26.1";
   if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 
   useEffect(() => {
