@@ -193,7 +193,7 @@ export default function Conheca() {
 
         {/* Manual do usuário — disponível para quem quer se aprofundar antes */}
         <div style={{ textAlign:"center", marginBottom:40 }}>
-          <a href={`/manual.pdf?v=1.24.19`} target="_blank" rel="noopener noreferrer"
+          <a href={`/manual.pdf?v=1.26.0`} target="_blank" rel="noopener noreferrer"
             style={{ display:"inline-flex", alignItems:"center", gap:10, background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 24px", color:C.cream, textDecoration:"none", fontSize:14, fontWeight:700 }}>
             <span style={{ fontSize:24 }}>📖</span>
             <span style={{ textAlign:"left" }}>
