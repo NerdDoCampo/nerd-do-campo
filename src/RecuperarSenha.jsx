@@ -56,7 +56,7 @@ export default function RecuperarSenha() {
       if (!res.ok) {
         const txt = await res.text();
         let msg = "Não foi possível redefinir a senha.";
-        try { const j = JSON.parse(txt); msg = j.msg || j.error_description || j.message || msg; } catch {}
+        try { const j = JSON.parse(txt); msg = j.msg || j.error_description || j.message || msg; } catch { /* best-effort: falha aqui não deve travar o fluxo */ }
         if (res.status === 401 || res.status === 403) msg = "O link expirou. Solicite uma nova recuperação de senha.";
         throw new Error(msg);
       }

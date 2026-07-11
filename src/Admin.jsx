@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.23";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.25";
+if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
@@ -145,7 +146,7 @@ async function renovarToken() {
       if (res.refresh_token) { REFRESH_TOKEN = res.refresh_token; sessionStorage.setItem("ndc_refresh", res.refresh_token); }
       return true;
     }
-  } catch (e) {}
+  } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ }
   return false;
 }
 
@@ -219,28 +220,31 @@ async function uploadImagem(bucket, file, nomeArquivo) {
 // ── Componente de upload de imagem ────────────────────────────
 function ImageUpload({ label, value, onUpload, bucket, nomeArquivo }) {
   const [uploading, setUploading] = useState(false);
+  const [erro, setErro] = useState(null); // erro inline: melhor que alert() (não bloqueia a página)
   const inputRef = React.useRef();
 
   async function handleFile(e) {
     const file = e.target.files[0];
     if (!file) return;
+    setErro(null);
     if (!["image/jpeg","image/png","image/webp","image/gif"].includes(file.type)) {
-      alert("Use imagens JPG, PNG ou WebP"); return;
+      setErro("Use imagens JPG, PNG ou WebP."); return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      alert("Imagem muito grande. Máximo 2MB."); return;
+      setErro("Imagem muito grande. Máximo 2MB."); return;
     }
     setUploading(true);
     try {
       const url = await uploadImagem(bucket, file, nomeArquivo);
       onUpload(url);
-    } catch(e) { alert(e.message); }
+    } catch(e) { setErro("Erro ao enviar: " + e.message); }
     finally { setUploading(false); }
   }
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
       {label && <label style={{ fontSize:11, color:"#8FAF9A", textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700 }}>{label}</label>}
+      {erro && <div role="alert" style={{ fontSize:12, color:"#FF8A80", background:"#FF8A8018", border:"1px solid #FF8A8055", borderRadius:8, padding:"7px 10px" }}>⚠️ {erro}</div>}
       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
         {value ? (
           <img src={value} alt="preview" style={{ width:64, height:64, borderRadius:8, objectFit:"cover", border:"2px solid #1F5C3E" }}/>
@@ -983,6 +987,7 @@ async function carregarTodasCidades() {
 
 function exportarExcel(dados, colunas, nomeArquivo, instrucoes, abaReferencia) {
   const XLSX = window.XLSX;
+  // alert() proposital: helper global fora da árvore React (sem acesso ao Toast); falha rara de CDN.
   if (!XLSX) { alert("Recarregue a página para usar esta função."); return; }
   const wb = XLSX.utils.book_new();
   const header = colunas.map(c => c.label);
@@ -1057,7 +1062,7 @@ function ModalImportacao({ resultado, onClose, onConfirmar, salvando }) {
           <span style={{ fontWeight:700, fontSize:16, textTransform:"uppercase", color:temErros?"#E53935":"#4CAF50" }}>
             {temErros?"❌ Erros Encontrados":"✅ Pronto para Importar"}
           </span>
-          <button onClick={onClose} style={{ background:"none", border:"none", color:"#8FAF9A", fontSize:20, cursor:"pointer" }}>✕</button>
+          <button onClick={onClose} aria-label="Fechar" style={{ background:"none", border:"none", color:"#8FAF9A", fontSize:20, cursor:"pointer" }}>✕</button>
         </div>
         <div style={{ padding:20, overflowY:"auto", display:"flex", flexDirection:"column", gap:16 }}>
           {temErros ? (
@@ -1881,7 +1886,7 @@ function FormNovaPartida({ temporada, onSalvo, onCancelar, readOnly = false }) {
       // REGRA 12: registrar automaticamente a participação do jogador 0 (adversário) na partida
       const idPartida = Array.isArray(nova) ? nova[0]?.id_partida : nova?.id_partida;
       if (idPartida) {
-        try { await api.post("participacao", { id_partida: idPartida, id_jogador: 0, titular: "N" }); } catch {}
+        try { await api.post("participacao", { id_partida: idPartida, id_jogador: 0, titular: "N" }); } catch { /* best-effort: falha aqui não deve travar o fluxo */ }
       }
       show(form.id_adversario ? "Partida criada!" : "Partida criada (procurando adversário)!");
       setTimeout(onSalvo, 800);
@@ -2199,7 +2204,7 @@ function ConvocarPartida({ partida, time, idTime, show }) {
     try {
       const existentes = await api.get(`link_confirmacao?tipo=eq.partida&id_ref=eq.${partida.id_partida}&select=token&limit=1`);
       if (existentes?.[0]?.token) { reload(); return existentes[0].token; }
-    } catch(e) {}
+    } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ }
     const token = (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g,"") : (Math.random().toString(36).slice(2)+Date.now().toString(36)));
     const expira = partida.data ? new Date(new Date(partida.data).getTime() + 16*24*60*60*1000).toISOString() : null; // 16 dias após a data (regra original de 1 dia + 15 dias para ajustes pós-jogo)
     try {
@@ -2317,7 +2322,7 @@ function ConvocarPartida({ partida, time, idTime, show }) {
       if (podeShare) {
         // Copia o link agora (o WhatsApp descarta o texto quando há imagem junto).
         let copiou = false;
-        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
+        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ } }
         // Abre o modal de confirmação: o usuário lê com calma e dispara o share quando quiser.
         setPronto({ arquivo, texto, url, copiou });
       } else {
@@ -2327,7 +2332,7 @@ function ConvocarPartida({ partida, time, idTime, show }) {
         a.href = u; a.download = "convocacao-nerd-do-campo.png";
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(u);
-        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); } catch(e){} }
+        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ } }
         show && show("Imagem baixada e link copiado! Cole no grupo junto da imagem.", "success");
       }
     } catch (e) {
@@ -2391,7 +2396,7 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
     try {
       const existentes = await api.get(`link_confirmacao?tipo=eq.${tipo}&id_ref=eq.${idRef}&select=token&limit=1`);
       if (existentes?.[0]?.token) { reload(); return existentes[0].token; }
-    } catch(e) {}
+    } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ }
     const token = (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g,"") : (Math.random().toString(36).slice(2)+Date.now().toString(36)));
     const expira = data ? new Date(new Date(data).getTime() + 16*24*60*60*1000).toISOString() : null; // 16 dias após a data (1 dia original + 15 dias para ajustes pós-jogo)
     try {
@@ -2497,7 +2502,7 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
       const podeShare = navigator.canShare && navigator.canShare({ files: [arquivo] });
       if (podeShare) {
         let copiou = false;
-        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch(e){} }
+        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); copiou = true; } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ } }
         setPronto({ arquivo, texto, url, copiou });
       } else {
         const u = URL.createObjectURL(blob);
@@ -2505,7 +2510,7 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
         a.href = u; a.download = "convite-nerd-do-campo.png";
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(u);
-        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); } catch(e){} }
+        if (navigator?.clipboard) { try { await navigator.clipboard.writeText(url); } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ } }
         show && show("Imagem baixada e link copiado! Cole no grupo junto da imagem.", "success");
       }
     } catch (e) {
@@ -5166,7 +5171,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
 
   function exportarExcel() {
     const XLSX = window.XLSX;
-    if (!XLSX) { alert("Recarregue a página para usar esta função."); return; }
+    if (!XLSX) { show("Recarregue a página para usar esta função.", "error"); return; }
     const linhas = linhasRelatorio();
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(linhas);
@@ -5184,7 +5189,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
 
   function exportarCSV() {
     const linhas = linhasRelatorio();
-    if (!linhas.length) { alert("Nenhum movimento para exportar."); return; }
+    if (!linhas.length) { show("Nenhum movimento para exportar.", "error"); return; }
     const cab = Object.keys(linhas[0]);
     const csv = [cab.join(";")].concat(
       linhas.map(l => cab.map(k => {
@@ -5243,7 +5248,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
       <div class="assinatura">⚽ Designed by Caxpa Augsten — Nerd do Campo</div>
       </body></html>`;
     const w = window.open("", "_blank");
-    if (!w) { alert("Permita pop-ups para gerar o PDF."); return; }
+    if (!w) { show("Permita pop-ups para gerar o PDF.", "error"); return; }
     w.document.write(html); w.document.close();
     setTimeout(() => w.print(), 400);
   }
@@ -6232,7 +6237,7 @@ function CrudEventos({ idTime, show, readOnly }) {
           const faltante = metaValor>0 ? Math.max(0, metaValor-entregue) : 0;
           let nome = v.nome_convidado || "Atleta";
           if (!v.nome_convidado && v.id_jogador) {
-            try { const j = await api.get(`jogador?id_jogador=eq.${v.id_jogador}&select=nome,apelido&limit=1`); nome = j?.[0]?.apelido || j?.[0]?.nome || "Atleta"; } catch(e){}
+            try { const j = await api.get(`jogador?id_jogador=eq.${v.id_jogador}&select=nome,apelido&limit=1`); nome = j?.[0]?.apelido || j?.[0]?.nome || "Atleta"; } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ }
           }
           const partes = [`${Number(v.vendidos||0)} cartões`];
           if (Number(v.complemento||0) > 0) partes.push(`+ ${fmtMoeda(v.complemento)} complemento`);
@@ -6630,7 +6635,7 @@ export default function AdminAppCompleto() {
     try {
       if (idTime) sessionStorage.setItem("ndc_id_time", String(idTime));
       else sessionStorage.removeItem("ndc_id_time");
-    } catch(e) {}
+    } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ }
   }, [idTime]);
   const [timeInativo, setTimeInativo] = useState(false);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
@@ -6645,7 +6650,7 @@ export default function AdminAppCompleto() {
   }, [idTime]);
   function fecharTour() {
     setMostrarTour(false);
-    try { localStorage.setItem("ndc_tour_visto", "1"); } catch(e) {}
+    try { localStorage.setItem("ndc_tour_visto", "1"); } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ }
   }
 
   useEffect(() => {
@@ -6692,7 +6697,7 @@ export default function AdminAppCompleto() {
             // Mantém o time que o super estava observando se a página foi atualizada.
             // Sem time salvo, começa vendo tudo (null).
             let timeSalvo = null;
-            try { const v = sessionStorage.getItem("ndc_id_time"); timeSalvo = v ? Number(v) : null; } catch(e) {}
+            try { const v = sessionStorage.getItem("ndc_id_time"); timeSalvo = v ? Number(v) : null; } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ }
             setIdTime(timeSalvo || null);
             return;
           }
@@ -7774,7 +7779,7 @@ function CrudCampos({ idTime, show, readOnly }) {
                     {inativo && <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:5, background:C.surf2, color:C.dim, border:`1px solid ${C.border}` }}>Inativo</span>}
                   </div>
                   {c.endereco && <div style={{ fontSize:12, color:C.dim, marginTop:4 }}>{c.endereco}</div>}
-                  {c.link_local && <a href={c.link_local} target="_blank" rel="noreferrer" style={{ fontSize:12, color:C.gold, marginTop:4, display:"inline-block", textDecoration:"none" }}>🔗 Abrir no mapa</a>}
+                  {c.link_local && <a href={c.link_local} target="_blank" rel="noopener noreferrer" style={{ fontSize:12, color:C.gold, marginTop:4, display:"inline-block", textDecoration:"none" }}>🔗 Abrir no mapa</a>}
                 </div>
                 {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", flexShrink:0 }} onClick={() => abrirEditar(c)}>Editar</Btn>}
               </Card>

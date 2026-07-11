@@ -29,7 +29,7 @@ async function renovarToken() {
       if (res.refresh_token) { REFRESH_TOKEN = res.refresh_token; sessionStorage.setItem("ndc_super_refresh", res.refresh_token); }
       return true;
     }
-  } catch (e) {}
+  } catch (e){ /* best-effort: falha aqui não deve travar o fluxo */ }
   return false;
 }
 
@@ -480,6 +480,8 @@ function DashboardSuper() {
   const { data: usuarios } = useQuery(() => api.get(`usuario_time?select=*&order=criado_em.desc&limit=2000`));
   const { data: solPendentes, reload: reloadPendentes } = useQuery(() => api.get(`solicitacao_time?select=id&status=eq.pendente`));
   const { data: solAdminPend, reload: reloadSolAdmin } = useQuery(() => api.get(`solicitacao_admin?select=id&status=eq.pendente`));
+  const { data: errosAbertos, reload: reloadErros } = useQuery(() => api.get(`log_erro?select=hash&resolvido=eq.false&limit=1000`));
+  const nErrosAbertos = useMemo(() => new Set((errosAbertos||[]).map(e=>e.hash)).size, [errosAbertos]);
   const { data: avalPendentes, reload: reloadAvalPend } = useQuery(() => api.get(`avaliacao?select=id&status=eq.pendente`));
   // Telefone da solicitação original (fallback p/ times antigos sem telefone gravado)
   const { data: _solTelefones } = useQuery(() => api.get(`solicitacao_time?select=telefone,id_time_criado&id_time_criado=not.is.null&telefone=not.is.null&limit=2000`));
@@ -540,6 +542,7 @@ function DashboardSuper() {
           { id:"solicitacoes", label:`📋 Solicitações${(solPendentes||[]).length > 0 ? ` (${(solPendentes||[]).length})` : ""}` },
           { id:"solic_admin",  label:`👥 Novos Admins${(solAdminPend||[]).length > 0 ? ` (${(solAdminPend||[]).length})` : ""}` },
           { id:"avaliacoes",   label:`⭐ Avaliações${(avalPendentes||[]).length > 0 ? ` (${(avalPendentes||[]).length})` : ""}` },
+          { id:"erros",        label:`🐞 Erros${nErrosAbertos > 0 ? ` (${nErrosAbertos})` : ""}` },
           { id:"tipos",        label:"⚽ Tipos de Time" },
           { id:"cidades",      label:"📍 Cidades" },
           { id:"config",       label:"⚙️ Configurações" },
@@ -547,7 +550,8 @@ function DashboardSuper() {
         ].map(a => {
           const temPendentes = (a.id === "solicitacoes" && (solPendentes||[]).length > 0)
                             || (a.id === "solic_admin" && (solAdminPend||[]).length > 0)
-                            || (a.id === "avaliacoes" && (avalPendentes||[]).length > 0);
+                            || (a.id === "avaliacoes" && (avalPendentes||[]).length > 0)
+                            || (a.id === "erros" && nErrosAbertos > 0);
           const corFundo = aba===a.id ? (temPendentes ? C.lossBg : C.gold)
                                        : (temPendentes ? C.lossBg+"22" : C.surface);
           const corTexto = aba===a.id ? (temPendentes ? "#fff" : "#0B3D2E")
@@ -572,6 +576,7 @@ function DashboardSuper() {
       {aba === "mensalidades" && <CrudMensalidadeTimes show={show}/>}
       {aba === "solicitacoes" && <CrudSolicitacoes show={show} onMudou={reloadPendentes}/>}
       {aba === "solic_admin"  && <CrudSolicitacoesAdmin show={show} onMudou={reloadSolAdmin}/>}
+      {aba === "erros"        && <CrudErros show={show} onMudou={reloadErros}/>}
       {aba === "avaliacoes"   && <GestaoAvaliacoes show={show} onMudou={reloadAvalPend}/>}
       {aba === "times" && <>
 
@@ -717,7 +722,7 @@ function DashboardSuper() {
                         if (dig.length >= 10) {
                           // backfill: se veio da solicitação, grava no cadastro do time pra próxima vez
                           if (!t.telefone && telSol) {
-                            try { await api.patch(`time?id_time=eq.${t.id_time}`, { telefone: telSol }); reload(); } catch {}
+                            try { await api.patch(`time?id_time=eq.${t.id_time}`, { telefone: telSol }); reload(); } catch { /* best-effort: falha aqui não deve travar o fluxo */ }
                           }
                           const num = dig.startsWith("55") ? dig : "55" + dig;
                           window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank", "noopener");
@@ -969,7 +974,7 @@ function FormNovoAdmin({ time, onSalvo, show }) {
         // grava o telefone (só dígitos) no vínculo do admin, se informado
         const telNorm = telefone.replace(/\D/g, "");
         if (telNorm && result.user_id) {
-          try { await api.patch(`usuario_time?user_id=eq.${result.user_id}&id_time=eq.${time.id_time}`, { telefone: telNorm }); } catch {}
+          try { await api.patch(`usuario_time?user_id=eq.${result.user_id}&id_time=eq.${time.id_time}`, { telefone: telNorm }); } catch { /* best-effort: falha aqui não deve travar o fluxo */ }
         }
         setVinculado({ email, time: time.nome });
       } else {
@@ -1298,6 +1303,106 @@ function GestaoAvaliacoes({ show, onMudou }) {
   );
 }
 
+// Monitor de erros: agrupa por hash, mostra contexto (app, versão, tela, navegador) e
+// permite marcar como resolvido. Alimentado pelo coletor global do index.js.
+function CrudErros({ show, onMudou }) {
+  const { data: erros, reload } = useQuery(() => api.get(`log_erro?select=*&order=criado_em.desc&limit=500`));
+  const [filtroStatus, setFiltroStatus] = useState("abertos");
+  const [filtroApp, setFiltroApp] = useState("todos");
+  const [aberto, setAberto] = useState(null); // hash expandido
+  const [saving, setSaving] = useState(false);
+
+  // agrupa por hash: 1 card por erro distinto, com contagem e última ocorrência
+  const grupos = useMemo(() => {
+    const m = {};
+    (erros||[]).forEach(e => {
+      if (!m[e.hash]) m[e.hash] = { ...e, qtd: 0, primeira: e.criado_em, ultima: e.criado_em, apps: new Set(), versoes: new Set(), times: new Set() };
+      const g = m[e.hash];
+      g.qtd++;
+      if (e.criado_em < g.primeira) g.primeira = e.criado_em;
+      if (e.criado_em > g.ultima) { g.ultima = e.criado_em; g.mensagem = e.mensagem; g.stack = e.stack; g.url = e.url; g.navegador = e.navegador; g.versao = e.versao; g.resolvido = e.resolvido; }
+      if (e.app) g.apps.add(e.app);
+      if (e.versao) g.versoes.add(e.versao);
+      if (e.id_time) g.times.add(e.id_time);
+    });
+    return Object.values(m).sort((a,b) => (a.ultima < b.ultima ? 1 : -1));
+  }, [erros]);
+
+  const lista = grupos.filter(g =>
+    (filtroStatus === "todos" || (filtroStatus === "abertos" ? !g.resolvido : g.resolvido)) &&
+    (filtroApp === "todos" || g.apps.has(filtroApp))
+  );
+
+  async function marcar(g, resolvido) {
+    setSaving(true);
+    try {
+      await api.patch(`log_erro?hash=eq.${encodeURIComponent(g.hash)}`, { resolvido });
+      show(resolvido ? "Erro marcado como resolvido." : "Erro reaberto.");
+      reload(); if (onMudou) onMudou();
+    } catch (e) { show("Erro ao atualizar: " + e.message, "error"); }
+    finally { setSaving(false); }
+  }
+
+  const fmtDT = (iso) => iso ? new Date(iso).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : "—";
+  const APPS = [["todos","Todos"],["publico","🌐 Público"],["admin","🟢 Admin"],["super","👑 Super"],["confirmar","🙋 Confirmação"],["conheca","📣 Conheça"],["recuperar","🔑 Recuperar"]];
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+      <Card style={{ padding:"14px 18px", fontSize:13, color:C.dim, lineHeight:1.6 }}>
+        🐞 Erros que aconteceram na tela dos usuários, capturados automaticamente. Cada card é um erro distinto (agrupado), com quantas vezes ocorreu e onde. Marque como <b style={{color:C.cream}}>resolvido</b> depois de corrigir — se voltar a acontecer, ele reaparece como novo registro.
+      </Card>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+        {[["abertos","🔴 Abertos"],["resolvidos","✅ Resolvidos"],["todos","Todos"]].map(([k,l]) => (
+          <button key={k} onClick={() => setFiltroStatus(k)}
+            style={{ background: filtroStatus===k ? C.gold : C.surface, color: filtroStatus===k ? "#0B1A2E" : C.dim,
+              border:`1px solid ${filtroStatus===k ? C.gold : C.border}`, borderRadius:8, padding:"7px 14px", fontFamily:"inherit", fontSize:12, fontWeight:700, cursor:"pointer" }}>{l}</button>
+        ))}
+        <span style={{ width:1, background:C.border, margin:"0 4px" }}/>
+        {APPS.map(([k,l]) => (
+          <button key={k} onClick={() => setFiltroApp(k)}
+            style={{ background: filtroApp===k ? C.surf2 : "none", color: filtroApp===k ? C.cream : C.dim,
+              border:`1px solid ${C.border}`, borderRadius:8, padding:"7px 12px", fontFamily:"inherit", fontSize:12, fontWeight:700, cursor:"pointer" }}>{l}</button>
+        ))}
+      </div>
+
+      {lista.length === 0 ? (
+        <Card style={{ padding:30, textAlign:"center", color:C.dim, fontSize:14 }}>
+          {filtroStatus === "abertos" ? "🎉 Nenhum erro em aberto. Sistema saudável!" : "Nada por aqui."}
+        </Card>
+      ) : lista.map(g => (
+        <Card key={g.hash} style={{ padding:18, border:`1px solid ${g.resolvido ? C.border : "#F4433666"}` }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+            <div style={{ flex:1, minWidth:220 }}>
+              <div style={{ fontSize:14, fontWeight:800, color:C.cream, wordBreak:"break-word" }}>{g.mensagem}</div>
+              <div style={{ fontSize:12, color:C.dim, marginTop:6 }}>
+                {[...g.apps].join(", ")} · v{g.versao || "?"} · <b style={{color:C.cream}}>{g.qtd}×</b> · última {fmtDT(g.ultima)}
+                {g.times.size > 0 && <> · time(s): {[...g.times].join(", ")}</>}
+              </div>
+            </div>
+            <span style={{ fontSize:11, fontWeight:700, color: g.resolvido ? "#4CAF50" : "#F44336", border:`1px solid ${g.resolvido ? "#4CAF50" : "#F44336"}55`, background:`${g.resolvido ? "#4CAF50" : "#F44336"}18`, borderRadius:6, padding:"3px 10px", whiteSpace:"nowrap" }}>{g.resolvido ? "✅ Resolvido" : "🔴 Aberto"}</span>
+          </div>
+          <div style={{ display:"flex", gap:8, marginTop:12, flexWrap:"wrap" }}>
+            <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={() => setAberto(aberto === g.hash ? null : g.hash)}>
+              {aberto === g.hash ? "▲ Fechar detalhes" : "▼ Ver detalhes"}
+            </Btn>
+            {g.resolvido
+              ? <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} disabled={saving} onClick={() => marcar(g, false)}>↩️ Reabrir</Btn>
+              : <Btn style={{ fontSize:11, padding:"5px 12px" }} disabled={saving} onClick={() => marcar(g, true)}>✔ Marcar resolvido</Btn>}
+          </div>
+          {aberto === g.hash && (
+            <div style={{ marginTop:12, background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px", fontSize:12, color:C.dim, lineHeight:1.6, overflowX:"auto" }}>
+              <div><b style={{color:C.cream}}>URL:</b> {g.url || "—"}</div>
+              <div><b style={{color:C.cream}}>Navegador:</b> {g.navegador || "—"}</div>
+              <div><b style={{color:C.cream}}>Origem:</b> {g.origem || "—"} · <b style={{color:C.cream}}>Primeira vez:</b> {fmtDT(g.primeira)} · <b style={{color:C.cream}}>Versões:</b> {[...g.versoes].join(", ") || "—"}</div>
+              {g.stack && <pre style={{ marginTop:8, whiteSpace:"pre-wrap", wordBreak:"break-word", fontFamily:"monospace", fontSize:11, color:C.cream, background:"#00000033", borderRadius:8, padding:10, maxHeight:260, overflowY:"auto" }}>{g.stack}</pre>}
+            </div>
+          )}
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 function CrudSolicitacoesAdmin({ show, onMudou }) {
   const { data: solicitacoes, reload } = useQuery(() =>
     api.get(`solicitacao_admin?select=*,time(nome)&order=criado_em.desc&limit=500`)
@@ -1329,7 +1434,7 @@ function CrudSolicitacoesAdmin({ show, onMudou }) {
         headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SESSION_TOKEN}`, "Content-Type": "application/json" },
         body: JSON.stringify({ email, senha: senhaInicial }),
       });
-      let efData = {}; try { efData = await efRes.json(); } catch {}
+      let efData = {}; try { efData = await efRes.json(); } catch { /* best-effort: falha aqui não deve travar o fluxo */ }
       const usuarioNovo = !!(efData && efData.user_id);
 
       // 2. Vincular ao time (role admin). O user_id do vínculo é a fonte da verdade.
@@ -1348,7 +1453,7 @@ function CrudSolicitacoesAdmin({ show, onMudou }) {
       try {
         const tel = String(modalSol.telefone || "").replace(/\D/g, "");
         if (tel) await api.patch(`usuario_time?user_id=eq.${user_id}&id_time=eq.${id_time}`, { telefone: tel });
-      } catch {}
+      } catch { /* best-effort: falha aqui não deve travar o fluxo */ }
 
       // 4. Permissões escolhidas pelo admin solicitante (limpa antes p/ retentativa)
       try { await api.delete(`usuario_permissao?user_id=eq.${user_id}&id_time=eq.${id_time}`); } catch {}
@@ -1538,7 +1643,7 @@ function CrudSolicitacoes({ show, onMudou }) {
       try {
         const cfg = await api.get(`config_sistema?chave=eq.raio_busca_padrao_km&select=valor&limit=1`);
         if (cfg?.[0]?.valor) raioPadrao = parseInt(cfg[0].valor) || 50;
-      } catch {}
+      } catch { /* best-effort: falha aqui não deve travar o fluxo */ }
 
       // 1. Criar o time — mas se a solicitação já tem um time vinculado (retentativa
       //    após falha no vínculo do usuário), reusa em vez de duplicar.
@@ -1557,7 +1662,7 @@ function CrudSolicitacoes({ show, onMudou }) {
               minutos_padrao_periodo: tt[0].minutos_padrao_periodo ?? 45,
               permite_acrescimos: tt[0].permite_acrescimos ?? "S",
             };
-          } catch {}
+          } catch { /* best-effort: falha aqui não deve travar o fluxo */ }
         }
         const timeRes = await api.post(`time`, {
           nome: modalSol.nome_time,
@@ -1581,7 +1686,7 @@ function CrudSolicitacoes({ show, onMudou }) {
       if (!id_time) throw new Error("Não foi possível criar ou localizar o time.");
       // Marca na solicitação qual time foi criado, para uma eventual retentativa não duplicar
       if (!modalSol.id_time_criado) {
-        try { await api.patch(`solicitacao_time?id=eq.${modalSol.id}`, { id_time_criado: id_time }); } catch {}
+        try { await api.patch(`solicitacao_time?id=eq.${modalSol.id}`, { id_time_criado: id_time }); } catch { /* best-effort: falha aqui não deve travar o fluxo */ }
       }
 
       // 3. Criar o USUÁRIO no Auth com a senha definida (via Edge Function segura).
@@ -1615,7 +1720,7 @@ function CrudSolicitacoes({ show, onMudou }) {
       try {
         const telAdmin = String(modalSol.telefone || "").replace(/\D/g, "");
         if (telAdmin) await api.patch(`usuario_time?user_id=eq.${user_id}&id_time=eq.${id_time}`, { telefone: telAdmin });
-      } catch {}
+      } catch { /* best-effort: falha aqui não deve travar o fluxo */ }
 
       // 4. Salvar permissões (limpa antes, caso seja uma retentativa)
       try { await api.delete(`usuario_permissao?user_id=eq.${user_id}&id_time=eq.${id_time}`); } catch {}
@@ -3302,7 +3407,8 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.23";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.25";
+  if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 
   useEffect(() => {
     const handler = () => { setSessaoExpirou(true); setSession(null); };
