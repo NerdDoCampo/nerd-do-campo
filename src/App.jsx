@@ -1329,13 +1329,16 @@ function BlocoAvaliacoes() {
 function ModalSolicitacao({ onClose }) {
   const [form, setForm] = useState({
     nome_time:"", id_tipo_time:"", id_subtipo:"", data_fundacao:"", cidade:"", id_cidade:"",
-    nome_responsavel:"", email_responsavel:"", telefone:"",
+    nome_responsavel:"", email_responsavel:"", telefone:"", senha:"", hp:"",
   });
   const [uf, setUf] = useState("RS"); // RS é o padrão (público inicial)
   const [modoJogo, setModoJogo] = useState(null); // null | "enfrenta" | "entre_si" — define como o time joga
   const [step, setStep]     = useState(1); // 1=dados, 2=confirmação
   const [saving, setSaving] = useState(false);
-  const [enviado, setEnviado] = useState(false);
+  const [enviado, setEnviado] = useState(false);        // fallback: solicitação pendente (fluxo antigo)
+  const [entrando, setEntrando] = useState(false);       // autocadastro ok: criando sessão e redirecionando
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const tsAbertura = useState(() => Date.now())[0];      // anti-bot: tempo mínimo de preenchimento
   const [erro, setErro]     = useState("");
   const { data: tipos } = useQuery(() => sb(`tipo_time?select=*&status=eq.Ativo&order=descricao.asc`));
   // Cidades da UF selecionada (dropdown encadeado)
@@ -1349,6 +1352,7 @@ function ModalSolicitacao({ onClose }) {
     if (!form.email_responsavel.trim())  return "E-mail é obrigatório.";
     if (!/\S+@\S+\.\S+/.test(form.email_responsavel)) return "E-mail inválido.";
     if (form.telefone.replace(/\D/g, "").length < 10) return "Telefone inválido — informe DDD + número (só dígitos).";
+    if ((form.senha||"").length < 6) return "Crie uma senha com pelo menos 6 caracteres.";
     {
       if (!modoJogo) return "Escolha como seu time joga.";
       if (!form.id_tipo_time) return "Escolha a modalidade.";
@@ -1365,27 +1369,63 @@ function ModalSolicitacao({ onClose }) {
     try {
       const cidadeSel = (cidadesUf || []).find(c => String(c.id_cidade) === String(form.id_cidade));
       const cidadeTexto = cidadeSel ? `${cidadeSel.nome} - ${cidadeSel.estado}` : null;
-      const body = {
-        nome_time:          form.nome_time.trim(),
-        id_tipo_time:       form.id_tipo_time ? Number(form.id_tipo_time) : null,
-        id_subtipo:         form.id_subtipo ? Number(form.id_subtipo) : null,
-        data_fundacao:      form.data_fundacao || null,
-        cidade:             cidadeTexto,
-        id_cidade:          form.id_cidade ? Number(form.id_cidade) : null,
-        nome_responsavel:   form.nome_responsavel.trim(),
-        email_responsavel:  form.email_responsavel.trim().toLowerCase(),
-        telefone:           form.telefone.replace(/\D/g, ""),
-      };
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/solicitacao_time`, {
+      const email = form.email_responsavel.trim().toLowerCase();
+      // Autocadastro: a Edge Function valida e cria conta + time + permissões de uma vez.
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/criar-time-self`, {
         method:"POST",
-        headers:{ apikey:SUPABASE_KEY, "Content-Type":"application/json", Prefer:"return=minimal" },
-        body: JSON.stringify(body),
+        headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${SUPABASE_KEY}`, "Content-Type":"application/json" },
+        body: JSON.stringify({
+          nome_time:        form.nome_time.trim(),
+          id_tipo_time:     form.id_tipo_time ? Number(form.id_tipo_time) : null,
+          id_subtipo:       form.id_subtipo ? Number(form.id_subtipo) : null,
+          data_fundacao:    form.data_fundacao || null,
+          cidade:           cidadeTexto,
+          id_cidade:        form.id_cidade ? Number(form.id_cidade) : null,
+          nome_responsavel: form.nome_responsavel.trim(),
+          email,
+          telefone:         form.telefone.replace(/\D/g, ""),
+          senha:            form.senha,
+          hp:               form.hp,          // honeypot (humano não preenche)
+          t0:               tsAbertura,       // anti-bot: tempo mínimo de preenchimento
+        }),
       });
-      if (!res.ok) throw new Error("Erro ao enviar solicitação.");
-      setEnviado(true);
+      const data = await res.json().catch(() => ({}));
+      if (data.success && !data.fallback) {
+        // Time criado! Faz o login automático e entra no painel.
+        setEntrando(true);
+        try {
+          const tk = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+            method:"POST", headers:{ apikey:SUPABASE_KEY, "Content-Type":"application/json" },
+            body: JSON.stringify({ email, password: form.senha }),
+          }).then(r => r.json());
+          if (tk.access_token) {
+            sessionStorage.setItem("ndc_token", tk.access_token);
+            if (tk.refresh_token) sessionStorage.setItem("ndc_refresh", tk.refresh_token);
+          }
+        } catch { /* best-effort: sem sessão, a pessoa loga na tela do admin */ }
+        setTimeout(() => { window.location.href = "/admin"; }, 1600);
+      } else if (data.success && data.fallback) {
+        // Fluxo antigo assumiu (limite/kill-switch): solicitação registrada como pendente.
+        setEnviado(true);
+      } else {
+        throw new Error(data.error || "Erro ao criar o time. Tente novamente.");
+      }
     } catch(e) { setErro(e.message); }
     finally { setSaving(false); }
   }
+
+  if (entrando) return (
+    <div style={{ position:"fixed", inset:0, background:"#00000099", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+      <div style={{ background:C.surface, borderRadius:16, padding:40, maxWidth:400, width:"100%", textAlign:"center", border:`1px solid ${C.gold}66` }}>
+        <div style={{ fontSize:56, marginBottom:16 }}>🎉</div>
+        <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:12 }}>Seu time está no ar!</div>
+        <div style={{ fontSize:13, color:C.dim, lineHeight:1.6 }}>
+          Conta criada com sucesso. <b style={{color:C.gold}}>Entrando no painel do seu time...</b><br/>
+          Seu login é o e-mail informado, com a senha que você criou.
+        </div>
+      </div>
+    </div>
+  );
 
   if (enviado) return (
     <div style={{ position:"fixed", inset:0, background:"#00000099", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
@@ -1564,6 +1604,24 @@ function ModalSolicitacao({ onClose }) {
                 placeholder="51999999999 (só números, com DDD)"
                 style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
             </div>
+
+            <div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Crie sua senha de acesso * <span style={{ color:C.gold }}>(você entra no painel na hora!)</span></div>
+              <div style={{ position:"relative" }}>
+                <input type={mostrarSenha ? "text" : "password"} value={form.senha} onChange={e => set("senha", e.target.value)}
+                  placeholder="Mínimo 6 caracteres" autoComplete="new-password"
+                  style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 40px 10px 12px", boxSizing:"border-box", outline:"none" }}/>
+                <button type="button" onClick={() => setMostrarSenha(v => !v)}
+                  aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                  style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", fontSize:17, padding:4, lineHeight:1 }}>
+                  {mostrarSenha ? "🙈" : "👁️"}
+                </button>
+              </div>
+            </div>
+
+            {/* honeypot anti-bot: invisível para humanos; bots preenchem e são barrados */}
+            <input value={form.hp} onChange={e => set("hp", e.target.value)} name="website" tabIndex={-1} autoComplete="off"
+              aria-hidden="true" style={{ position:"absolute", left:-9999, top:-9999, height:1, width:1, opacity:0 }}/>
 
             {/* Resumo */}
             <div style={{ background:C.surf2, borderRadius:10, padding:14, border:`1px solid ${C.border}` }}>

@@ -327,7 +327,7 @@ function LoginSuper({ onLogin, aviso }) {
 
 // ── DASHBOARD SUPER ───────────────────────────────────────────
 // ── Aba Visão Geral: painel-resumo do Super ──
-function VisaoGeralSuper({ totalTimes, totalUsuarios, solPendentes, faixaAtivo=30, faixaRisco=90, onVerRisco }) {
+function VisaoGeralSuper({ totalTimes, totalUsuarios, solPendentes, novosSelf=0, faixaAtivo=30, faixaRisco=90, onVerRisco }) {
   const hoje = new Date();
   // limites de atividade (configuráveis)
   const dAtivo = new Date(hoje.getTime() - faixaAtivo*24*60*60*1000).toISOString();
@@ -356,6 +356,7 @@ function VisaoGeralSuper({ totalTimes, totalUsuarios, solPendentes, faixaAtivo=3
     { ic:"✅", num: qtdPago.toLocaleString("pt-BR"), lbl:`Pagantes em ${nomesMes[mes-1]}`, cor:C.win },
     { ic:"💰", num: `R$ ${fmt(recebido)}`, lbl:"Recebido este mês", cor:C.gold },
     { ic:"📬", num: solPendentes.toLocaleString("pt-BR"), lbl:"Solicitações pendentes", cor: solPendentes > 0 ? C.loss : C.cream },
+    { ic:"🆕", num: novosSelf.toLocaleString("pt-BR"), lbl:"Times por autocadastro (7 dias)", cor: novosSelf > 0 ? C.gold : C.cream },
   ];
 
   return (
@@ -481,6 +482,7 @@ function DashboardSuper() {
   const { data: solPendentes, reload: reloadPendentes } = useQuery(() => api.get(`solicitacao_time?select=id&status=eq.pendente`));
   const { data: solAdminPend, reload: reloadSolAdmin } = useQuery(() => api.get(`solicitacao_admin?select=id&status=eq.pendente`));
   const { data: errosAbertos, reload: reloadErros } = useQuery(() => api.get(`log_erro?select=hash&resolvido=eq.false&limit=1000`));
+  const { data: _novosSelf } = useQuery(() => api.get(`solicitacao_time?select=id&origem=eq.self&status=eq.aprovado&criado_em=gte.${new Date(Date.now()-7*86400000).toISOString()}`));
   const nErrosAbertos = useMemo(() => new Set((errosAbertos||[]).map(e=>e.hash)).size, [errosAbertos]);
   const { data: avalPendentes, reload: reloadAvalPend } = useQuery(() => api.get(`avaliacao?select=id&status=eq.pendente`));
   // Telefone da solicitação original (fallback p/ times antigos sem telefone gravado)
@@ -568,7 +570,7 @@ function DashboardSuper() {
         );})}
       </nav>
 
-      {aba === "visao"        && <VisaoGeralSuper totalTimes={totalTimes} totalUsuarios={(usuarios||[]).length} solPendentes={(solPendentes||[]).length} faixaAtivo={faixaAtivo} faixaRisco={faixaRisco} onVerRisco={()=>{setAba("times"); setFiltroAtividade("risco");}} />}
+      {aba === "visao"        && <VisaoGeralSuper totalTimes={totalTimes} totalUsuarios={(usuarios||[]).length} solPendentes={(solPendentes||[]).length} novosSelf={(_novosSelf||[]).length} faixaAtivo={faixaAtivo} faixaRisco={faixaRisco} onVerRisco={()=>{setAba("times"); setFiltroAtividade("risco");}} />}
       {aba === "tipos"        && <CrudTipoTime show={show}/>}
       {aba === "cidades"      && <GestaoCidades show={show}/>}
       {aba === "config"       && <ConfigSistema show={show}/>}
@@ -1825,6 +1827,7 @@ nerddocampo.com.br/admin`;
             <tbody>
               {lista.map((s,i) => {
                 const cfg = STATUS_SOL[s.status] || STATUS_SOL.pendente;
+                const ehSelf = s.origem === "self";
                 return (
                   <tr key={s.id} style={{ background:i%2===0?C.surface:C.bg }}>
                     <td style={{ padding:"11px 14px", color:C.dim, fontSize:11, whiteSpace:"nowrap" }}>{new Date(s.criado_em).toLocaleDateString("pt-BR")}</td>
@@ -1838,6 +1841,7 @@ nerddocampo.com.br/admin`;
                       <span style={{ background:cfg.cor+"22", color:cfg.cor, border:`1px solid ${cfg.cor}44`, borderRadius:6, padding:"2px 10px", fontSize:11, fontWeight:700 }}>
                         {cfg.label}
                       </span>
+                      {ehSelf && <span title="Time criado por autocadastro (acesso na hora)" style={{ marginLeft:6, background:C.gold+"22", color:C.gold, border:`1px solid ${C.gold}44`, borderRadius:6, padding:"2px 8px", fontSize:10, fontWeight:700 }}>🆕 self</span>}
                     </td>
                     <td style={{ padding:"11px 14px" }}>
                       {s.status === "pendente" && (
@@ -2006,6 +2010,11 @@ const CONFIGS_LABEL = {
     label: "Cadastro de Times",
     desc:  "Exibe o botão '🏆 Cadastrar meu Time' no app público",
     icon:  "🏆",
+  },
+  "autocadastro_ativo": {
+    label: "Autocadastro (acesso na hora)",
+    desc:  "Time novo entra sem aprovação: cria a senha e já cai no painel. Desligado, os pedidos caem como solicitação pendente para você aprovar (fluxo antigo).",
+    icon:  "⚡",
   },
   "sistema_manutencao": {
     label: "Modo Manutenção",
@@ -3037,7 +3046,7 @@ function AjudaSuper() {
           Guia completo de gestão do sistema: times, mensalidades, solicitações,
           tipos, configurações, permissões e os fluxos do dia a dia.
         </div>
-        <a href="/manual-super.pdf?v=1.24.19" target="_blank" rel="noopener noreferrer"
+        <a href="/manual-super.pdf?v=1.26.0" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -3407,7 +3416,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.24.25";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.26.0";
   if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 
   useEffect(() => {
