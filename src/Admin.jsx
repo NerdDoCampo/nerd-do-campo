@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.26.1";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.26.2";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -2343,10 +2343,22 @@ function ConvocarPartida({ partida, time, idTime, show }) {
   // Compartilhamento real, disparado pelo botão do modal (no gesto do usuário).
   async function compartilharAgora() {
     if (!pronto) return;
+    // Copia o link AGORA, dentro do toque (no iOS, copiar fora do gesto falha silenciosamente).
+    let linkCopiado = false;
+    if (navigator?.clipboard && pronto.url) {
+      try { await navigator.clipboard.writeText(pronto.url); linkCopiado = true; } catch { /* best-effort */ }
+    }
+    let compartilhou = false;
     try {
       await navigator.share({ files: [pronto.arquivo], text: pronto.texto });
+      compartilhou = true;
     } catch (e) { /* usuário cancelou: tudo bem */ }
     setPronto(null);
+    if (compartilhou && pronto.url) {
+      show && show(linkCopiado
+        ? "✅ Imagem enviada! O link de confirmação está copiado — cole no grupo agora (toque e segure → Colar)."
+        : "✅ Imagem enviada! Agora mande também o link de confirmação no grupo.", "success");
+    }
   }
 
   // só faz sentido para partida futura (sem placar) e com adversário definido
@@ -2366,10 +2378,17 @@ function ConvocarPartida({ partida, time, idTime, show }) {
           <div style={{ background:C.surf2, border:`1px solid ${C.gold}55`, borderRadius:10, padding:"14px 16px", marginBottom:18 }}>
             <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:6 }}>📌 Importante</div>
             <div style={{ fontSize:13, color:C.cream, lineHeight:1.6 }}>
-              {pronto.copiou
-                ? "O link de confirmação já foi copiado. Depois de enviar a imagem no grupo, cole o link (toque e segure → Colar) numa mensagem logo abaixo."
-                : "Depois de enviar a imagem, lembre de mandar também o link de confirmação no grupo."}
+              Depois de enviar a imagem no grupo, <b>cole o link de confirmação</b> numa mensagem logo abaixo (toque e segure → Colar). Ele será copiado quando você tocar em Compartilhar — ou copie agora:
             </div>
+            {pronto.url && (
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:10 }}>
+                <div style={{ flex:1, fontSize:11, color:C.dim, background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 10px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{pronto.url}</div>
+                <Btn variant="secondary" style={{ fontSize:11, padding:"7px 12px", whiteSpace:"nowrap" }}
+                  onClick={async () => { try { await navigator.clipboard.writeText(pronto.url); show && show("Link copiado!", "success"); } catch { show && show("Não consegui copiar — selecione o link manualmente.", "error"); } }}>
+                  📋 Copiar link
+                </Btn>
+              </div>
+            )}
           </div>
           <div style={{ display:"flex", gap:10 }}>
             <Btn variant="secondary" onClick={() => setPronto(null)} style={{ flex:1 }}>Cancelar</Btn>
@@ -2520,9 +2539,22 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
 
   async function compartilharAgora() {
     if (!pronto) return;
-    try { await navigator.share({ files: [pronto.arquivo], text: pronto.texto }); }
-    catch (e) { /* cancelou: ok */ }
+    // Copia o link AGORA, dentro do toque (no iOS, copiar fora do gesto falha silenciosamente).
+    let linkCopiado = false;
+    if (navigator?.clipboard && pronto.url) {
+      try { await navigator.clipboard.writeText(pronto.url); linkCopiado = true; } catch { /* best-effort */ }
+    }
+    let compartilhou = false;
+    try {
+      await navigator.share({ files: [pronto.arquivo], text: pronto.texto });
+      compartilhou = true;
+    } catch (e) { /* usuário cancelou: tudo bem */ }
     setPronto(null);
+    if (compartilhou && pronto.url) {
+      show && show(linkCopiado
+        ? "✅ Imagem enviada! O link de confirmação está copiado — cole no grupo agora (toque e segure → Colar)."
+        : "✅ Imagem enviada! Agora mande também o link de confirmação no grupo.", "success");
+    }
   }
 
   return (
@@ -2538,10 +2570,17 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
           <div style={{ background:C.surf2, border:`1px solid ${C.gold}55`, borderRadius:10, padding:"14px 16px", marginBottom:18 }}>
             <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginBottom:6 }}>📌 Importante</div>
             <div style={{ fontSize:13, color:C.cream, lineHeight:1.6 }}>
-              {pronto.copiou
-                ? "O link de confirmação já foi copiado. Depois de enviar a imagem no grupo, cole o link (toque e segure → Colar) numa mensagem logo abaixo."
-                : "Depois de enviar a imagem, lembre de mandar também o link de confirmação no grupo."}
+              Depois de enviar a imagem no grupo, <b>cole o link de confirmação</b> numa mensagem logo abaixo (toque e segure → Colar). Ele será copiado quando você tocar em Compartilhar — ou copie agora:
             </div>
+            {pronto.url && (
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:10 }}>
+                <div style={{ flex:1, fontSize:11, color:C.dim, background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 10px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{pronto.url}</div>
+                <Btn variant="secondary" style={{ fontSize:11, padding:"7px 12px", whiteSpace:"nowrap" }}
+                  onClick={async () => { try { await navigator.clipboard.writeText(pronto.url); show && show("Link copiado!", "success"); } catch { show && show("Não consegui copiar — selecione o link manualmente.", "error"); } }}>
+                  📋 Copiar link
+                </Btn>
+              </div>
+            )}
           </div>
           <div style={{ display:"flex", gap:10 }}>
             <Btn variant="secondary" onClick={() => setPronto(null)} style={{ flex:1 }}>Cancelar</Btn>
