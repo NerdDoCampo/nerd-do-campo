@@ -6828,7 +6828,7 @@ export default function AdminAppCompleto() {
       _reloadPartidas && _reloadPartidas();
       _reloadEncontros && _reloadEncontros();
     }
-  }, [menu]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [menu]);
   const [temporadaSel, setTemporadaSel] = useState(null);
   useEffect(() => {
     const lista = temporadas || [];
