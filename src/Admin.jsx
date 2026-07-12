@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.27.1";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.27.2";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -7206,8 +7206,7 @@ export default function AdminAppCompleto() {
         </div>
         <div className="footer-tip-desktop" style={{ marginTop:6, paddingTop:6, borderTop:`1px solid ${C.border}66` }}>
           👥 Seu time pode ter <b style={{color:C.cream}}>vários administradores</b>, cada um com acesso aos módulos que você definir — e, em cada módulo, é possível liberar <b style={{color:C.cream}}>só visualização</b> ou também <b style={{color:C.cream}}>edição</b>.
-          <span style={{color:C.gold}}> A quantidade de usuários não altera o valor da mensalidade do time.</span>
-          {canEdit("time") && <> Fale com o suporte para adicionar novos acessos.</>}
+          {canEdit("time") && <> Precisa de mais um acesso? É só solicitar em Configurações do Time.</>}
         </div>
       </footer>
     </div>
