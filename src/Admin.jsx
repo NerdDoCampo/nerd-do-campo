@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.26.2";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.27.1";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -3624,24 +3624,24 @@ function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, re
 
 // ── APP ADMIN ─────────────────────────────────────────────────
 const MENU_BASE = [
-  { id:"inicio",      label:"Início",      icon:"🏠", grupo:"" },
-  { id:"time",        label:"Meu Time",    icon:"⚙️", grupo:"Configurar" },
-  { id:"temporadas",  label:"Temporadas",  icon:"📆", grupo:"Configurar" },
-  { id:"campos",      label:"Campos",      icon:"🏟️", grupo:"Cadastros" },
-  { id:"posicoes",    label:"Posições",    icon:"🎯", grupo:"Cadastros" },
-  { id:"adversarios", label:"Adversários", icon:"⚔️", grupo:"Cadastros" },
-  { id:"jogadores",   label:"Jogadores",   icon:"👕", grupo:"Cadastros" },
-  { id:"partidas",    label:"Partidas",    icon:"📅", grupo:"Jogos" },
-  { id:"tiposmov",    label:"Tipos de Mov.", icon:"🏷️", grupo:"Financeiro" },
-  { id:"mensalidades",label:"Mensalidades", icon:"💰", grupo:"Financeiro" },
-  { id:"caixa",       label:"Caixa",        icon:"💵", grupo:"Financeiro" },
-  { id:"eventos",     label:"Eventos",      icon:"🎉", grupo:"Financeiro" },
-  { id:"relatorio",   label:"Relatório",    icon:"📊", grupo:"Financeiro" },
-  { id:"app",         label:"Visão App",   icon:"👁️", grupo:"Acompanhar" },
-  { id:"dicas",       label:"Dicas",       icon:"💡", grupo:"Acompanhar" },
-  { id:"indique",     label:"Indique o app", icon:"🎁", grupo:"Acompanhar" },
-  { id:"avaliar",     label:"Avaliar o app", icon:"⭐", grupo:"Acompanhar" },
-  { id:"ajuda",       label:"Ajuda",        icon:"❓", grupo:"Acompanhar" },
+  { id:"inicio",      label:"Início",      icon:"🏠", grupo:"",            hint:"O vestiário do seu time. Comece por aqui." },
+  { id:"time",        label:"Meu Time",    icon:"⚙️", grupo:"Configurar",  hint:"Escudo, cores, regras do jogo. A identidade do time mora aqui." },
+  { id:"temporadas",  label:"Temporadas",  icon:"📆", grupo:"Configurar",  hint:"Cada ano, uma história. Organize as campanhas do time." },
+  { id:"campos",      label:"Campos",      icon:"🏟️", grupo:"Cadastros",   hint:"Onde a bola vai rolar. Cadastre os campos e nunca mais responda 'é aonde mesmo?'." },
+  { id:"posicoes",    label:"Posições",    icon:"🎯", grupo:"Cadastros",   hint:"Quem é zaga, quem é ataque. Monte o time dos seus sonhos." },
+  { id:"adversarios", label:"Adversários", icon:"⚔️", grupo:"Cadastros",   hint:"Conheça quem vem aí. Todo rival tem seu cadastro." },
+  { id:"jogadores",   label:"Jogadores",   icon:"👕", grupo:"Cadastros",   hint:"Os craques (e os pernas de pau também). Seu elenco completo." },
+  { id:"partidas",    label:"Partidas",    icon:"📅", grupo:"Jogos",       hint:"Aqui o jogo acontece. Escale, marque o placar, registre os gols." },
+  { id:"tiposmov",    label:"Tipos de Mov.", icon:"🏷️", grupo:"Financeiro", hint:"Organize as entradas e saídas. Cada real no seu lugar." },
+  { id:"mensalidades",label:"Mensalidades", icon:"💰", grupo:"Financeiro", hint:"Quem tá em dia e quem tá devendo. Você vai saber na hora." },
+  { id:"caixa",       label:"Caixa",        icon:"💵", grupo:"Financeiro", hint:"O cofre do time. Bateu o olho, sabe quanto tem." },
+  { id:"eventos",     label:"Eventos",      icon:"🎉", grupo:"Financeiro", hint:"Churrasco, rifa, confraternização. Organize e arrecade sem dor de cabeça." },
+  { id:"relatorio",   label:"Relatório",    icon:"📊", grupo:"Financeiro", hint:"Os números não mentem. A saúde financeira do time em gráficos." },
+  { id:"app",         label:"Visão App",   icon:"👁️", grupo:"Acompanhar", hint:"Espie como a torcida vê seu time no site público." },
+  { id:"dicas",       label:"Dicas",       icon:"💡", grupo:"Acompanhar", hint:"Segredinhos pra tirar o máximo do sistema. Dá uma espiada." },
+  { id:"indique",     label:"Indique o app", icon:"🎁", grupo:"Acompanhar", hint:"Conhece outro time na pelada? Chama pra cá!" },
+  { id:"avaliar",     label:"Avaliar o app", icon:"⭐", grupo:"Acompanhar", hint:"Curtiu? Deixa sua nota. Reclamação também é bem-vinda!" },
+  { id:"ajuda",       label:"Ajuda",        icon:"❓", grupo:"Acompanhar", hint:"Empacou? A gente te dá a assistência." },
 ];
 
 
@@ -6818,9 +6818,17 @@ export default function AdminAppCompleto() {
   const { data: _jogadores }  = useQuery(() => idTime ? api.get(`jogador?id_time=eq.${idTime}&id_jogador=gt.0&select=id_jogador&limit=1`) : Promise.resolve([]), [session, idTime]);
   const _idsTemp = (temporadas||[]).map(t=>t.id_temporada).join(",");
   // Dados ricos (com limite defensivo): alimentam tanto o checklist quanto a Home operacional
-  const { data: _partidas }   = useQuery(() => _idsTemp ? api.get(`partida?id_temporada=in.(${_idsTemp})&select=id_partida,data,cancelada,gols_marcados,gols_sofridos,id_adversario,adversario(nome)&order=data.asc&limit=500`) : Promise.resolve([]), [_idsTemp]);
+  const { data: _partidas, reload: _reloadPartidas }   = useQuery(() => _idsTemp ? api.get(`partida?id_temporada=in.(${_idsTemp})&select=id_partida,data,cancelada,gols_marcados,gols_sofridos,id_adversario,adversario(nome)&order=data.asc&limit=500`) : Promise.resolve([]), [_idsTemp]);
   const { data: _timesInternos } = useQuery(() => idTime ? api.get(`time_interno?id_time=eq.${idTime}&select=id_time_interno&limit=1`) : Promise.resolve([]), [session, idTime]);
-  const { data: _encontros }  = useQuery(() => _idsTemp ? api.get(`encontro?id_temporada=in.(${_idsTemp})&select=id_encontro,data,status&order=data.asc&limit=500`) : Promise.resolve([]), [_idsTemp]);
+  const { data: _encontros, reload: _reloadEncontros }  = useQuery(() => _idsTemp ? api.get(`encontro?id_temporada=in.(${_idsTemp})&select=id_encontro,data,status&order=data.asc&limit=500`) : Promise.resolve([]), [_idsTemp]);
+  // Ao voltar para o Início, refaz a busca de partidas/encontros — assim o que foi
+  // cadastrado durante a sessão aparece na agenda sem precisar relogar.
+  useEffect(() => {
+    if (menu === "inicio") {
+      _reloadPartidas && _reloadPartidas();
+      _reloadEncontros && _reloadEncontros();
+    }
+  }, [menu]); // eslint-disable-line react-hooks/exhaustive-deps
   const [temporadaSel, setTemporadaSel] = useState(null);
   useEffect(() => {
     const lista = temporadas || [];
@@ -6891,9 +6899,9 @@ export default function AdminAppCompleto() {
         // renomeia Partidas→Encontros e adiciona Times Internos.
         const base = MENU_BASE
           .filter(m => m.id !== "adversarios")
-          .map(m => m.id === "partidas" ? { ...m, label:"Encontros", icon:"📋" } : m);
+          .map(m => m.id === "partidas" ? { ...m, label:"Encontros", icon:"📅" } : m);
         const idx = base.findIndex(m => m.id === "jogadores");
-        const item = { id:"times_internos", label:"Times Internos", icon:"🧡", grupo:"Cadastros" };
+        const item = { id:"times_internos", label:"Times Internos", icon:"🆚", grupo:"Cadastros", hint:"Os times fixos da sua pelada. Camisa laranja x camisa preta, todo domingo." };
         if (idx >= 0) base.splice(idx + 1, 0, item); else base.push(item);
         return base;
       })()
@@ -7041,7 +7049,7 @@ export default function AdminAppCompleto() {
           </div>
           {/* Item sem grupo: Início */}
           {MENU.filter(m => m.grupo === "").map(m => (
-            <button key={m.id} onClick={() => navMenu(m.id)} aria-current={menu===m.id ? "page" : undefined} style={{
+            <button key={m.id} onClick={() => navMenu(m.id)} title={m.hint || undefined} aria-current={menu===m.id ? "page" : undefined} style={{
               display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 20px",
               background: menu===m.id ? C.gold+"22" : "transparent",
               borderLeft: menu===m.id ? `3px solid ${C.gold}` : "3px solid transparent",
@@ -7060,7 +7068,7 @@ export default function AdminAppCompleto() {
               <div key={grupo} className="menu-grupo">
                 <div className="menu-grupo-titulo" style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, padding:"12px 20px 6px" }}>{grupo}</div>
                 {itens.map(m => (
-                  <button key={m.id} onClick={() => navMenu(m.id)} aria-current={menu===m.id ? "page" : undefined} style={{
+                  <button key={m.id} onClick={() => navMenu(m.id)} title={m.hint || undefined} aria-current={menu===m.id ? "page" : undefined} style={{
                     display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 20px",
                     background: menu===m.id ? C.gold+"22" : "transparent",
                     borderLeft: menu===m.id ? `3px solid ${C.gold}` : "3px solid transparent",
