@@ -1,6 +1,6 @@
 {
   "name": "nerd-do-campo",
-  "version": "1.27.2",
+  "version": "1.28.0",
   "private": true,
   "dependencies": {
     "react": "^18.2.0",

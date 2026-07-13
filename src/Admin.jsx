@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.27.2";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.28.0";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -5114,7 +5114,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
   const saldoInicial = Number(timeData?.[0]?.saldo_inicial || 0);
 
   const { data: movimentos, loading, reload } = useQuery(
-    () => idTime ? api.get(`movimento_caixa?id_time=eq.${idTime}&select=*,tipo_movimento(descricao),evento(nome,id_temporada),partida(data,adversario(nome))&order=data_movimento.asc,id_movimento.asc`) : Promise.resolve([]),
+    () => idTime ? api.get(`movimento_caixa?id_time=eq.${idTime}&select=*,tipo_movimento(descricao),evento(nome,id_temporada),partida(data,adversario(nome)),encontro(data)&order=data_movimento.asc,id_movimento.asc`) : Promise.resolve([]),
     [idTime]
   );
   const { data: temporadas } = useQuery(() => idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*&order=data_inicio.desc`) : Promise.resolve([]), [idTime]);
@@ -5177,6 +5177,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
     if (m.origem==="evento") return `🎉 ${m.evento?.nome || "Evento"}`;
     if (m.origem==="venda_evento") return `🎟️ ${m.evento?.nome || "Venda de cartões"}`;
     if (m.origem==="partida") return `📅 vs ${m.partida?.adversario?.nome || "Adversário"}`;
+    if (m.origem==="encontro") return `🤝 Encontro${m.encontro?.data ? " " + new Date(m.encontro.data).toLocaleDateString("pt-BR") : ""}`;
     return m.origem;
   }
 
@@ -5185,6 +5186,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
     if (m.origem==="evento") return `Evento: ${m.evento?.nome || ""}`;
     if (m.origem==="venda_evento") return `Venda de cartões: ${m.evento?.nome || ""}`;
     if (m.origem==="partida") return `Partida vs ${m.partida?.adversario?.nome || ""}`;
+    if (m.origem==="encontro") return `Encontro${m.encontro?.data ? " de " + new Date(m.encontro.data).toLocaleDateString("pt-BR") : ""}`;
     return m.origem;
   }
 
@@ -5443,7 +5445,7 @@ function RelatorioFinanceiro({ idTime, show }) {
   const { data: timeData } = useQuery(() => idTime ? api.get(`time?id_time=eq.${idTime}&select=saldo_inicial,nome`) : Promise.resolve([]), [idTime]);
   const { data: temporadas } = useQuery(() => idTime ? api.get(`temporada?id_time=eq.${idTime}&select=*&order=data_inicio.desc`) : Promise.resolve([]), [idTime]);
   const { data: movimentos, loading } = useQuery(
-    () => idTime ? api.get(`movimento_caixa?id_time=eq.${idTime}&select=*,tipo_movimento(descricao),evento(nome),partida(data,adversario(nome))&order=data_movimento.asc`) : Promise.resolve([]),
+    () => idTime ? api.get(`movimento_caixa?id_time=eq.${idTime}&select=*,tipo_movimento(descricao),evento(nome),partida(data,adversario(nome)),encontro(data)&order=data_movimento.asc`) : Promise.resolve([]),
     [idTime]
   );
 
@@ -8584,6 +8586,38 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
   const { data: jogos, reload: reloadJogos } = useQuery(() => idEncontro ? api.get(`encontro_jogo?id_encontro=eq.${idEncontro}&select=*&order=ordem.asc.nullslast,id_encontro_jogo.asc`) : Promise.resolve([]), [idEncontro]);
   const { data: parts, reload: reloadParts } = useQuery(() => idEncontro ? api.get(`encontro_participacao?id_encontro=eq.${idEncontro}&select=*,jogador(nome,apelido,camisa)&order=id_encontro_part.asc`) : Promise.resolve([]), [idEncontro]);
 
+  // ── Financeiro do encontro (aluguel da quadra, juiz, rateio da galera...) ──
+  const { data: tiposMovEnc } = useQuery(() => idTime ? api.get(`tipo_movimento?id_time=eq.${idTime}&status=eq.Ativo&select=*&order=descricao.asc`) : Promise.resolve([]), [idTime]);
+  const { data: movsEnc, reload: reloadMovsEnc } = useQuery(() => idEncontro ? api.get(`movimento_caixa?origem=eq.encontro&id_encontro=eq.${idEncontro}&select=*,tipo_movimento(descricao)&order=id_movimento.asc`) : Promise.resolve([]), [idEncontro]);
+  const [modalMovEnc, setModalMovEnc] = useState(false);
+  const [formMovEnc, setFormMovEnc] = useState({});
+  const [savingMovEnc, setSavingMovEnc] = useState(false);
+  function abrirMovEnc() {
+    setFormMovEnc({ id_tipo_movimento:"", valor:"", data_movimento: (cabecalho.data || new Date().toISOString().split("T")[0]), observacao:"" });
+    setModalMovEnc(true);
+  }
+  async function salvarMovEnc() {
+    const tipo = (tiposMovEnc||[]).find(t => String(t.id_tipo_movimento)===String(formMovEnc.id_tipo_movimento));
+    if (!tipo) { show("Selecione o tipo.", "error"); return; }
+    if (!formMovEnc.valor || Number(formMovEnc.valor)<=0) { show("Informe um valor válido.", "error"); return; }
+    setSavingMovEnc(true);
+    try {
+      await api.post(`movimento_caixa`, {
+        id_time: idTime, id_tipo_movimento: tipo.id_tipo_movimento, natureza: tipo.natureza,
+        valor: Number(formMovEnc.valor), data_movimento: formMovEnc.data_movimento,
+        observacao: formMovEnc.observacao||null, origem:"encontro", id_encontro: idEncontro,
+        registrado_por: emailUsuarioLogado(),
+      });
+      show("Lançamento adicionado!"); setModalMovEnc(false); reloadMovsEnc();
+    } catch(e){ show("Erro: "+e.message, "error"); }
+    finally { setSavingMovEnc(false); }
+  }
+  async function removerMovEnc(m) {
+    if (!(await confirmar("Remover este lançamento?", { perigoso:true, textoOk:"Remover" }))) return;
+    try { await api.delete(`movimento_caixa?id_movimento=eq.${m.id_movimento}`); show("Removido."); reloadMovsEnc(); }
+    catch(e){ show("Erro: "+e.message, "error"); }
+  }
+
   const mapaTI = {}; (timesInternos||[]).forEach(t => { mapaTI[t.id_time_interno] = t; });
 
   // ── Salvar cabeçalho (cria o encontro) ──
@@ -8654,6 +8688,63 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
             </div>
           )}
           <JogosEncontro idEncontro={idEncontro} jogos={jogos||[]} timesInternos={timesInternos||[]} mapaTI={mapaTI} reload={reloadJogos} show={show} readOnly={readOnly} totalPlacares={totalPlacares} />
+
+          {/* Financeiro do encontro (aluguel, juiz, rateio da galera...) */}
+          {(() => {
+            const receitas = (movsEnc||[]).filter(m=>m.natureza==="receita").reduce((s,m)=>s+Number(m.valor||0),0);
+            const despesas = (movsEnc||[]).filter(m=>m.natureza==="despesa").reduce((s,m)=>s+Number(m.valor||0),0);
+            const saldo = receitas - despesas;
+            return (
+              <Card style={{ padding:"20px 24px" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, flexWrap:"wrap", gap:8 }}>
+                  <div style={{ fontSize:13, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em", fontWeight:700 }}>
+                    💵 Financeiro do Encontro
+                  </div>
+                  {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px" }} onClick={abrirMovEnc}>+ Lançar receita/despesa</Btn>}
+                </div>
+                {(movsEnc||[]).length === 0 ? (
+                  <div style={{ color:C.dim, fontSize:13 }}>Nenhum lançamento financeiro neste encontro. Use para aluguel da quadra, juiz, material ou o rateio da galera.</div>
+                ) : (
+                  <>
+                    <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:14 }}>
+                      {(movsEnc||[]).map(m => (
+                        <div key={m.id_movimento} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:`1px solid ${C.border}`, fontSize:13 }}>
+                          <span style={{ color:C.cream }}>{m.tipo_movimento?.descricao}{m.observacao?<span style={{ color:C.dim }}> — {m.observacao}</span>:""}</span>
+                          <span style={{ display:"flex", gap:12, alignItems:"center" }}>
+                            <span style={{ color: m.natureza==="receita"?C.win:C.loss, fontWeight:700 }}>{m.natureza==="receita"?"+":"−"} {fmtMoeda(m.valor)}</span>
+                            {!readOnly && <button onClick={()=>removerMovEnc(m)} style={{ background:"none", border:"none", color:C.loss, cursor:"pointer", fontSize:14 }}>✕</button>}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display:"flex", gap:16, justifyContent:"flex-end", fontSize:13 }}>
+                      <span style={{ color:C.win }}>Receitas: {fmtMoeda(receitas)}</span>
+                      <span style={{ color:C.loss }}>Despesas: {fmtMoeda(despesas)}</span>
+                      <span style={{ fontWeight:800, color: saldo>=0?C.gold:C.loss }}>Saldo: {fmtMoeda(saldo)}</span>
+                    </div>
+                  </>
+                )}
+              </Card>
+            );
+          })()}
+
+          {modalMovEnc && (
+            <Modal title="Lançar no financeiro do encontro" onClose={() => setModalMovEnc(false)}>
+              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+                <Select label="Tipo *" value={formMovEnc.id_tipo_movimento} onChange={e => setFormMovEnc(f => ({ ...f, id_tipo_movimento: e.target.value }))}>
+                  <option value="">Selecione...</option>
+                  {(tiposMovEnc||[]).map(t => <option key={t.id_tipo_movimento} value={t.id_tipo_movimento}>{t.descricao} ({t.natureza === "receita" ? "entrada" : "saída"})</option>)}
+                </Select>
+                <Input label="Valor (R$) *" type="number" inputMode="decimal" value={formMovEnc.valor} onChange={e => setFormMovEnc(f => ({ ...f, valor: e.target.value }))} placeholder="0,00" />
+                <Input label="Data" type="date" value={formMovEnc.data_movimento} onChange={e => setFormMovEnc(f => ({ ...f, data_movimento: e.target.value }))} />
+                <Input label="Observação" value={formMovEnc.observacao} onChange={e => setFormMovEnc(f => ({ ...f, observacao: e.target.value }))} placeholder="Ex: aluguel da quadra, juiz do dia..." />
+                <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+                  <Btn variant="secondary" onClick={() => setModalMovEnc(false)}>Cancelar</Btn>
+                  <Btn onClick={salvarMovEnc} disabled={savingMovEnc}>{savingMovEnc ? "Salvando..." : "Lançar"}</Btn>
+                </div>
+              </div>
+            </Modal>
+          )}
         </>
       )}
     </div>
