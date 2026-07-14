@@ -5,6 +5,7 @@ import { default as AdminApp } from './Admin';
 import SuperApp from './Super';
 import RecuperarSenha, { ehLinkRecuperacao } from './RecuperarSenha';
 import Confirmar, { ehLinkConfirmacao } from './Confirmar';
+import Craque, { ehLinkCraque } from './Craque';
 import Conheca from './Conheca';
 
 const path = window.location.pathname;
@@ -13,13 +14,14 @@ const isSuper = path.startsWith('/super');
 const isConheca = path.startsWith('/conheca');
 const isRecuperacao = ehLinkRecuperacao();
 const isConfirmacao = ehLinkConfirmacao();
+const isCraque = ehLinkCraque();
 
 // ── Monitor de erros ─────────────────────────────────────────────
 // Captura erros não tratados de TODOS os apps e grava em log_erro no
 // Supabase (fire-and-forget). O Super mostra tudo na aba 🐞 Erros.
 const ERR_URL = process.env.REACT_APP_SUPABASE_URL || 'https://nxztffulmvohduvudbhg.supabase.co';
 const ERR_KEY = process.env.REACT_APP_SUPABASE_ANON || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54enRmZnVsbXZvaGR1dnVkYmhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODY5ODMsImV4cCI6MjA5NTA2Mjk4M30.CwEmjukApMTJhkbKh1jlp4Q-IYrM26u-5SYx9p20nsg';
-const ERR_APP = isConfirmacao ? 'confirmar' : isRecuperacao ? 'recuperar' : isSuper ? 'super' : isAdmin ? 'admin' : isConheca ? 'conheca' : 'publico';
+const ERR_APP = isCraque ? 'craque' : isConfirmacao ? 'confirmar' : isRecuperacao ? 'recuperar' : isSuper ? 'super' : isAdmin ? 'admin' : isConheca ? 'conheca' : 'publico';
 
 const _errVistos = new Set(); // dedup por sessão
 let _errCota = 5;             // no máx. 5 registros por sessão (evita loop gravar milhares)
@@ -89,7 +91,7 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <ErroFatal>
-      {isConfirmacao ? <Confirmar /> : isRecuperacao ? <RecuperarSenha /> : isSuper ? <SuperApp /> : isAdmin ? <AdminApp /> : isConheca ? <Conheca /> : <App />}
+      {isCraque ? <Craque /> : isConfirmacao ? <Confirmar /> : isRecuperacao ? <RecuperarSenha /> : isSuper ? <SuperApp /> : isAdmin ? <AdminApp /> : isConheca ? <Conheca /> : <App />}
     </ErroFatal>
   </React.StrictMode>
 );

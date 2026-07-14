@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.28.1";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.29.0";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -770,6 +770,11 @@ function Estatisticas({ time, temporada }) {
     () => temporada?.id_temporada ? sb(`vw_stats_temporada?id_temporada=eq.${temporada.id_temporada}&select=*`) : sb(`vw_estatisticas_jogadores?id_time=eq.${time.id_time}&select=*`),
     [temporada?.id_temporada, time.id_time]
   );
+  // Craque do Ano: coroações na temporada (junta o nome do jogador)
+  const { data: craquesAno } = useQuery(
+    () => temporada?.id_temporada ? sb(`vw_craque_ano?id_temporada=eq.${temporada.id_temporada}&select=id_jogador,titulos,jogador:id_jogador(nome,apelido,camisa,foto_url)&order=titulos.desc`) : Promise.resolve([]),
+    [temporada?.id_temporada]
+  );
   if (loading) return <Spinner />;
   const sorted = [...(stats||[])].sort((a,b) => {
     const va=a[sortKey]??0; const vb=b[sortKey]??0;
@@ -794,6 +799,25 @@ function Estatisticas({ time, temporada }) {
   ];
   return (
     <Card style={{ padding:0, overflow:"hidden" }}>
+      {(craquesAno||[]).length > 0 && (
+        <div style={{ padding:"20px 24px", borderBottom:`1px solid ${C.border}` }}>
+          <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginBottom:14, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>🏆 Craque do Ano — eleito pela galera</div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:12 }}>
+            {(craquesAno||[]).slice(0,5).map((c, i) => (
+              <div key={c.id_jogador} style={{ display:"flex", alignItems:"center", gap:10, background:C.surf2, borderRadius:10, padding:"10px 14px", border:`1px solid ${i===0?C.gold:C.border}` }}>
+                <span style={{ fontSize:16, fontWeight:800, color:i===0?C.gold:C.dim, minWidth:22, textAlign:"center" }}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</span>
+                {c.jogador?.foto_url
+                  ? <img src={c.jogador.foto_url} alt="" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover" }} />
+                  : <span style={{ width:36, height:36, borderRadius:"50%", background:"#245038", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:13 }}>{((c.jogador?.apelido||c.jogador?.nome||"?").slice(0,2)).toUpperCase()}</span>}
+                <div>
+                  <div style={{ fontSize:14, fontWeight:700, color:C.cream }}>{c.jogador?.apelido || c.jogador?.nome || "—"}</div>
+                  <div style={{ fontSize:12, color:C.gold, fontWeight:700 }}>{c.titulos} {c.titulos===1?"título":"títulos"}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div style={{ padding:"20px 24px 12px", borderBottom:`1px solid ${C.border}` }}>
         <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, marginBottom:14, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>Estatísticas dos Jogadores</div>
       </div>
@@ -2764,7 +2788,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
   const [advSel, setAdvSel] = useState("");
   const [savingAdv, setSavingAdv] = useState(false);
   const { data: participacoes, reload: reloadPart } = useQuery(
-    () => api.get(`participacao?id_partida=eq.${partida.id_partida}&id_jogador=gt.0&select=*,jogador(nome,apelido,camisa),posicao(nome,id_posicao,id_posicao_pai,ordem)&order=camisa.asc`),
+    () => api.get(`participacao?id_partida=eq.${partida.id_partida}&id_jogador=gt.0&select=*,jogador(nome,apelido,camisa,foto_url),posicao(nome,id_posicao,id_posicao_pai,ordem)&order=camisa.asc`),
     [partida.id_partida]
   );
   // Esquema tático dos titulares (ex: 4-4-2), pela posição cadastrada nesta partida.
@@ -3208,6 +3232,16 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
           <LinkConfirmacao tipo="partida" idRef={partida.id_partida} idTime={idTime} dataRef={partida.data} show={show} embutido />
           <ConvocarPartida partida={partida} time={meuTimeData?.[0]} idTime={idTime} show={show}/>
         </Card>
+      )}
+
+      {/* Craque da Partida — votação da galera (só depois do placar salvo) */}
+      {!cancelada && (
+        <BlocoCraque tipo="partida" idRef={partida.id_partida} idTime={idTime}
+          placarPronto={partida.gols_marcados !== null && partida.gols_marcados !== undefined}
+          estado={partida.votacao_craque} idCraque={partida.id_craque}
+          elegiveis={(participacoes||[]).map(pt => ({ id_jogador: pt.id_jogador, nome: pt.jogador?.nome, apelido: pt.jogador?.apelido, camisa: pt.camisa ?? pt.jogador?.camisa, foto_url: pt.jogador?.foto_url }))}
+          dataRef={partida.data} show={show} readOnly={readOnly}
+          onMudou={async () => { try { const r = await api.get(`partida?id_partida=eq.${partida.id_partida}&select=votacao_craque,id_craque&limit=1`); if (r?.[0]) setPartida(u => ({ ...u, ...r[0] })); } catch {} }} />
       )}
 
       {/* Ação destrutiva: isolada no fim da página, longe das ações rotineiras */}
@@ -8563,6 +8597,7 @@ function SorteioTimes({ idEncontro, idTime, timesInternos, jogadores, posicoes, 
 function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }) {
   const ehNovo = !encontro;
   const [idEncontro, setIdEncontro] = useState(encontro?.id_encontro || null);
+  const [craqueEnc, setCraqueEnc] = useState({ votacao_craque: encontro?.votacao_craque ?? null, id_craque: encontro?.id_craque ?? null });
   const [cabecalho, setCabecalho] = useState({
     data: dataDeTS(encontro?.data),
     hora: horaDeTS(encontro?.data),
@@ -8584,7 +8619,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
 
   // Jogos e participações do encontro (quando já existe)
   const { data: jogos, reload: reloadJogos } = useQuery(() => idEncontro ? api.get(`encontro_jogo?id_encontro=eq.${idEncontro}&select=*&order=ordem.asc.nullslast,id_encontro_jogo.asc`) : Promise.resolve([]), [idEncontro]);
-  const { data: parts, reload: reloadParts } = useQuery(() => idEncontro ? api.get(`encontro_participacao?id_encontro=eq.${idEncontro}&select=*,jogador(nome,apelido,camisa)&order=id_encontro_part.asc`) : Promise.resolve([]), [idEncontro]);
+  const { data: parts, reload: reloadParts } = useQuery(() => idEncontro ? api.get(`encontro_participacao?id_encontro=eq.${idEncontro}&select=*,jogador(nome,apelido,camisa,foto_url)&order=id_encontro_part.asc`) : Promise.resolve([]), [idEncontro]);
 
   // ── Financeiro do encontro (aluguel da quadra, juiz, rateio da galera...) ──
   const { data: tiposMovEnc } = useQuery(() => idTime ? api.get(`tipo_movimento?id_time=eq.${idTime}&status=eq.Ativo&select=*&order=descricao.asc`) : Promise.resolve([]), [idTime]);
@@ -8745,6 +8780,14 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
               </div>
             </Modal>
           )}
+
+          {/* Craque do Encontro — votação da galera (só depois de ter jogos com placar) */}
+          <BlocoCraque tipo="encontro" idRef={idEncontro} idTime={idTime}
+            placarPronto={totalPlacares > 0}
+            estado={craqueEnc.votacao_craque} idCraque={craqueEnc.id_craque}
+            elegiveis={(parts||[]).map(pt => ({ id_jogador: pt.id_jogador, nome: pt.jogador?.nome, apelido: pt.jogador?.apelido, camisa: pt.camisa ?? pt.jogador?.camisa, foto_url: pt.jogador?.foto_url }))}
+            dataRef={cabecalho.data} show={show} readOnly={readOnly}
+            onMudou={async () => { try { const r = await api.get(`encontro?id_encontro=eq.${idEncontro}&select=votacao_craque,id_craque&limit=1`); if (r?.[0]) setCraqueEnc(r[0]); } catch {} }} />
         </>
       )}
     </div>
@@ -9901,6 +9944,190 @@ function ConfigTime({ idTime, show, readOnly }) {
         </div>
       )}
       {pedirAdmin && <ModalSolicitarAdmin idTime={idTime} show={show} onClose={() => setPedirAdmin(false)}/>}
+    </Card>
+  );
+}
+
+// ============================================================================
+// Craque da Partida / Encontro — votação da galera (bloco compartilhado)
+// tipo: "partida" | "encontro" · placarPronto: trava (não abre sem placar salvo)
+// ============================================================================
+function BlocoCraque({ tipo, idRef, idTime, placarPronto, estado, idCraque, elegiveis, dataRef, onMudou, show, readOnly }) {
+  const [token, setToken] = useState(null);
+  const [tally, setTally] = useState(null);
+  const [abrindo, setAbrindo] = useState(false);
+  const [modalCoroar, setModalCoroar] = useState(false);
+  const [escolhaCraque, setEscolhaCraque] = useState(null);
+  const urlBase = (typeof window !== "undefined") ? `${window.location.origin}/craque?t=` : "/craque?t=";
+
+  // busca token existente do craque
+  async function carregarToken() {
+    try {
+      const r = await api.get(`link_craque?tipo=eq.${tipo}&id_ref=eq.${idRef}&select=token&limit=1`);
+      if (r?.[0]?.token) setToken(r[0].token);
+    } catch { /* best-effort */ }
+  }
+  useEffect(() => { if (idRef) carregarToken(); /* eslint-disable-next-line */ }, [idRef]);
+
+  // apuração (quando aberta/encerrada)
+  async function apurar(tk) {
+    const t = tk || token; if (!t) return;
+    try {
+      const r = await rpc("craque_apurar", { p_token: t });
+      if (!r?.erro) setTally(r.resultado || []);
+    } catch { /* best-effort */ }
+  }
+  useEffect(() => { if (token && (estado === "aberta" || estado === "encerrada")) apurar(token); /* eslint-disable-next-line */ }, [token, estado]);
+
+  async function garantirToken() {
+    if (token) return token;
+    const existentes = await api.get(`link_craque?tipo=eq.${tipo}&id_ref=eq.${idRef}&select=token&limit=1`);
+    if (existentes?.[0]?.token) { setToken(existentes[0].token); return existentes[0].token; }
+    const novo = (crypto?.randomUUID ? crypto.randomUUID().replace(/-/g, "") : (Math.random().toString(36).slice(2) + Date.now().toString(36)));
+    const expira = dataRef ? new Date(new Date(dataRef).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString() : null;
+    await api.post("link_craque", { token: novo, tipo, id_ref: idRef, id_time: idTime, expira_em: expira });
+    setToken(novo);
+    return novo;
+  }
+
+  async function abrirVotacao() {
+    setAbrindo(true);
+    try {
+      await garantirToken();
+      const tabela = tipo === "partida" ? "partida" : "encontro";
+      const idCol = tipo === "partida" ? "id_partida" : "id_encontro";
+      await api.patch(`${tabela}?${idCol}=eq.${idRef}`, { votacao_craque: "aberta", id_craque: null });
+      show("Votação aberta! Compartilhe o link com a galera.");
+      onMudou && onMudou();
+    } catch (e) { show("Erro ao abrir: " + e.message, "error"); }
+    finally { setAbrindo(false); }
+  }
+
+  async function reabrir() {
+    try {
+      const tabela = tipo === "partida" ? "partida" : "encontro";
+      const idCol = tipo === "partida" ? "id_partida" : "id_encontro";
+      await api.patch(`${tabela}?${idCol}=eq.${idRef}`, { votacao_craque: "aberta", id_craque: null });
+      show("Votação reaberta."); onMudou && onMudou();
+    } catch (e) { show("Erro: " + e.message, "error"); }
+  }
+
+  function abrirCoroar() {
+    const ord = [...(tally || [])].sort((a, b) => b.votos - a.votos);
+    setEscolhaCraque(ord?.[0]?.id_jogador || null);
+    setModalCoroar(true);
+  }
+
+  async function coroar() {
+    if (!escolhaCraque) { show("Escolha o craque.", "error"); return; }
+    try {
+      const tabela = tipo === "partida" ? "partida" : "encontro";
+      const idCol = tipo === "partida" ? "id_partida" : "id_encontro";
+      await api.patch(`${tabela}?${idCol}=eq.${idRef}`, { votacao_craque: "encerrada", id_craque: escolhaCraque });
+      show("Craque coroado! 🏆"); setModalCoroar(false); onMudou && onMudou();
+    } catch (e) { show("Erro: " + e.message, "error"); }
+  }
+
+  async function copiarLink() {
+    try {
+      const tk = await garantirToken();
+      await navigator.clipboard.writeText(urlBase + tk);
+      show("Link copiado! Cole no grupo pra galera votar.");
+    } catch { show("Não consegui copiar — tente novamente.", "error"); }
+  }
+
+  const inic = (j) => ((j.apelido || j.nome || "?").trim().slice(0, 2)).toUpperCase();
+  const ord = [...(tally || [])].sort((a, b) => b.votos - a.votos);
+  const maxVotos = ord?.[0]?.votos || 1;
+  const empatados = ord.filter(x => x.votos === maxVotos);
+  const craqueObj = (elegiveis || []).find(j => j.id_jogador === idCraque);
+
+  return (
+    <Card style={{ padding: "20px 24px" }}>
+      <div style={{ fontSize: 13, color: C.gold, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 14 }}>
+        🏆 Craque {tipo === "encontro" ? "do Encontro" : "da Partida"}
+      </div>
+
+      {/* Sem placar: trava */}
+      {!placarPronto && (estado == null || estado === undefined) ? (
+        <div style={{ color: C.dim, fontSize: 13 }}>
+          A votação do craque libera <b style={{ color: C.cream }}>depois que o placar do jogo estiver salvo</b>. Registre o resultado primeiro.
+        </div>
+      ) : estado == null || estado === undefined ? (
+        <>
+          <div style={{ color: C.dim, fontSize: 13, marginBottom: 14 }}>Abra a votação e mande o link no grupo — a galera escolhe o craque, sem precisar de login.</div>
+          {!readOnly && <Btn onClick={abrirVotacao} disabled={abrindo}>{abrindo ? "Abrindo..." : "🏆 Abrir votação do craque"}</Btn>}
+        </>
+      ) : estado === "aberta" ? (
+        <>
+          <div style={{ background: C.surf2, borderRadius: 8, padding: "10px 12px", fontSize: 12, color: C.dim, marginBottom: 14 }}>
+            🟢 Votação <b style={{ color: C.win }}>aberta</b> · {(tally || []).reduce((s, x) => s + Number(x.votos), 0)} voto(s) · compartilhe o link no grupo.
+          </div>
+          {ord.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+              {ord.map((x, i) => (
+                <div key={x.id_jogador} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ width: 26, textAlign: "center", fontWeight: 800, color: i === 0 ? C.gold : C.dim }}>{i === 0 ? "🥇" : (i + 1)}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
+                      <span style={{ color: C.cream, fontWeight: 600 }}>{x.apelido || x.nome}{x.camisa != null ? ` #${x.camisa}` : ""}</span>
+                      <span style={{ color: C.gold, fontWeight: 800 }}>{x.votos}</span>
+                    </div>
+                    <div style={{ height: 9, background: C.surf2, borderRadius: 5, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${(x.votos / maxVotos) * 100}%`, background: C.gold, borderRadius: 5 }} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {!readOnly && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn variant="secondary" style={{ flex: 1 }} onClick={copiarLink}>🔗 Copiar link</Btn>
+              <Btn style={{ flex: 1 }} onClick={abrirCoroar} disabled={ord.length === 0}>🏆 Encerrar e coroar</Btn>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* encerrada */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            {craqueObj?.foto_url
+              ? <img src={craqueObj.foto_url} alt="" style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", border: `2px solid ${C.gold}` }} />
+              : <span style={{ width: 52, height: 52, borderRadius: "50%", background: C.surf2, border: `2px solid ${C.gold}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800 }}>{craqueObj ? inic(craqueObj) : "🏆"}</span>}
+            <div>
+              <div style={{ fontSize: 11, color: C.gold, fontWeight: 700, textTransform: "uppercase" }}>Craque eleito</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: C.cream }}>{craqueObj ? (craqueObj.apelido || craqueObj.nome) : "—"}</div>
+            </div>
+          </div>
+          {!readOnly && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn variant="secondary" style={{ flex: 1 }} onClick={reabrir}>↺ Reabrir votação</Btn>
+              <Btn variant="secondary" style={{ flex: 1 }} onClick={copiarLink}>🔗 Link do resultado</Btn>
+            </div>
+          )}
+        </>
+      )}
+
+      {modalCoroar && (
+        <Modal title="Encerrar e coroar o craque" onClose={() => setModalCoroar(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {empatados.length > 1 && (
+              <div style={{ background: C.surf2, borderRadius: 8, padding: "10px 12px", fontSize: 12, color: C.gold }}>
+                ⚖️ Empate com {maxVotos} voto(s)! Escolha quem será o craque:
+              </div>
+            )}
+            <Select label="Craque" value={escolhaCraque || ""} onChange={e => setEscolhaCraque(Number(e.target.value))}>
+              <option value="">Selecione...</option>
+              {ord.map(x => <option key={x.id_jogador} value={x.id_jogador}>{x.apelido || x.nome} — {x.votos} voto(s)</option>)}
+            </Select>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <Btn variant="secondary" onClick={() => setModalCoroar(false)}>Cancelar</Btn>
+              <Btn onClick={coroar}>🏆 Coroar</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
     </Card>
   );
 }
