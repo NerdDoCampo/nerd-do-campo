@@ -28,10 +28,28 @@ let _errCota = 5;             // no máx. 5 registros por sessão (evita loop gr
 
 function _hashErr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return String(h >>> 0); }
 
+// Ruído de EXTENSÕES/RECURSOS do navegador (não é erro do nosso código).
+// Ex.: carteira cripto do Brave (window.ethereum), modo leitor/tradutor
+// (__firefox__), e o "Script error." genérico de scripts de outra origem.
+const _RUIDO = [
+  'window.ethereum', 'ethereum.selectedAddress', 'selectedAddress',
+  '__firefox__', 'firefox__reader', 'reader',
+  'evmAsk', 'web3', 'metamask', 'solana', 'phantom',
+  'chrome-extension://', 'moz-extension://', 'safari-extension://', 'safari-web-extension://',
+  'ResizeObserver loop', 'Non-Error promise rejection',
+];
+function _ehRuido(msg, stack) {
+  const alvo = (msg + ' ' + stack).toLowerCase();
+  // "Script error." puro (sem stack útil) = erro de script de outra origem (extensão)
+  if (/^script error\.?$/i.test(String(msg || '').trim()) && !stack) return true;
+  return _RUIDO.some((p) => alvo.includes(p.toLowerCase()));
+}
+
 export function reportarErro(mensagem, stack, origem) {
   try {
     const msg = String(mensagem || 'erro desconhecido').slice(0, 500);
     const st = String(stack || '').slice(0, 4000);
+    if (_ehRuido(msg, st)) return; // ignora ruído de extensão de navegador
     const hash = _hashErr(ERR_APP + '|' + msg + '|' + st.split('\n')[0]);
     if (_errVistos.has(hash) || _errCota <= 0) return;
     _errVistos.add(hash); _errCota--;
