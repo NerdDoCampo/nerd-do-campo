@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.29.0";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.30.0";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -3239,7 +3239,8 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
         <BlocoCraque tipo="partida" idRef={partida.id_partida} idTime={idTime}
           placarPronto={partida.gols_marcados !== null && partida.gols_marcados !== undefined}
           estado={partida.votacao_craque} idCraque={partida.id_craque}
-          elegiveis={(participacoes||[]).map(pt => ({ id_jogador: pt.id_jogador, nome: pt.jogador?.nome, apelido: pt.jogador?.apelido, camisa: pt.camisa ?? pt.jogador?.camisa, foto_url: pt.jogador?.foto_url }))}
+          time={meuTimeData?.[0]} subtitulo={partida.adversario?.nome ? `vs ${partida.adversario.nome}` : "Partida"}
+          elegiveis={(participacoes||[]).map(pt => ({ id_jogador: pt.id_jogador, nome: pt.jogador?.nome, apelido: pt.jogador?.apelido, camisa: pt.camisa ?? pt.jogador?.camisa, foto_url: pt.jogador?.foto_url, posicao: pt.posicao?.nome }))}
           dataRef={partida.data} show={show} readOnly={readOnly}
           onMudou={async () => { try { const r = await api.get(`partida?id_partida=eq.${partida.id_partida}&select=votacao_craque,id_craque&limit=1`); if (r?.[0]) setPartida(u => ({ ...u, ...r[0] })); } catch {} }} />
       )}
@@ -8785,6 +8786,7 @@ function FichaEncontro({ idTime, temporada, encontro, show, readOnly, onVoltar }
           <BlocoCraque tipo="encontro" idRef={idEncontro} idTime={idTime}
             placarPronto={totalPlacares > 0}
             estado={craqueEnc.votacao_craque} idCraque={craqueEnc.id_craque}
+            time={{ nome: _timeEnc?.[0]?.nome || "Meu Time" }} subtitulo={cabecalho.local || "Encontro"}
             elegiveis={(parts||[]).map(pt => ({ id_jogador: pt.id_jogador, nome: pt.jogador?.nome, apelido: pt.jogador?.apelido, camisa: pt.camisa ?? pt.jogador?.camisa, foto_url: pt.jogador?.foto_url }))}
             dataRef={cabecalho.data} show={show} readOnly={readOnly}
             onMudou={async () => { try { const r = await api.get(`encontro?id_encontro=eq.${idEncontro}&select=votacao_craque,id_craque&limit=1`); if (r?.[0]) setCraqueEnc(r[0]); } catch {} }} />
@@ -9952,7 +9954,7 @@ function ConfigTime({ idTime, show, readOnly }) {
 // Craque da Partida / Encontro — votação da galera (bloco compartilhado)
 // tipo: "partida" | "encontro" · placarPronto: trava (não abre sem placar salvo)
 // ============================================================================
-function BlocoCraque({ tipo, idRef, idTime, placarPronto, estado, idCraque, elegiveis, dataRef, onMudou, show, readOnly }) {
+function BlocoCraque({ tipo, idRef, idTime, placarPronto, estado, idCraque, elegiveis, dataRef, time, subtitulo, onMudou, show, readOnly }) {
   const [token, setToken] = useState(null);
   const [tally, setTally] = useState(null);
   const [abrindo, setAbrindo] = useState(false);
@@ -10038,6 +10040,103 @@ function BlocoCraque({ tipo, idRef, idTime, placarPronto, estado, idCraque, eleg
 
   const inic = (j) => ((j.apelido || j.nome || "?").trim().slice(0, 2)).toUpperCase();
   const ord = [...(tally || [])].sort((a, b) => b.votos - a.votos);
+
+  // ── Card compartilhável do craque coroado (canvas, padrão dos outros cards) ──
+  const [gerandoCard, setGerandoCard] = useState(false);
+  function carregarFoto(url) {
+    return new Promise((resolve) => {
+      if (!url) { resolve(null); return; }
+      const img = new Image(); img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img); img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  }
+  async function desenharCardCraque() {
+    const W = 1080, H = 1080;
+    await carregarLogo();
+    const craque = (elegiveis || []).find(j => j.id_jogador === idCraque);
+    const votos = ord.find(x => x.id_jogador === idCraque)?.votos || 0;
+    const foto = await carregarFoto(craque?.foto_url);
+    const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    const grad = ctx.createRadialGradient(W/2, 360, 60, W/2, 360, 820);
+    grad.addColorStop(0, "#0a4030"); grad.addColorStop(1, "#00332a");
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    const GOLD = "#E8A020", CREAM = "#F0E8D0", DIM = "#8FAF9A", SURF = "#174D36";
+    ctx.textAlign = "center";
+
+    // cabeçalho
+    ctx.fillStyle = GOLD; ctx.font = "800 44px Arial";
+    ctx.fillText(`🏆 CRAQUE ${tipo === "encontro" ? "DO ENCONTRO" : "DA PARTIDA"}`, W/2, 92);
+    ctx.fillStyle = DIM; ctx.font = "26px Arial";
+    const dataFmt = dataRef ? new Date(dataRef).toLocaleDateString("pt-BR") : "";
+    ctx.fillText([subtitulo, dataFmt].filter(Boolean).join(" · ").slice(0, 48), W/2, 134);
+
+    // foto circular com borda dourada
+    const cx = W/2, cy = 360, r = 150;
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.closePath(); ctx.clip();
+    if (foto) {
+      const s = Math.max((2*r)/foto.width, (2*r)/foto.height);
+      const dw = foto.width*s, dh = foto.height*s;
+      ctx.drawImage(foto, cx-dw/2, cy-dh/2, dw, dh);
+    } else {
+      ctx.fillStyle = SURF; ctx.fillRect(cx-r, cy-r, 2*r, 2*r);
+      ctx.fillStyle = CREAM; ctx.font = "800 110px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(craque ? inic(craque) : "🏆", cx, cy+4); ctx.textBaseline = "alphabetic";
+    }
+    ctx.restore();
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+    // medalha
+    ctx.fillStyle = GOLD; ctx.beginPath(); ctx.arc(cx+r-20, cy+r-20, 46, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#00332a"; ctx.font = "44px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("🏆", cx+r-20, cy+r-16); ctx.textBaseline = "alphabetic";
+
+    // nome
+    ctx.fillStyle = CREAM; ctx.font = "800 80px Arial"; ctx.textAlign = "center";
+    ctx.fillText((craque ? (craque.apelido || craque.nome) : "—").toUpperCase().slice(0, 18), W/2, 620);
+    ctx.fillStyle = DIM; ctx.font = "30px Arial";
+    const sub = [craque?.posicao, craque?.camisa != null ? `Camisa ${craque.camisa}` : null].filter(Boolean).join(" · ");
+    if (sub) ctx.fillText(sub, W/2, 664);
+
+    // selo de votos
+    ctx.font = "700 34px Arial";
+    const txt = `⭐ Eleito pela galera com ${votos} voto${votos === 1 ? "" : "s"}`;
+    const tw = ctx.measureText(txt).width + 76;
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 3;
+    const bx = W/2 - tw/2, by = 716, bh = 74;
+    ctx.beginPath(); ctx.moveTo(bx+37, by); ctx.arcTo(bx+tw, by, bx+tw, by+bh, 37); ctx.arcTo(bx+tw, by+bh, bx, by+bh, 37); ctx.arcTo(bx, by+bh, bx, by, 37); ctx.arcTo(bx, by, bx+tw, by, 37); ctx.closePath();
+    ctx.fillStyle = "rgba(232,160,32,0.15)"; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = CREAM; ctx.fillText(txt, W/2, by+49);
+
+    // frase
+    ctx.fillStyle = DIM; ctx.font = "28px Arial";
+    ctx.fillText("A torcida escolheu. O craque da rodada é ele!", W/2, 860);
+
+    // rodapé marca
+    desenharLogoCard(ctx, _logoCache, 90, H-92, 40, "⚽");
+    ctx.textAlign = "left";
+    ctx.fillStyle = GOLD; ctx.font = "800 30px Arial"; ctx.fillText(time?.nome || "Nerd do Campo", 150, H-96);
+    ctx.fillStyle = DIM; ctx.font = "24px Arial"; ctx.fillText("nerddocampo.com.br", 150, H-60);
+    ctx.textAlign = "center";
+    return canvas;
+  }
+  async function compartilharCard() {
+    setGerandoCard(true);
+    try {
+      const canvas = await desenharCardCraque();
+      const blob = await new Promise(res => canvas.toBlob(res, "image/png"));
+      if (!blob) throw new Error("Falha ao gerar imagem");
+      const arquivo = new File([blob], "craque-nerd-do-campo.png", { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+        await navigator.share({ files: [arquivo] });
+      } else {
+        const url = URL.createObjectURL(blob); const a = document.createElement("a");
+        a.href = url; a.download = "craque-nerd-do-campo.png"; a.click(); URL.revokeObjectURL(url);
+      }
+    } catch (e) { if (e?.name !== "AbortError") show("Não consegui gerar o card. Tente novamente.", "error"); }
+    finally { setGerandoCard(false); }
+  }
+
   const maxVotos = ord?.[0]?.votos || 1;
   const empatados = ord.filter(x => x.votos === maxVotos);
   const craqueObj = (elegiveis || []).find(j => j.id_jogador === idCraque);
@@ -10101,9 +10200,10 @@ function BlocoCraque({ tipo, idRef, idTime, placarPronto, estado, idCraque, eleg
             </div>
           </div>
           {!readOnly && (
-            <div style={{ display: "flex", gap: 8 }}>
-              <Btn variant="secondary" style={{ flex: 1 }} onClick={reabrir}>↺ Reabrir votação</Btn>
-              <Btn variant="secondary" style={{ flex: 1 }} onClick={copiarLink}>🔗 Link do resultado</Btn>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Btn style={{ flex: 1, minWidth: 160 }} onClick={compartilharCard} disabled={gerandoCard}>{gerandoCard ? "Gerando..." : "📸 Compartilhar card"}</Btn>
+              <Btn variant="secondary" style={{ flex: 1, minWidth: 120 }} onClick={reabrir}>↺ Reabrir</Btn>
+              <Btn variant="secondary" style={{ flex: 1, minWidth: 120 }} onClick={copiarLink}>🔗 Link</Btn>
             </div>
           )}
         </>
