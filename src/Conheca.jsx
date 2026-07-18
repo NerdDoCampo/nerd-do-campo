@@ -12,6 +12,59 @@ async function sb(path) {
   return res.json();
 }
 
+// Conta pública de demonstração — divulgada no login, no /conheca e no app público.
+const DEMO_EMAIL = "vemtestar@nerddocampo.com.br";
+const DEMO_SENHA = "teste2026";
+// Copia um valor solto (e-mail OU senha) para colar direto no campo.
+// Usa a API moderna e cai num fallback que funciona no iOS.
+async function copiarDemo(txt) {
+  try { if (navigator?.clipboard) { await navigator.clipboard.writeText(txt); return true; } } catch (e) { /* cai no fallback */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) { return false; }
+}
+
+// Bloco da conta de demonstração (usado no /conheca e no app público)
+function BlocoDemo({ titulo, texto, rodape }) {
+  const [copiado, setCopiado] = useState("");
+  async function copiar(campo, valor) {
+    const ok = await copiarDemo(valor);
+    setCopiado(ok ? campo : "erro");
+    setTimeout(() => setCopiado(""), 2000);
+  }
+  const linha = (campo, rotulo, valor) => (
+    <div style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0" }}>
+      <span style={{ color:C.dim, fontSize:12, width:48, flexShrink:0 }}>{rotulo}</span>
+      <span style={{ color:C.cream, fontFamily:"monospace", fontSize:12, flex:1, wordBreak:"break-all" }}>{valor}</span>
+      <button onClick={() => copiar(campo, valor)} aria-label={`Copiar ${rotulo.toLowerCase()}`}
+        style={{ background:"transparent", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:6, padding:"4px 9px", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0, whiteSpace:"nowrap" }}>
+        {copiado === campo ? "✅" : "📋"}
+      </button>
+    </div>
+  );
+  return (
+    <div style={{ border:`1px dashed ${C.gold}`, background:`${C.gold}12`, borderRadius:12, padding:"14px 16px", margin:"18px auto", maxWidth:520, textAlign:"left" }}>
+      <div style={{ fontSize:14, fontWeight:800, color:C.gold, marginBottom:5 }}>{titulo}</div>
+      <div style={{ fontSize:12.5, color:C.cream, lineHeight:1.5, marginBottom:10 }}>{texto}</div>
+      <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"7px 11px", marginBottom:10 }}>
+        {linha("email", "E-mail", DEMO_EMAIL)}
+        <div style={{ borderTop:`1px solid ${C.border}` }} />
+        {linha("senha", "Senha", DEMO_SENHA)}
+      </div>
+      {copiado === "erro" && <div style={{ fontSize:11, color:C.dim, marginBottom:8 }}>Não deu pra copiar — segure o texto para selecionar.</div>}
+      <a href="/admin" style={{ display:"block", background:C.gold, color:"#0B3D2E", borderRadius:7, padding:"10px 8px", fontSize:12.5, fontWeight:700, textAlign:"center", textDecoration:"none" }}>
+        Abrir a demonstração
+      </a>
+      {rodape && <div style={{ fontSize:10.5, color:C.dim, marginTop:8, fontStyle:"italic", lineHeight:1.4 }}>{rodape}</div>}
+    </div>
+  );
+}
+
 const C = {
   bg: "#0B3D2E", surface: "#103D2A", surf2: "#174D36",
   border: "#1F5C3E", gold: "#E8A020", cream: "#F0E8D0",
@@ -193,7 +246,7 @@ export default function Conheca() {
 
         {/* Manual do usuário — disponível para quem quer se aprofundar antes */}
         <div style={{ textAlign:"center", marginBottom:40 }}>
-          <a href={`/manual.pdf?v=1.28.0`} target="_blank" rel="noopener noreferrer"
+          <a href={`/manual.pdf?v=1.32.0`} target="_blank" rel="noopener noreferrer"
             style={{ display:"inline-flex", alignItems:"center", gap:10, background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 24px", color:C.cream, textDecoration:"none", fontSize:14, fontWeight:700 }}>
             <span style={{ fontSize:24 }}>📖</span>
             <span style={{ textAlign:"left" }}>
@@ -220,6 +273,13 @@ export default function Conheca() {
           <div style={{ fontSize:14, color:C.dim, marginBottom:22 }}>É rápido pra começar, e a gente te ajuda no caminho.</div>
           <BtnQuero grande />
         </div>
+
+        {/* Conta de demonstração */}
+        <BlocoDemo
+          titulo="🧪 Prefere ver por dentro antes?"
+          texto={<>Use a <strong>conta de demonstração</strong> e navegue pelo painel como se o time fosse seu: escale, lance placar, teste o financeiro. Nada do que você fizer lá atrapalha ninguém.</>}
+          rodape="Conta pública de testes — pode mexer em tudo."
+        />
 
         {/* contato */}
         <div style={{ textAlign:"center", marginTop:44, paddingTop:24, borderTop:`1px solid ${C.border}`, fontSize:13, color:C.dim }}>

@@ -1,9 +1,26 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.31.0";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.34.0";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 // Paleta de cores do sistema — declarada no topo para evitar "Cannot access 'C' before initialization"
+// Conta pública de demonstração — divulgada no login, no /conheca e no app público.
+const DEMO_EMAIL = "vemtestar@nerddocampo.com.br";
+const DEMO_SENHA = "teste2026";
+// Copia um valor solto (e-mail OU senha) para colar direto no campo.
+// Usa a API moderna e cai num fallback que funciona no iOS.
+async function copiarDemo(txt) {
+  try { if (navigator?.clipboard) { await navigator.clipboard.writeText(txt); return true; } } catch (e) { /* cai no fallback */ }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) { return false; }
+}
+
 const C = {
   bg:      "#0B3D2E", surface: "#103D2A", surf2: "#174D36",
   border:  "#1F5C3E", gold: "#E8A020",    cream: "#F0E8D0",
@@ -1570,10 +1587,13 @@ function Login({ onLogin, aviso }) {
   const [emailRec, setEmailRec] = useState("");
   const [enviandoRec, setEnviandoRec] = useState(false);
   const [msgRec, setMsgRec] = useState(null);
+  const [copiadoDemo, setCopiadoDemo] = useState("");
 
-  async function handleLogin() {
+  async function handleLogin(emailArg, senhaArg) {
+    const mail = typeof emailArg === "string" ? emailArg : email;
+    const pass = typeof senhaArg === "string" ? senhaArg : senha;
     setErro(""); setLoading(true);
-    const res = await sbAuth("token?grant_type=password", { email, password: senha });
+    const res = await sbAuth("token?grant_type=password", { email: mail, password: pass });
     setLoading(false);
     if (res.access_token) {
       SESSION_TOKEN = res.access_token;
@@ -1642,6 +1662,35 @@ function Login({ onLogin, aviso }) {
           ⚽ Designed by Caxpa Augsten
         </div>
       </Card>
+
+      {/* Conta de demonstração: entra com um toque, sem digitar nada */}
+      <div style={{ width:"100%", maxWidth:380, marginTop:14, border:`1px dashed ${C.gold}`, background:`${C.gold}12`, borderRadius:12, padding:"14px 16px" }}>
+        <div style={{ fontSize:13, fontWeight:800, color:C.gold, marginBottom:5 }}>🧪 Quer testar antes de criar seu time?</div>
+        <div style={{ fontSize:12, color:C.cream, lineHeight:1.5, marginBottom:10 }}>
+          Entre na <strong>conta de demonstração</strong> e mexa à vontade — tem dois times prontos, com jogos, jogadores e financeiro pra você explorar.
+        </div>
+        <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"7px 11px", marginBottom:10 }}>
+          {[["email","E-mail",DEMO_EMAIL],["senha","Senha",DEMO_SENHA]].map(([campo, rotulo, valor], idx) => (
+            <div key={campo} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderTop: idx === 0 ? "none" : `1px solid ${C.border}` }}>
+              <span style={{ color:C.dim, fontSize:11.5, width:46, flexShrink:0 }}>{rotulo}</span>
+              <span style={{ color:C.cream, fontFamily:"monospace", fontSize:11.5, flex:1, wordBreak:"break-all" }}>{valor}</span>
+              <button onClick={async () => { const ok = await copiarDemo(valor); setCopiadoDemo(ok ? campo : "erro"); setTimeout(() => setCopiadoDemo(""), 2000); }}
+                aria-label={`Copiar ${rotulo.toLowerCase()}`}
+                style={{ background:"transparent", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:6, padding:"4px 9px", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
+                {copiadoDemo === campo ? "✅" : "📋"}
+              </button>
+            </div>
+          ))}
+        </div>
+        {copiadoDemo === "erro" && <div style={{ fontSize:11, color:C.dim, marginBottom:8 }}>Não deu pra copiar — segure o texto para selecionar.</div>}
+        <button onClick={() => { setEmail(DEMO_EMAIL); setSenha(DEMO_SENHA); handleLogin(DEMO_EMAIL, DEMO_SENHA); }} disabled={loading}
+          style={{ width:"100%", background:C.gold, color:"#0B3D2E", border:"none", borderRadius:7, padding:"10px 8px", fontSize:12.5, fontWeight:700, cursor:loading?"default":"pointer", fontFamily:"inherit" }}>
+          {loading ? "Entrando..." : "Entrar na demonstração"}
+        </button>
+        <div style={{ fontSize:10.5, color:C.dim, marginTop:8, fontStyle:"italic", lineHeight:1.4 }}>
+          É uma conta pública de testes: pode bagunçar sem medo, mas não guarde dados de verdade aí.
+        </div>
+      </div>
 
       <VitrineCaptacao />
       <BlocoAvaliacoesLogin />
@@ -4099,6 +4148,9 @@ function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
         </Card>
       )}
 
+      {/* Dicas do dia (rodízio diário) */}
+      <DicasDoDia ehTurmaFechada={ehTurmaFechada} onNavegar={onNavegar} />
+
       {/* Aniversariantes do mês */}
       <AniversariantesDoMes idTime={idTime} />
 
@@ -4175,17 +4227,8 @@ function PaginaInicio({ dados, onNavegar, idTime, time, show }) {
       {/* Aniversariantes do mês */}
       <AniversariantesDoMes idTime={idTime} />
 
-      {/* Dica de importação */}
-      <Card style={{ padding:"14px 20px", background:C.surf2, border:`1px solid ${C.gold}44`, display:"flex", gap:14, alignItems:"flex-start" }}>
-        <span style={{ fontSize:24, flexShrink:0 }}>💡</span>
-        <div>
-          <div style={{ fontWeight:700, color:C.gold, marginBottom:4, fontSize:14 }}>Dica: Use a importação por planilha!</div>
-          <div style={{ fontSize:13, color:C.dim, lineHeight:1.5 }}>
-            Em cada cadastro, clique em <strong style={{color:C.cream}}>📥 Exportar</strong> para baixar uma planilha modelo.
-            Preencha no Excel e clique em <strong style={{color:C.cream}}>📤 Importar</strong> para cadastrar tudo de uma vez — muito mais rápido do que cadastrar um por um!
-          </div>
-        </div>
-      </Card>
+      {/* Dicas do dia (rodízio diário) */}
+      <DicasDoDia ehTurmaFechada={ehTurmaFechada} onNavegar={onNavegar} />
 
       {/* Lista de etapas */}
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
@@ -4947,28 +4990,69 @@ function PaginaIndique({ show }) {
   );
 }
 
+const DICAS = [
+  { ic:"📥", t:"Importe por planilha", d:"Em cada cadastro, clique em 📥 Exportar para baixar uma planilha modelo. Preencha no Excel e clique em 📤 Importar para cadastrar tudo de uma vez — muito mais rápido do que um por um.", c:"Exporte o modelo, preencha no Excel e importe tudo de uma vez." },
+  { ic:"📅", t:"Use só o que precisar", d:"Você não é obrigado a usar tudo. Dá pra controlar só o calendário, só a presença, ou ir até o controle financeiro completo. Comece simples e ative o resto quando quiser." , c:"Use só os módulos que fizerem sentido. Comece simples e ative o resto depois." },
+  { ic:"📲", t:"Compartilhe imagens prontas no grupo", d:"Em vários momentos o sistema gera uma imagem bonita para você mandar direto no grupo do WhatsApp: o resultado de uma partida (com placar, gols e resumo da temporada), a convocação para o próximo jogo, o convite para um encontro da turma, o convite para um evento e o card do craque eleito. É só tocar em 'Compartilhar' e escolher o grupo — a imagem (e o link de presença, quando faz sentido) vai junto, levando a marca do seu time." , c:"O sistema gera a imagem do resultado, da convocação e do craque prontinha pro grupo." },
+  { ic:"🏆", t:"A galera elege o craque", d:"Depois de salvar o placar, abra a votação e mande o link no grupo. Cada um toca no próprio nome e vota em quem brilhou — sem login, sem instalar nada. Você acompanha a contagem, encerra quando quiser e o craque é coroado." , c:"Com o placar salvo, abra a votação e mande o link no grupo — sem login." },
+  { ic:"👑", t:"Craque do Ano", d:"Cada craque eleito vira ponto na temporada. O pódio aparece em Estatísticas e mostra quem a galera mais escolheu no ano." , c:"Cada craque eleito vira ponto na temporada. O pódio fica em Estatísticas." },
+  { ic:"✅", t:"Confirmação de presença sem login", d:"Gere um link e mande no grupo. Cada jogador abre, toca no próprio nome e responde se vai — sem instalar nada e sem senha. Você vê quem confirmou em tempo real." , c:"Mande um link no grupo: cada um toca no próprio nome e responde se vai." },
+  { ic:"⚽", t:"Escalação inteligente", d:"Na hora de escalar, o sistema não deixa repetir o número da camisa e respeita o limite de titulares da modalidade. Menos chance de errar a escalação." , c:"Na escalação, o sistema não deixa repetir camisa nem furar o limite de titulares." },
+  { ic:"🎯", t:"Gols com assistência e minuto", d:"Ao registrar um gol, informe quem deu o passe e o minuto. A artilharia e o ranking de assistências se montam sozinhos, sem você fazer conta." , c:"Informe quem deu o passe: a artilharia e o ranking de assistências se montam sozinhos." },
+  { ic:"💰", t:"Mensalidade sem fofoca", d:"Marque quem pagou mês a mês. Quem está em dia, quem deve e quem é isento aparece numa lista só. Dá até pra marcar todos como pagos de uma vez." , c:"Quem pagou, quem deve e quem é isento numa lista só." },
+  { ic:"💵", t:"Controle de caixa completo", d:"Quer ir além da mensalidade? Registre receitas e despesas e tenha o saldo do time sempre atualizado. Use só se fizer sentido pro seu grupo." , c:"Registre receitas e despesas e tenha o saldo do time sempre atualizado." },
+  { ic:"🎉", t:"Eventos com presença", d:"Cadastre um churrasco ou confraternização e registre quem foi — sem precisar lançar nada financeiro. Serve só pra controlar presença, se quiser." , c:"Cadastre um churrasco e registre quem foi — sem precisar lançar nada financeiro." },
+  { ic:"📊", t:"Seu time numa vitrine pública", d:"As estatísticas do time ficam numa página que qualquer um acessa pelo celular, sem instalar app. Bom pra mostrar a artilharia e o histórico pra galera." , c:"As estatísticas ficam numa página que qualquer um abre pelo celular." },
+  { ic:"👥", t:"Um login, vários times", d:"Se você administra mais de um time com o mesmo e-mail, dá pra alternar entre eles no seletor lá em cima — sem precisar sair e entrar de novo." , c:"Administra mais de um time? Troque pelo seletor lá em cima, sem sair e entrar." },
+  { ic:"🎂", t:"Idade do jogador automática", d:"Cadastre a data de nascimento e o sistema calcula a idade sozinho na lista de jogadores. Dá até pra ordenar do mais novo ao mais velho." , c:"Cadastre o nascimento e o sistema calcula a idade sozinho." },
+  { ic:"📈", t:"Relatório financeiro com gráficos", d:"Em Financeiro → Relatório você vê tudo consolidado: receitas e despesas por mês, de onde veio cada real e em que saiu. Filtre por temporada ou período e exporte em PDF (pra imprimir) ou Excel. Ótimo pra prestar contas pra galera." , c:"Veja receitas e despesas por mês e exporte em PDF pra prestar contas." },
+  { ic:"📍", t:"Link do local no convite", d:"Ao criar uma partida, encontro ou evento, cole o link do Google Maps no campo de localização. Quando você compartilhar o convite, o link vai junto — a galera toca e o mapa abre direto, sem ninguém perguntar 'onde é?'." , c:"Cole o link do mapa na partida: a galera toca e abre direto o caminho." },
+  { ic:"📅", t:"Remarcou? É só editar", d:"Mudou o horário, o campo ou a data do jogo? Na ficha da partida, toque em 'Editar dados' e ajuste na hora — sem precisar apagar e cadastrar tudo de novo." , c:"Mudou data, hora ou campo? Edite na ficha da partida, sem recadastrar." },
+  { ic:"🕐", t:"O horário que você digita é o que vale", d:"A hora do jogo aparece igualzinha pra todo mundo, sem confusão de fuso. Se você marcou 19h, todo mundo vê 19h." , c:"Marcou 19h? Todo mundo vê 19h, sem confusão de fuso." },
+];
+const DICAS_TURMA = [
+  { ic:"🎽", t:"Turma fechada: times internos", d:"No modo turma fechada, você monta times que se enfrentam entre si (Laranja x Preto) e registra cada rodada do racha." , c:"Monte os times que se enfrentam (Laranja x Preto) e registre cada rodada." },
+  { ic:"🧺", t:"Ranking da lavagem do colete", d:"Marque quem levou o fardamento pra lavar em cada encontro. O sistema mantém um ranking — ninguém mais 'esquece' que é a vez dele." , c:"O sistema anota quem levou o fardamento — ninguém mais 'esquece' a vez." },
+  { ic:"🤝", t:"Financeiro do encontro", d:"Lance as entradas e saídas de cada dia de pelada: aluguel da quadra, juiz, material e o rateio da galera. Tudo cai no caixa do time marcado como '🤝 Encontro'." , c:"Lance aluguel da quadra, juiz e o rateio da galera direto no caixa do time." },
+];
+
+// Duas dicas por dia, girando pela data: no dia seguinte entram as próximas da lista.
+// Estável dentro do mesmo dia (abrir várias vezes mostra as mesmas) e sem guardar nada.
+function DicasDoDia({ ehTurmaFechada, onNavegar, quantas = 2 }) {
+  const lista = ehTurmaFechada ? [...DICAS, ...DICAS_TURMA] : DICAS;
+  const hoje = new Date();
+  const diaAno = Math.floor((hoje - new Date(hoje.getFullYear(), 0, 0)) / 86400000);
+  const inicio = (diaAno * quantas) % lista.length;
+  const doDia = Array.from({ length: Math.min(quantas, lista.length) }, (_, k) => lista[(inicio + k) % lista.length]);
+
+  return (
+    <Card style={{ padding:"14px 18px", border:`1px solid ${C.gold}55` }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+        <span style={{ fontSize:11, color:C.gold, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em" }}>💡 Você sabia?</span>
+        {onNavegar && (
+          <button onClick={() => onNavegar("dicas")}
+            style={{ background:"none", border:"none", color:C.dim, fontSize:11, textDecoration:"underline", cursor:"pointer", fontFamily:"inherit", padding:0 }}>
+            ver todas
+          </button>
+        )}
+      </div>
+      {doDia.map((dica, i) => (
+        <div key={dica.t} style={{ display:"flex", gap:11, alignItems:"flex-start", padding:"9px 0", borderTop: i === 0 ? "none" : `1px solid ${C.border}` }}>
+          <span style={{ fontSize:20, flexShrink:0, lineHeight:1.2 }} aria-hidden="true">{dica.ic}</span>
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color:C.gold, marginBottom:2 }}>{dica.t}</div>
+            <div style={{ fontSize:12, color:C.cream, lineHeight:1.45 }}>{dica.c || dica.d}</div>
+          </div>
+        </div>
+      ))}
+      <div style={{ borderTop:`1px solid ${C.border}`, marginTop:4, paddingTop:9, fontSize:11, color:C.dim, textAlign:"center", fontStyle:"italic" }}>
+        Volte amanhã que o Nerd traz outras 👋
+      </div>
+    </Card>
+  );
+}
+
 function PaginaDicas({ ehTurmaFechada }) {
-  const DICAS = [
-    { ic:"📅", t:"Use só o que precisar", d:"Você não é obrigado a usar tudo. Dá pra controlar só o calendário, só a presença, ou ir até o controle financeiro completo. Comece simples e ative o resto quando quiser." },
-    { ic:"📲", t:"Compartilhe imagens prontas no grupo", d:"Em vários momentos o sistema gera uma imagem bonita para você mandar direto no grupo do WhatsApp: o resultado de uma partida (com placar, gols e resumo da temporada), a convocação para o próximo jogo, o convite para um encontro da turma e o convite para um evento. É só tocar em 'Compartilhar' e escolher o grupo — a imagem (e o link de presença, quando faz sentido) vai junto, levando a marca do seu time." },
-    { ic:"✅", t:"Confirmação de presença sem login", d:"Gere um link e mande no grupo. Cada jogador abre, toca no próprio nome e responde se vai — sem instalar nada e sem senha. Você vê quem confirmou em tempo real." },
-    { ic:"⚽", t:"Escalação inteligente", d:"Na hora de escalar, o sistema não deixa repetir o número da camisa e respeita o limite de titulares da modalidade. Menos chance de errar a escalação." },
-    { ic:"🎯", t:"Gols com assistência e minuto", d:"Ao registrar um gol, informe quem deu o passe e o minuto. A artilharia e o ranking de assistências se montam sozinhos, sem você fazer conta." },
-    { ic:"💰", t:"Mensalidade sem fofoca", d:"Marque quem pagou mês a mês. Quem está em dia, quem deve e quem é isento aparece numa lista só. Dá até pra marcar todos como pagos de uma vez." },
-    { ic:"💵", t:"Controle de caixa completo", d:"Quer ir além da mensalidade? Registre receitas e despesas e tenha o saldo do time sempre atualizado. Use só se fizer sentido pro seu grupo." },
-    { ic:"🎉", t:"Eventos com presença", d:"Cadastre um churrasco ou confraternização e registre quem foi — sem precisar lançar nada financeiro. Serve só pra controlar presença, se quiser." },
-    { ic:"📊", t:"Seu time numa vitrine pública", d:"As estatísticas do time ficam numa página que qualquer um acessa pelo celular, sem instalar app. Bom pra mostrar a artilharia e o histórico pra galera." },
-    { ic:"👥", t:"Um login, vários times", d:"Se você administra mais de um time com o mesmo e-mail, dá pra alternar entre eles no seletor lá em cima — sem precisar sair e entrar de novo." },
-    { ic:"🎂", t:"Idade do jogador automática", d:"Cadastre a data de nascimento e o sistema calcula a idade sozinho na lista de jogadores. Dá até pra ordenar do mais novo ao mais velho." },
-    { ic:"📈", t:"Relatório financeiro com gráficos", d:"Em Financeiro → Relatório você vê tudo consolidado: receitas e despesas por mês, de onde veio cada real e em que saiu. Filtre por temporada ou período e exporte em PDF (pra imprimir) ou Excel. Ótimo pra prestar contas pra galera." },
-    { ic:"📍", t:"Link do local no convite", d:"Ao criar uma partida, encontro ou evento, cole o link do Google Maps no campo de localização. Quando você compartilhar o convite, o link vai junto — a galera toca e o mapa abre direto, sem ninguém perguntar 'onde é?'." },
-    { ic:"📅", t:"Remarcou? É só editar", d:"Mudou o horário, o campo ou a data do jogo? Na ficha da partida, toque em 'Editar dados' e ajuste na hora — sem precisar apagar e cadastrar tudo de novo." },
-    { ic:"🕐", t:"O horário que você digita é o que vale", d:"A hora do jogo aparece igualzinha pra todo mundo, sem confusão de fuso. Se você marcou 19h, todo mundo vê 19h." },
-  ];
-  const DICAS_TURMA = [
-    { ic:"🎽", t:"Turma fechada: times internos", d:"No modo turma fechada, você monta times que se enfrentam entre si (Laranja x Preto) e registra cada rodada do racha." },
-    { ic:"🧺", t:"Ranking da lavagem do colete", d:"Marque quem levou o fardamento pra lavar em cada encontro. O sistema mantém um ranking — ninguém mais 'esquece' que é a vez dele." },
-  ];
   const lista = ehTurmaFechada ? [...DICAS, ...DICAS_TURMA] : DICAS;
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:16, maxWidth:720 }}>
@@ -5005,7 +5089,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.28.0" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.32.0" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
