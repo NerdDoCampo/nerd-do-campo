@@ -15,10 +15,9 @@ async function sb(path) {
 // Conta pública de demonstração — divulgada no login, no /conheca e no app público.
 const DEMO_EMAIL = "vemtestar@nerddocampo.com.br";
 const DEMO_SENHA = "teste2026";
-// Copia as credenciais da demo. Usa a API moderna e cai num fallback
-// que funciona no iOS, onde navigator.clipboard costuma falhar.
-async function copiarDemo() {
-  const txt = `${DEMO_EMAIL} / ${DEMO_SENHA}`;
+// Copia um valor solto (e-mail OU senha) para colar direto no campo.
+// Usa a API moderna e cai num fallback que funciona no iOS.
+async function copiarDemo(txt) {
   try { if (navigator?.clipboard) { await navigator.clipboard.writeText(txt); return true; } } catch (e) { /* cai no fallback */ }
   try {
     const ta = document.createElement("textarea");
@@ -32,28 +31,35 @@ async function copiarDemo() {
 
 // Bloco da conta de demonstração (usado no /conheca e no app público)
 function BlocoDemo({ titulo, texto, rodape }) {
-  const [copiou, setCopiou] = useState(false);
+  const [copiado, setCopiado] = useState("");
+  async function copiar(campo, valor) {
+    const ok = await copiarDemo(valor);
+    setCopiado(ok ? campo : "erro");
+    setTimeout(() => setCopiado(""), 2000);
+  }
+  const linha = (campo, rotulo, valor) => (
+    <div style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0" }}>
+      <span style={{ color:C.dim, fontSize:12, width:48, flexShrink:0 }}>{rotulo}</span>
+      <span style={{ color:C.cream, fontFamily:"monospace", fontSize:12, flex:1, wordBreak:"break-all" }}>{valor}</span>
+      <button onClick={() => copiar(campo, valor)} aria-label={`Copiar ${rotulo.toLowerCase()}`}
+        style={{ background:"transparent", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:6, padding:"4px 9px", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0, whiteSpace:"nowrap" }}>
+        {copiado === campo ? "✅" : "📋"}
+      </button>
+    </div>
+  );
   return (
-    <div style={{ border:`1px dashed ${C.gold}`, background:`${C.gold}12`, borderRadius:12, padding:"14px 16px", margin:"18px 0", maxWidth:520, marginLeft:"auto", marginRight:"auto", textAlign:"left" }}>
+    <div style={{ border:`1px dashed ${C.gold}`, background:`${C.gold}12`, borderRadius:12, padding:"14px 16px", margin:"18px auto", maxWidth:520, textAlign:"left" }}>
       <div style={{ fontSize:14, fontWeight:800, color:C.gold, marginBottom:5 }}>{titulo}</div>
       <div style={{ fontSize:12.5, color:C.cream, lineHeight:1.5, marginBottom:10 }}>{texto}</div>
-      <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 11px", marginBottom:10 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:12, padding:"2px 0" }}>
-          <span style={{ color:C.dim }}>E-mail</span><span style={{ color:C.cream, fontFamily:"monospace", wordBreak:"break-all" }}>{DEMO_EMAIL}</span>
-        </div>
-        <div style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:12, padding:"2px 0" }}>
-          <span style={{ color:C.dim }}>Senha</span><span style={{ color:C.cream, fontFamily:"monospace" }}>{DEMO_SENHA}</span>
-        </div>
+      <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"7px 11px", marginBottom:10 }}>
+        {linha("email", "E-mail", DEMO_EMAIL)}
+        <div style={{ borderTop:`1px solid ${C.border}` }} />
+        {linha("senha", "Senha", DEMO_SENHA)}
       </div>
-      <div style={{ display:"flex", gap:8 }}>
-        <a href="/admin" style={{ flex:1, background:C.gold, color:"#0B3D2E", borderRadius:7, padding:"9px 8px", fontSize:12, fontWeight:700, textAlign:"center", textDecoration:"none" }}>
-          Abrir a demonstração
-        </a>
-        <button onClick={async () => { const ok = await copiarDemo(); setCopiou(ok); setTimeout(() => setCopiou(false), 2000); }}
-          style={{ flex:1, background:"transparent", color:C.gold, border:`1px solid ${C.gold}`, borderRadius:7, padding:"9px 8px", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
-          {copiou ? "✅ Copiado!" : "📋 Copiar"}
-        </button>
-      </div>
+      {copiado === "erro" && <div style={{ fontSize:11, color:C.dim, marginBottom:8 }}>Não deu pra copiar — segure o texto para selecionar.</div>}
+      <a href="/admin" style={{ display:"block", background:C.gold, color:"#0B3D2E", borderRadius:7, padding:"10px 8px", fontSize:12.5, fontWeight:700, textAlign:"center", textDecoration:"none" }}>
+        Abrir a demonstração
+      </a>
       {rodape && <div style={{ fontSize:10.5, color:C.dim, marginTop:8, fontStyle:"italic", lineHeight:1.4 }}>{rodape}</div>}
     </div>
   );

@@ -7,10 +7,9 @@ const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG"
 // Conta pública de demonstração — divulgada no login, no /conheca e no app público.
 const DEMO_EMAIL = "vemtestar@nerddocampo.com.br";
 const DEMO_SENHA = "teste2026";
-// Copia as credenciais da demo. Usa a API moderna e cai num fallback
-// que funciona no iOS, onde navigator.clipboard costuma falhar.
-async function copiarDemo() {
-  const txt = `${DEMO_EMAIL} / ${DEMO_SENHA}`;
+// Copia um valor solto (e-mail OU senha) para colar direto no campo.
+// Usa a API moderna e cai num fallback que funciona no iOS.
+async function copiarDemo(txt) {
   try { if (navigator?.clipboard) { await navigator.clipboard.writeText(txt); return true; } } catch (e) { /* cai no fallback */ }
   try {
     const ta = document.createElement("textarea");
@@ -1588,6 +1587,7 @@ function Login({ onLogin, aviso }) {
   const [emailRec, setEmailRec] = useState("");
   const [enviandoRec, setEnviandoRec] = useState(false);
   const [msgRec, setMsgRec] = useState(null);
+  const [copiadoDemo, setCopiadoDemo] = useState("");
 
   async function handleLogin(emailArg, senhaArg) {
     const mail = typeof emailArg === "string" ? emailArg : email;
@@ -1669,24 +1669,24 @@ function Login({ onLogin, aviso }) {
         <div style={{ fontSize:12, color:C.cream, lineHeight:1.5, marginBottom:10 }}>
           Entre na <strong>conta de demonstração</strong> e mexa à vontade — tem dois times prontos, com jogos, jogadores e financeiro pra você explorar.
         </div>
-        <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"9px 11px", marginBottom:10 }}>
-          <div style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:11.5, padding:"2px 0" }}>
-            <span style={{ color:C.dim }}>E-mail</span><span style={{ color:C.cream, fontFamily:"monospace", wordBreak:"break-all" }}>{DEMO_EMAIL}</span>
-          </div>
-          <div style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:11.5, padding:"2px 0" }}>
-            <span style={{ color:C.dim }}>Senha</span><span style={{ color:C.cream, fontFamily:"monospace" }}>{DEMO_SENHA}</span>
-          </div>
+        <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"7px 11px", marginBottom:10 }}>
+          {[["email","E-mail",DEMO_EMAIL],["senha","Senha",DEMO_SENHA]].map(([campo, rotulo, valor], idx) => (
+            <div key={campo} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderTop: idx === 0 ? "none" : `1px solid ${C.border}` }}>
+              <span style={{ color:C.dim, fontSize:11.5, width:46, flexShrink:0 }}>{rotulo}</span>
+              <span style={{ color:C.cream, fontFamily:"monospace", fontSize:11.5, flex:1, wordBreak:"break-all" }}>{valor}</span>
+              <button onClick={async () => { const ok = await copiarDemo(valor); setCopiadoDemo(ok ? campo : "erro"); setTimeout(() => setCopiadoDemo(""), 2000); }}
+                aria-label={`Copiar ${rotulo.toLowerCase()}`}
+                style={{ background:"transparent", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:6, padding:"4px 9px", fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
+                {copiadoDemo === campo ? "✅" : "📋"}
+              </button>
+            </div>
+          ))}
         </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <button onClick={() => { setEmail(DEMO_EMAIL); setSenha(DEMO_SENHA); handleLogin(DEMO_EMAIL, DEMO_SENHA); }} disabled={loading}
-            style={{ flex:1, background:C.gold, color:"#0B3D2E", border:"none", borderRadius:7, padding:"9px 8px", fontSize:11.5, fontWeight:700, cursor:loading?"default":"pointer", fontFamily:"inherit" }}>
-            {loading ? "Entrando..." : "Entrar na demonstração"}
-          </button>
-          <button onClick={async () => { const ok = await copiarDemo(); setErro(ok ? "" : "Não deu pra copiar — selecione o texto acima."); }}
-            style={{ flex:1, background:"transparent", color:C.gold, border:`1px solid ${C.gold}`, borderRadius:7, padding:"9px 8px", fontSize:11.5, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
-            📋 Copiar
-          </button>
-        </div>
+        {copiadoDemo === "erro" && <div style={{ fontSize:11, color:C.dim, marginBottom:8 }}>Não deu pra copiar — segure o texto para selecionar.</div>}
+        <button onClick={() => { setEmail(DEMO_EMAIL); setSenha(DEMO_SENHA); handleLogin(DEMO_EMAIL, DEMO_SENHA); }} disabled={loading}
+          style={{ width:"100%", background:C.gold, color:"#0B3D2E", border:"none", borderRadius:7, padding:"10px 8px", fontSize:12.5, fontWeight:700, cursor:loading?"default":"pointer", fontFamily:"inherit" }}>
+          {loading ? "Entrando..." : "Entrar na demonstração"}
+        </button>
         <div style={{ fontSize:10.5, color:C.dim, marginTop:8, fontStyle:"italic", lineHeight:1.4 }}>
           É uma conta pública de testes: pode bagunçar sem medo, mas não guarde dados de verdade aí.
         </div>
