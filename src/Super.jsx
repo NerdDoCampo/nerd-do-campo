@@ -485,10 +485,14 @@ function DashboardSuper() {
   const { data: _novosSelf } = useQuery(() => api.get(`solicitacao_time?select=id&origem=eq.self&status=eq.aprovado&criado_em=gte.${new Date(Date.now()-7*86400000).toISOString()}`));
   const nErrosAbertos = useMemo(() => new Set((errosAbertos||[]).map(e=>e.hash)).size, [errosAbertos]);
   const { data: avalPendentes, reload: reloadAvalPend } = useQuery(() => api.get(`avaliacao?select=id&status=eq.pendente`));
-  // Telefone da solicitação original (fallback p/ times antigos sem telefone gravado)
-  const { data: _solTelefones } = useQuery(() => api.get(`solicitacao_time?select=telefone,id_time_criado&id_time_criado=not.is.null&telefone=not.is.null&limit=2000`));
+  // Telefone e nome do responsável da solicitação (fallback p/ times sem esses dados gravados)
+  const { data: _solTelefones } = useQuery(() => api.get(`solicitacao_time?select=telefone,nome_responsavel,id_time_criado&id_time_criado=not.is.null&limit=2000`));
   const mapaSolTel = useMemo(() => {
     const m = {}; (_solTelefones||[]).forEach(s => { if (s.id_time_criado && s.telefone) m[s.id_time_criado] = s.telefone; });
+    return m;
+  }, [_solTelefones]);
+  const mapaSolNome = useMemo(() => {
+    const m = {}; (_solTelefones||[]).forEach(s => { if (s.id_time_criado && s.nome_responsavel) m[s.id_time_criado] = s.nome_responsavel; });
     return m;
   }, [_solTelefones]);
   const { toast, show, close } = useToast();
@@ -714,6 +718,17 @@ function DashboardSuper() {
                     }}>
                     {t.destaque ? "★ Destaque" : "☆ Destaque"}
                   </Btn>
+                  <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px", color:C.gold }}
+                      onClick={async () => {
+                        const primeiroNome = (mapaSolNome[t.id_time] || "").trim().split(/\s+/)[0];
+                        const saudacao = primeiroNome ? `E aí, ${primeiroNome}!` : "E aí!";
+                        const msg = `${saudacao} 👋\n\nDeu tudo certo com o cadastro do *${t.nome}* — o time já tá no ar no Nerd do Campo! 🎉\n\nVocê já pode entrar no painel com o *e-mail e a senha que criou* no cadastro:\n\n🔗 https://nerddocampo.com.br/admin\n\nUma dica: a plataforma é bem completa, mas não precisa usar tudo de uma vez. Dá pra começar simples — só com o calendário de jogos, ou só com a presença — e ir ativando o resto (estatísticas, mensalidades, financeiro) conforme a necessidade do time. O sistema se adapta ao que você quiser controlar.\n\nPra te ajudar nos primeiros passos, tem um *manual completo no módulo de Ajuda* do sistema. E qualquer dúvida, é só responder este zap que a gente te dá uma força.\n\n⭐ Ah, e quando pegar o jeito da casa, deixa uma *avaliação do app* ali dentro do sistema — teu retorno ajuda outros times a conhecerem o Nerd do Campo (e a gente a melhorar sempre).\n\nVai me contando também como o time tá evoluindo por aí e se está tudo funcionando como esperado — esse retorno pelo zap me ajuda demais a deixar o sistema cada vez melhor.\n\nBom jogo e bons números! ⚽\n\nAbraço,\n*Nerd do Campo*`;
+                        (await copiarTexto(msg))
+                          ? show("Boas-vindas copiada! Cole no WhatsApp do responsável.")
+                          : show("Não deu pra copiar automático — selecione o texto manualmente.", "error");
+                      }}>
+                      👋 Boas-vindas
+                    </Btn>
                   <Btn variant="secondary" style={{ fontSize:11, padding:"5px 12px", color:C.gold }}
                       onClick={async () => {
                         const msg = `E aí! Tudo certo? 👋\n\nAqui é o *Nerd do Campo* ⚽\n\nNotei que o teu time deu uma sumida do sistema (ou ainda não deu as caras) e fiquei na dúvida do que houve.\n\nSe você chegou a entrar e algo te travou, me conta que me ajuda demais:\n\n🔧 Se algo *não funcionou* ou ficou confuso, eu arrumo — o sistema evolui com esse retorno.\n\n🧭 Se pareceu *coisa demais*, dá pra usar bem simples: só o calendário de jogos, ou só a presença da galera. O resto liga quando quiser.\n\n💬 E se o time deu uma parada ou resolveram não usar, sem problema — só me diz que eu não te encho mais. 😄\n\nQualquer coisa, responde aqui mesmo. Abraço do Nerd!`;
@@ -3416,7 +3431,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.30.1";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.31.0";
   if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 
   useEffect(() => {
