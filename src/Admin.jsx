@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.34.0";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.35.0";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -3715,6 +3715,7 @@ const MENU_BASE = [
   { id:"posicoes",    label:"Posições",    icon:"🎯", grupo:"Cadastros",   hint:"Quem é zaga, quem é ataque. Monte o time dos seus sonhos." },
   { id:"adversarios", label:"Adversários", icon:"⚔️", grupo:"Cadastros",   hint:"Conheça quem vem aí. Todo rival tem seu cadastro." },
   { id:"jogadores",   label:"Jogadores",   icon:"👕", grupo:"Cadastros",   hint:"Os craques (e os pernas de pau também). Seu elenco completo." },
+  { id:"premiacao",   label:"Premiação",   icon:"🏆", grupo:"Cadastros",   hint:"A Lenda do Ano e os craques de cada categoria. Você define o peso de cada uma." },
   { id:"partidas",    label:"Partidas",    icon:"📅", grupo:"Jogos",       hint:"Aqui o jogo acontece. Escale, marque o placar, registre os gols." },
   { id:"tiposmov",    label:"Tipos de Mov.", icon:"🏷️", grupo:"Financeiro", hint:"Organize as entradas e saídas. Cada real no seu lugar." },
   { id:"mensalidades",label:"Mensalidades", icon:"💰", grupo:"Financeiro", hint:"Quem tá em dia e quem tá devendo. Você vai saber na hora." },
@@ -5052,6 +5053,237 @@ function DicasDoDia({ ehTurmaFechada, onNavegar, quantas = 2 }) {
   );
 }
 
+// ── Premiação / Lenda do Ano ──────────────────────────────────
+// Categorias que somam pontos na Lenda. As "por colocação" (Fair Play e
+// Assiduidade) pontuam pela posição; as demais, proporcional ao valor
+// (valor/líder × 100). Cavalo do Ano fica FORA da Lenda (troféu de zoeira).
+const PREMIO_CATS = [
+  { id:"craque",        peso:"peso_craque",        ic:"⭐", nome:"Craque do Ano",  sub:"votos da galera",    campo:"craque_titulos",  modo:"prop", unidade:"voto" },
+  { id:"artilheiro",    peso:"peso_artilheiro",    ic:"🥅", nome:"Artilheiro",      sub:"gols na temporada",  campo:"gols",            modo:"prop", unidade:"gol" },
+  { id:"garcom",        peso:"peso_garcom",        ic:"🅰️", nome:"Garçom",          sub:"assistências",       campo:"assistencias",    modo:"prop", unidade:"assist." },
+  { id:"assiduidade",   peso:"peso_assiduidade",   ic:"🎯", nome:"Assiduidade",     sub:"presença nos jogos", campo:"jogos",           modo:"pos",  unidade:"jogo" },
+  { id:"fairplay",      peso:"peso_fairplay",      ic:"🕊️", nome:"Fair Play",       sub:"menos cartões",      campo:"cartoes",         modo:"posinv", unidade:"cartão" },
+  { id:"aproveitamento",peso:"peso_aproveitamento",ic:"📈", nome:"Aproveitamento",  sub:"% de vitórias",      campo:"aproveitamento_pct", modo:"prop", unidade:"%" },
+  { id:"rodizio",       peso:"peso_rodizio",       ic:"🍊", nome:"Rei do rodízio",  sub:"turma fechada",      campo:"vitorias_internas", modo:"prop", unidade:"vitória", tf:true },
+  { id:"lavagem",       peso:"peso_lavagem",       ic:"🧺", nome:"Colega da lavagem", sub:"turma fechada",    campo:"lavagens",        modo:"prop", unidade:"lavagem", tf:true },
+];
+
+// Pontos de posição: 1º=100 e cai proporcional até o último colocado.
+function _pontosPorColocacao(n, i) { return n <= 1 ? 100 : Math.round((100 * (n - i)) / n); }
+
+// Calcula os pontos (0–100) de uma categoria para uma lista de jogadores já filtrada.
+function _rankearCategoria(lista, cat) {
+  const comValor = lista
+    .map(j => ({ ...j, _valor: Number(j[cat.campo] || 0) }))
+    .filter(j => cat.modo === "posinv" ? true : j._valor > 0); // no fair play, zero cartão é o melhor
+  if (cat.modo === "prop") {
+    const lider = Math.max(...comValor.map(j => j._valor), 0);
+    const rank = comValor
+      .map(j => ({ ...j, _pts: lider > 0 ? Math.round((100 * j._valor) / lider) : 0 }))
+      .sort((a, b) => b._valor - a._valor);
+    return rank;
+  }
+  // "pos": mais é melhor (assiduidade). "posinv": menos é melhor (fair play).
+  const ordenada = [...comValor].sort((a, b) =>
+    cat.modo === "posinv" ? a._valor - b._valor : b._valor - a._valor);
+  const n = ordenada.length;
+  return ordenada.map((j, i) => ({ ...j, _pts: _pontosPorColocacao(n, i) }));
+}
+
+function PaginaPremiacao({ idTime, temporada, ehTurmaFechada, show, readOnly }) {
+  const { data: cfgRaw, loading: loadCfg, reload: reloadCfg } = useQuery(
+    () => idTime ? api.get(`premiacao_config?id_time=eq.${idTime}&select=*`) : Promise.resolve([]), [idTime]);
+  const { data: base, loading: loadBase } = useQuery(
+    () => temporada?.id_temporada ? api.get(`vw_premiacao_base?id_temporada=eq.${temporada.id_temporada}&select=*`) : Promise.resolve([]),
+    [temporada?.id_temporada]);
+  const { data: rodizio } = useQuery(
+    () => (ehTurmaFechada && temporada?.id_temporada) ? api.get(`vw_premiacao_rodizio?id_temporada=eq.${temporada.id_temporada}&select=*`) : Promise.resolve([]),
+    [temporada?.id_temporada, ehTurmaFechada]);
+  const { data: lavagem } = useQuery(
+    () => (ehTurmaFechada && temporada?.id_temporada) ? api.get(`vw_premiacao_lavagem?id_temporada=eq.${temporada.id_temporada}&select=*`) : Promise.resolve([]),
+    [temporada?.id_temporada, ehTurmaFechada]);
+
+  const PADRAO = { peso_craque:5, peso_artilheiro:4, peso_garcom:3, peso_assiduidade:2, peso_fairplay:1, peso_aproveitamento:2, peso_rodizio:0, peso_lavagem:0, minimo_jogos:5 };
+  const [cfg, setCfg] = useState(PADRAO);
+  const [salvando, setSalvando] = useState(false);
+  const [abertos, setAbertos] = useState({});
+  useEffect(() => { if (cfgRaw) setCfg(cfgRaw[0] ? { ...PADRAO, ...cfgRaw[0] } : PADRAO); }, [cfgRaw]);
+
+  // junta rodízio e lavagem (turma fechada) na base por jogador
+  const jogadores = useMemo(() => {
+    const mapaR = {}; (rodizio||[]).forEach(r => { mapaR[r.id_jogador] = r.vitorias_internas; });
+    const mapaL = {}; (lavagem||[]).forEach(l => { mapaL[l.id_jogador] = l.lavagens; });
+    return (base||[]).map(j => ({ ...j, vitorias_internas: mapaR[j.id_jogador]||0, lavagens: mapaL[j.id_jogador]||0 }));
+  }, [base, rodizio, lavagem]);
+
+  const catsAtivas = PREMIO_CATS.filter(c => (!c.tf || ehTurmaFechada) && Number(cfg[c.peso]||0) > 0);
+
+  // filtra pelo mínimo de jogos e monta rankings + lenda
+  const { lenda, porCategoria } = useMemo(() => {
+    const elegiveis = jogadores.filter(j => Number(j.jogos||0) >= Number(cfg.minimo_jogos||0));
+    const porCategoria = {};
+    const pontosLenda = {}; // id_jogador -> soma ponderada
+    catsAtivas.forEach(cat => {
+      const rank = _rankearCategoria(elegiveis, cat);
+      porCategoria[cat.id] = rank;
+      const peso = Number(cfg[cat.peso]||0);
+      rank.forEach(j => { pontosLenda[j.id_jogador] = (pontosLenda[j.id_jogador]||0) + j._pts * peso; });
+    });
+    const lenda = elegiveis
+      .map(j => ({ ...j, _total: Math.round(pontosLenda[j.id_jogador]||0) }))
+      .filter(j => j._total > 0)
+      .sort((a, b) => b._total - a._total);
+    return { lenda, porCategoria };
+  }, [jogadores, cfg, catsAtivas]);
+
+  // Cavalo do Ano — mais cartões, fora da lenda, sem filtro de mínimo
+  const cavalo = useMemo(() =>
+    [...jogadores].filter(j => Number(j.cartoes||0) > 0).sort((a, b) => b.cartoes - a.cartoes).slice(0, 5),
+  [jogadores]);
+
+  async function salvar() {
+    setSalvando(true);
+    const body = {
+      id_time: idTime,
+      peso_craque:cfg.peso_craque, peso_artilheiro:cfg.peso_artilheiro, peso_garcom:cfg.peso_garcom,
+      peso_assiduidade:cfg.peso_assiduidade, peso_fairplay:cfg.peso_fairplay, peso_aproveitamento:cfg.peso_aproveitamento,
+      peso_rodizio:cfg.peso_rodizio, peso_lavagem:cfg.peso_lavagem, minimo_jogos:cfg.minimo_jogos,
+      atualizado_em: new Date().toISOString(),
+    };
+    try {
+      await sb(`premiacao_config?on_conflict=id_time`, { method:"POST", body: JSON.stringify(body), prefer: "resolution=merge-duplicates" });
+      show && show("Configuração salva!"); reloadCfg && reloadCfg();
+    } catch { show && show("Não consegui salvar. Tente de novo.", "error"); }
+    setSalvando(false);
+  }
+
+  function passo(campo, delta, max = 10) {
+    setCfg(c => ({ ...c, [campo]: Math.max(0, Math.min(max, Number(c[campo]||0) + delta)) }));
+  }
+
+  if (loadCfg || loadBase) return <Spinner/>;
+  if (!temporada?.id_temporada) return <EstadoVazio icone="📆" titulo="Sem temporada" texto="Crie uma temporada e registre jogos para começar a premiação." />;
+
+  const avatar = (j, tam = 40) => j.foto_url
+    ? <img src={j.foto_url} alt="" style={{ width:tam, height:tam, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}` }}/>
+    : <div style={{ width:tam, height:tam, borderRadius:"50%", background:_corAvatar(j.nome), display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:800, fontSize:tam*0.34 }}>{_iniciais(j.nome)}</div>;
+  const nomeJ = j => j.apelido || j.nome || "—";
+
+  const Stepper = ({ campo, max = 10 }) => (
+    <span style={{ display:"flex", alignItems:"center", flexShrink:0 }}>
+      <button onClick={() => passo(campo, -1, max)} disabled={readOnly} style={{ width:30, height:30, border:`1px solid ${C.border}`, background:C.surf2, color:C.cream, fontSize:17, fontWeight:700, cursor:readOnly?"default":"pointer", borderRadius:"7px 0 0 7px" }}>−</button>
+      <span style={{ width:38, height:30, borderTop:`1px solid ${C.border}`, borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:15, fontWeight:800, color:Number(cfg[campo])>0?C.gold:C.dim, background:C.bg }}>{cfg[campo]}</span>
+      <button onClick={() => passo(campo, +1, max)} disabled={readOnly} style={{ width:30, height:30, border:`1px solid ${C.border}`, background:C.surf2, color:C.cream, fontSize:17, fontWeight:700, cursor:readOnly?"default":"pointer", borderRadius:"0 7px 7px 0" }}>+</button>
+    </span>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:700, borderLeft:`3px solid ${C.gold}`, paddingLeft:10 }}>🏆 Premiação</div>
+
+      {/* CONFIG */}
+      <Card style={{ padding:"14px 16px" }}>
+        <div style={{ fontSize:11, color:C.gold, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>Peso das categorias (0 = desligada)</div>
+        <div style={{ fontSize:12, color:C.dim, marginBottom:10, lineHeight:1.4 }}>A Lenda do Ano é a soma dos pontos de cada categoria, ajustada pela posição de cada jogador e multiplicada pelo peso.</div>
+        {PREMIO_CATS.filter(c => !c.tf || ehTurmaFechada).map(cat => (
+          <div key={cat.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
+            <span style={{ fontSize:19, width:26, textAlign:"center", flexShrink:0 }} aria-hidden="true">{cat.ic}</span>
+            <span style={{ flex:1, fontSize:13.5, color:C.cream, fontWeight:600 }}>{cat.nome}<small style={{ display:"block", color:C.dim, fontSize:11, fontWeight:400 }}>{cat.sub}</small></span>
+            <Stepper campo={cat.peso}/>
+          </div>
+        ))}
+        <div style={{ display:"flex", alignItems:"center", gap:10, marginTop:12, paddingTop:12, borderTop:`1px dashed ${C.border}` }}>
+          <span style={{ flex:1, fontSize:13, color:C.cream, fontWeight:600 }}>🎮 Mínimo de jogos pra entrar</span>
+          <Stepper campo="minimo_jogos" max={100}/>
+        </div>
+        {!readOnly && (
+          <button onClick={salvar} disabled={salvando} style={{ marginTop:12, width:"100%", background:C.gold, color:"#0B3D2E", border:"none", borderRadius:8, padding:11, fontSize:13, fontWeight:800, cursor:salvando?"default":"pointer" }}>
+            {salvando ? "Salvando..." : "Salvar configuração"}
+          </button>
+        )}
+      </Card>
+
+      {/* LENDA DO ANO */}
+      <Card style={{ padding:"14px 16px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+          <span style={{ fontSize:20 }}>👑</span>
+          <span style={{ fontSize:15, fontWeight:800, color:C.gold }}>Lenda do Ano {temporada?.nome ? `· ${temporada.nome}` : ""}</span>
+        </div>
+        {lenda.length === 0 ? (
+          <div style={{ fontSize:13, color:C.dim, padding:"8px 0" }}>Sem jogadores suficientes ainda. Ajuste o mínimo de jogos ou registre mais partidas.</div>
+        ) : (
+          <>
+            <div style={{ display:"flex", alignItems:"flex-end", gap:8, justifyContent:"center", marginBottom:8 }}>
+              {[lenda[1], lenda[0], lenda[2]].map((j, k) => j ? (
+                <div key={j.id_jogador} style={{ flex:1, textAlign:"center", background:C.surf2, borderRadius:"10px 10px 0 0", padding: k===1?"16px 4px 8px":"10px 4px 8px" }}>
+                  <div style={{ fontSize:24 }}>{k===1?"🥇":k===0?"🥈":"🥉"}</div>
+                  <div style={{ margin:"4px auto" }}>{avatar(j, k===1?48:40)}</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:C.cream, lineHeight:1.15 }}>{nomeJ(j)}</div>
+                  <div style={{ fontSize:13, fontWeight:800, color:C.gold, marginTop:3 }}>{j._total}</div>
+                </div>
+              ) : <div key={k} style={{ flex:1 }}/>) }
+            </div>
+            {lenda.slice(3).map((j, i) => (
+              <div key={j.id_jogador} style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 0", borderBottom: i===lenda.slice(3).length-1?"none":`1px solid ${C.border}`, fontSize:13 }}>
+                <span style={{ width:20, color:C.dim, fontWeight:800, textAlign:"center" }}>{i+4}</span>
+                <span style={{ flex:1, color:C.cream, fontWeight:600 }}>{nomeJ(j)}</span>
+                <span style={{ color:C.gold, fontWeight:800 }}>{j._total}</span>
+              </div>
+            ))}
+          </>
+        )}
+      </Card>
+
+      {/* CATEGORIAS */}
+      {catsAtivas.length > 0 && (
+        <div style={{ fontSize:11, color:C.gold, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.08em", margin:"2px 4px" }}>Melhor em cada categoria</div>
+      )}
+      {catsAtivas.map(cat => {
+        const rank = porCategoria[cat.id] || [];
+        const aberto = abertos[cat.id];
+        return (
+          <Card key={cat.id} style={{ padding:0, overflow:"hidden" }}>
+            <button onClick={() => setAbertos(a => ({ ...a, [cat.id]: !a[cat.id] }))}
+              style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"11px 14px", background:C.surf2, border:"none", cursor:"pointer", fontFamily:"inherit" }}>
+              <span style={{ fontSize:17 }}>{cat.ic}</span>
+              <span style={{ flex:1, textAlign:"left", fontSize:13.5, fontWeight:700, color:C.cream }}>{cat.nome}</span>
+              <span style={{ fontSize:11, color:C.gold, fontWeight:800, background:"rgba(232,160,32,.14)", borderRadius:20, padding:"2px 9px" }}>peso {cfg[cat.peso]}</span>
+              <span style={{ color:C.dim, fontSize:12 }}>{aberto?"▲":"▼"}</span>
+            </button>
+            {aberto && (
+              <div style={{ padding:"4px 14px 8px" }}>
+                {rank.length === 0 ? <div style={{ fontSize:12, color:C.dim, padding:"8px 0" }}>Ninguém pontuou aqui ainda.</div> :
+                  rank.map((j, i) => (
+                    <div key={j.id_jogador} style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 0", borderBottom: i===rank.length-1?"none":`1px solid ${C.border}`, fontSize:13 }}>
+                      <span style={{ width:22, textAlign:"center", fontWeight:800, color: i===0?C.gold:C.dim }}>{i===0?"🥇":i+1}</span>
+                      <span style={{ flex:1, color:C.cream, fontWeight:600 }}>{nomeJ(j)} <span style={{ color:C.dim, fontSize:12 }}>· {j._valor}{cat.unidade==="%"?"%":` ${cat.unidade}${j._valor!==1?"s":""}`}</span></span>
+                      <span style={{ color:C.gold, fontWeight:800 }}>{j._pts}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </Card>
+        );
+      })}
+
+      {/* CAVALO DO ANO */}
+      {cavalo.length > 0 && (
+        <div style={{ border:`1px dashed ${C.loss}`, background:"rgba(229,57,53,.08)", borderRadius:12, padding:"13px 15px" }}>
+          <div style={{ fontSize:14, fontWeight:800, color:"#ff6b66", marginBottom:3 }}>🐴 Cavalo do Ano</div>
+          <div style={{ fontSize:11, color:C.dim, marginBottom:10 }}>Mais cartões da temporada. Fora da Lenda — é só a zoeira do grupo.</div>
+          {cavalo.map((j, i) => (
+            <div key={j.id_jogador} style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 0", borderBottom: i===cavalo.length-1?"none":"1px solid rgba(229,57,53,.2)", fontSize:13 }}>
+              <span style={{ width:22, textAlign:"center", fontWeight:800, color:"#ff6b66" }}>{i===0?"🐴":i+1}</span>
+              <span style={{ flex:1, color:C.cream, fontWeight:600 }}>{nomeJ(j)}</span>
+              <span style={{ color:"#ff6b66", fontWeight:800 }}>{j.amarelos}🟨{Number(j.vermelhos)>0?` · ${j.vermelhos}🟥`:""}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PaginaDicas({ ehTurmaFechada }) {
   const lista = ehTurmaFechada ? [...DICAS, ...DICAS_TURMA] : DICAS;
   return (
@@ -5089,7 +5321,7 @@ function PaginaAjuda() {
           O manual contém o guia completo do sistema — desde o cadastro inicial
           até o controle de mensalidades. Atualizado para a versão atual.
         </div>
-        <a href="/manual.pdf?v=1.32.0" target="_blank" rel="noopener noreferrer"
+        <a href="/manual.pdf?v=1.35.0" target="_blank" rel="noopener noreferrer"
           style={{ display:"inline-flex", alignItems:"center", gap:10,
             background:C.gold, color:"#0B3D2E", borderRadius:10,
             padding:"14px 28px", fontFamily:"inherit", fontWeight:800,
@@ -7302,6 +7534,7 @@ export default function AdminAppCompleto() {
           {menu === "posicoes"    && (<>{secTitle("Posições")}<CrudPosicoes idTime={idTime} show={show} readOnly={!canEdit("posicoes")} /></>)}
           {menu === "times_internos" && (<>{secTitle("Times Internos")}<CrudTimesInternos idTime={idTime} show={show} readOnly={!canEdit("times_internos")} /></>)}
           {menu === "temporadas"  && (<>{secTitle("Temporadas")}<CrudTemporadas idTime={idTime} show={show} readOnly={!canEdit("temporadas")} ehTurmaFechada={ehTurmaFechada} /></>)}
+          {menu === "premiacao"   && (<PaginaPremiacao idTime={idTime} temporada={temporadaSel} ehTurmaFechada={ehTurmaFechada} show={show} readOnly={!canEdit("premiacao")} />)}
           {menu === "mensalidades" && (<CrudMensalidades idTime={idTime} show={show} readOnly={!canEdit("mensalidades")}/>)}
           {menu === "caixa"         && (<CrudCaixa idTime={idTime} show={show} readOnly={!canEdit("caixa")}/>)}
           {menu === "relatorio"     && (canVer("caixa") ? <RelatorioFinanceiro idTime={idTime} show={show}/> : <EstadoVazio icone="🔒" titulo="Sem acesso" texto="Você não tem permissão para ver o relatório financeiro. Fale com o responsável pelo time."/>)}
@@ -9632,6 +9865,7 @@ const MODULOS_ADMIN = [
   { id:"app",          label:"👁️ Visão App" },
   { id:"partidas",     label:"📅 Partidas" },
   { id:"jogadores",    label:"👕 Jogadores" },
+  { id:"premiacao",    label:"🏆 Premiação" },
   { id:"adversarios",  label:"⚔️ Adversários" },
   { id:"campos",       label:"🏟️ Campos" },
   { id:"posicoes",     label:"🎯 Posições" },
