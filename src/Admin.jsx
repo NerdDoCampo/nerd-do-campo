@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.35.0";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.35.1";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -3379,7 +3379,6 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
           <FormGol
             partida={partida}
             participacoes={participacoes || []}
-            jogadores={jogadores || []}
             meuTime={meuTime}
             onSalvo={() => { setModalGol(false); reloadGols(); show("Gol registrado!"); }}
             show={show}
@@ -3593,7 +3592,7 @@ function FormEscalacao({ partida, jogadores, posicoes, participacoes, meuTime, o
 }
 
 // ── FORM GOL ──────────────────────────────────────────────────
-function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, readOnly = false }) {
+function FormGol({ partida, participacoes, meuTime, onSalvo, show, readOnly = false }) {
   const { confirmar, dialogo } = useConfirm();
   const [form, setForm] = useState({ id_participacao: "", periodo: "1", minuto: "", penalti: "N", gol_contra: "N", id_assistente: "" });
   const [saving, setSaving] = useState(false);
@@ -3655,7 +3654,7 @@ function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, re
         minuto: minuto,
         penalti: ehAdversario ? "N" : form.penalti,
         gol_contra: ehAdversario ? "S" : form.gol_contra,
-        id_assistente: (!ehAdversario && form.id_assistente) ? Number(form.id_assistente) : null,
+        id_assistente: (!ehAdversario && form.gol_contra !== "S" && form.id_assistente) ? Number(form.id_assistente) : null,
       });
       onSalvo();
     } catch (e) { show(e.message, "error"); }
@@ -3664,10 +3663,22 @@ function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, re
 
   const ehAdversario = form.id_participacao === "ADVERSARIO";
 
+  // A assistência só pode ser de quem ESTÁ ESCALADO nesta partida (mesmo critério
+  // do autor do gol) e nunca do próprio autor — ninguém assiste o próprio gol.
+  const idJogadorAutor = participacoes.find(pa => String(pa.id_participacao) === String(form.id_participacao))?.id_jogador;
+  const assistentesElegiveis = participacoes.filter(pa => !idJogadorAutor || pa.id_jogador !== idJogadorAutor);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {dialogo}
-      <Select label="Quem fez o gol *" value={form.id_participacao} onChange={e => set("id_participacao", e.target.value)}>
+      <Select label="Quem fez o gol *" value={form.id_participacao}
+        onChange={e => {
+          const v = e.target.value;
+          // se o novo autor era o assistente escolhido, limpa a assistência
+          const novoAutor = participacoes.find(pa => String(pa.id_participacao) === String(v))?.id_jogador;
+          setForm(f => ({ ...f, id_participacao: v,
+            id_assistente: (novoAutor && String(f.id_assistente) === String(novoAutor)) ? "" : f.id_assistente }));
+        }}>
         <option value="">Selecione...</option>
         {participacoes.map(pa => <option key={pa.id_participacao} value={pa.id_participacao}>#{pa.camisa} — {pa.jogador?.apelido || pa.jogador?.nome}</option>)}
         <option value="ADVERSARIO">⚽ Gol contra do adversário (a nosso favor)</option>
@@ -3688,15 +3699,20 @@ function FormGol({ partida, participacoes, jogadores, meuTime, onSalvo, show, re
           <Select label="Pênalti?" value={form.penalti} onChange={e => set("penalti", e.target.value)}>
             <option value="N">Não</option><option value="S">Sim</option>
           </Select>
-          <Select label="Gol Contra?" value={form.gol_contra} onChange={e => set("gol_contra", e.target.value)}>
+          <Select label="Gol Contra?" value={form.gol_contra}
+            onChange={e => {
+              const v = e.target.value;
+              // gol contra não tem assistência: limpa o que estiver escolhido
+              setForm(f => ({ ...f, gol_contra: v, id_assistente: v === "S" ? "" : f.id_assistente }));
+            }}>
             <option value="N">Não</option><option value="S">Sim</option>
           </Select>
         </div>
       )}
-      {!ehAdversario && (
+      {!ehAdversario && form.gol_contra !== "S" && (
         <Select label="Assistência (opcional)" value={form.id_assistente} onChange={e => set("id_assistente", e.target.value)}>
           <option value="">Sem assistência</option>
-          {jogadores.map(j => <option key={j.id_jogador} value={j.id_jogador}>#{j.camisa} — {j.apelido || j.nome}</option>)}
+          {assistentesElegiveis.map(pa => <option key={pa.id_participacao} value={pa.id_jogador}>#{pa.camisa} — {pa.jogador?.apelido || pa.jogador?.nome}</option>)}
         </Select>
       )}
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
