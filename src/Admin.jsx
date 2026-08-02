@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.35.1";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.36.0";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -2793,6 +2793,14 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
     if (!editDados.data) { show("Informe a data.", "error"); return; }
     if (!linkLocalValido(editDados.link_local)) { show(`Link inválido. Recebido: "${String(editDados.link_local).slice(0,60)}". Cole um link do mapa.`, "error"); return; }
     try {
+      // REGRA 10 (também na edição): não permitir colidir com outra partida na mesma data.
+      // Exclui a própria partida da checagem — senão ela sempre "encontraria a si mesma".
+      const dataDia = editDados.data;
+      const colide = await api.get(`partida?id_temporada=eq.${partida.id_temporada}&data=gte.${dataDia}T00:00:00&data=lte.${dataDia}T23:59:59&cancelada=eq.N&id_partida=neq.${partida.id_partida}&select=id_partida&limit=1`);
+      if (colide && colide.length > 0) {
+        show("Já existe outra partida cadastrada nesta data para este time.", "error");
+        return;
+      }
       const novaData = montarDataHoraUTC(editDados.data, editDados.hora || "12:00");
       const body = {
         data: novaData,
@@ -3079,7 +3087,7 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
                         <td style={{ padding: "10px 12px", fontWeight: 700 }}>{pa.jogador?.apelido || pa.jogador?.nome}</td>
                         <td style={{ padding: "10px 12px" }}><PosicaoCell pa={pa} posicoes={posicoes} reload={reloadPart} show={show} readOnly={readOnly} /></td>
                         <td style={{ padding: "10px 12px", textAlign: "center" }}><ToggleCell pa={pa} field="titular" reload={reloadPart} show={show} /></td>
-                        <td style={{ padding: "10px 12px", textAlign: "center" }}><ToggleCell pa={pa} field="capitao" reload={reloadPart} show={show} /></td>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}><ToggleCell pa={pa} field="capitao" reload={reloadPart} show={show} exclusivo /></td>
                         <td style={{ padding: "10px 12px", textAlign: "center" }}><NumCell pa={pa} field="cartao_amarelo" reload={reloadPart} show={show} /></td>
                         <td style={{ padding: "10px 12px", textAlign: "center" }}><NumCell pa={pa} field="cartao_vermelho" reload={reloadPart} show={show} /></td>
                         <td style={{ padding: "10px 12px", textAlign: "center" }}><NumCell pa={pa} field="gols_contra" reload={reloadPart} show={show} /></td>
@@ -3391,15 +3399,24 @@ function FichaPartida({ partida: p0, onVoltar, readOnly, idTime, temporada }) {
 }
 
 // ── Células editáveis da escalação ────────────────────────────
-function ToggleCell({ pa, field, reload, show }) {
+function ToggleCell({ pa, field, reload, show, exclusivo = false }) {
   const [val, setVal]     = useState(pa[field]);
   const [saving, setSaving] = useState(false);
+  // sem isso, um toggle "exclusivo" (capitão) não refletiria nas OUTRAS linhas
+  // quando o reload trouxer o valor "N" atualizado — cada célula guarda seu
+  // próprio estado local e não resincroniza sozinha com a prop.
+  useEffect(() => { setVal(pa[field]); }, [pa[field]]);
   async function toggle() {
     setSaving(true);
     const novo = val === "S" ? "N" : "S";
     try {
+      // campo exclusivo (ex: capitão): só um por partida — desmarca os outros antes
+      if (exclusivo && novo === "S" && pa.id_partida) {
+        await api.patch(`participacao?id_partida=eq.${pa.id_partida}&id_participacao=neq.${pa.id_participacao}`, { [field]: "N" });
+      }
       await api.patch(`participacao?id_participacao=eq.${pa.id_participacao}`, { [field]: novo });
       setVal(novo);
+      if (exclusivo && novo === "S") reload && reload(); // outros toggles na tela precisam refletir o "N"
     } catch (e) { show(e.message, "error"); }
     finally { setSaving(false); }
   }
@@ -3652,7 +3669,7 @@ function FormGol({ partida, participacoes, meuTime, onSalvo, show, readOnly = fa
         id_participacao: idParticipacao,
         periodo: periodo,
         minuto: minuto,
-        penalti: ehAdversario ? "N" : form.penalti,
+        penalti: (ehAdversario || form.gol_contra === "S") ? "N" : form.penalti,
         gol_contra: ehAdversario ? "S" : form.gol_contra,
         id_assistente: (!ehAdversario && form.gol_contra !== "S" && form.id_assistente) ? Number(form.id_assistente) : null,
       });
@@ -3696,14 +3713,16 @@ function FormGol({ partida, participacoes, meuTime, onSalvo, show, readOnly = fa
       </div>
       {!ehAdversario && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Select label="Pênalti?" value={form.penalti} onChange={e => set("penalti", e.target.value)}>
-            <option value="N">Não</option><option value="S">Sim</option>
-          </Select>
+          {form.gol_contra !== "S" && (
+            <Select label="Pênalti?" value={form.penalti} onChange={e => set("penalti", e.target.value)}>
+              <option value="N">Não</option><option value="S">Sim</option>
+            </Select>
+          )}
           <Select label="Gol Contra?" value={form.gol_contra}
             onChange={e => {
               const v = e.target.value;
-              // gol contra não tem assistência: limpa o que estiver escolhido
-              setForm(f => ({ ...f, gol_contra: v, id_assistente: v === "S" ? "" : f.id_assistente }));
+              // gol contra não é pênalti nem tem assistência: limpa os dois
+              setForm(f => ({ ...f, gol_contra: v, penalti: v === "S" ? "N" : f.penalti, id_assistente: v === "S" ? "" : f.id_assistente }));
             }}>
             <option value="N">Não</option><option value="S">Sim</option>
           </Select>
