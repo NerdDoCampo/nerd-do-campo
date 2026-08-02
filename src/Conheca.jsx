@@ -211,6 +211,15 @@ export default function Conheca() {
           </div>
         </div>
 
+        {/* aviso: a lista é grande, mas ninguém precisa usar tudo de uma vez */}
+        <div style={{ background:`linear-gradient(135deg, ${C.surf2}, ${C.surface})`, border:`1px solid ${C.gold}`, borderRadius:12, padding:"16px 18px", margin:"0 0 36px", display:"flex", gap:12, alignItems:"flex-start" }}>
+          <span style={{ fontSize:26, flexShrink:0 }} aria-hidden="true">🧩</span>
+          <div>
+            <div style={{ fontSize:14, fontWeight:800, color:C.gold, marginBottom:3 }}>Você não precisa usar tudo isso</div>
+            <div style={{ fontSize:13, color:C.cream, lineHeight:1.5 }}>A lista é grande porque o sistema é completo — mas o seu time usa só o que fizer sentido. Comece pelo básico e ative o resto quando quiser.</div>
+          </div>
+        </div>
+
         {/* seções de recursos */}
         {SECOES.map(sec => (
           <div key={sec.titulo} style={{ marginBottom:40 }}>
@@ -241,6 +250,13 @@ export default function Conheca() {
           <div style={{ fontSize:20, fontWeight:800, color:C.gold, marginBottom:8 }}>ZERO reais.</div>
           <div style={{ fontSize:14, color:C.dim, maxWidth:440, margin:"0 auto", lineHeight:1.6 }}>
             Isso mesmo — aquela bola ali no lugar do número. Tudo que você viu acima, sem custo nenhum pro seu time.
+          </div>
+          <div style={{ background:"rgba(232,160,32,.1)", border:`1px dashed ${C.gold}`, borderRadius:10, padding:"13px 15px", marginTop:20, textAlign:"left", display:"flex", gap:10, alignItems:"flex-start" }}>
+            <span style={{ fontSize:20, flexShrink:0 }} aria-hidden="true">🧩</span>
+            <div>
+              <div style={{ fontSize:13, fontWeight:800, color:C.gold, marginBottom:2 }}>E não precisa usar tudo de uma vez</div>
+              <div style={{ fontSize:12.5, color:C.cream, lineHeight:1.5 }}>Ative um módulo por vez, no seu ritmo. A maioria dos times começa só com o calendário e a escalação — o resto vem depois.</div>
+            </div>
           </div>
         </div>
 
