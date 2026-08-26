@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { IdiomaProvider, useIdioma, SeletorIdioma } from "./i18n";
 
 // ── Supabase ──────────────────────────────────────────────────
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
@@ -137,44 +138,46 @@ function distanciaKm(lat1, lon1, lat2, lon2) {
 function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 
 // ── SELETOR DE TIMES ──────────────────────────────────────────
-function CardTime({ t, onSelect, destaque = false }) {
+function CardTime({ t: time, onSelect, destaque = false }) {
+  const { t } = useIdioma();
   return (
     <div
-      onClick={() => onSelect(t)}
+      onClick={() => onSelect(time)}
       style={{ background:C.surface, borderRadius:16, padding:"28px 24px", border:`1px solid ${destaque ? C.gold : C.border}`, boxShadow: destaque ? `0 0 0 1px ${C.gold}33` : "none", cursor:"pointer", transition:"all 0.2s", textAlign:"center", position:"relative" }}
       onMouseEnter={e => { e.currentTarget.style.background = C.surf2; e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.transform = "translateY(-2px)"; }}
       onMouseLeave={e => { e.currentTarget.style.background = C.surface; e.currentTarget.style.borderColor = destaque ? C.gold : C.border; e.currentTarget.style.transform = "none"; }}>
       {destaque && (
-        <div style={{ position:"absolute", top:12, right:12, fontSize:11, fontWeight:800, color:C.gold, background:`${C.gold}1A`, border:`1px solid ${C.gold}55`, borderRadius:6, padding:"2px 8px", textTransform:"uppercase", letterSpacing:"0.06em" }}>⭐ Oficial</div>
+        <div style={{ position:"absolute", top:12, right:12, fontSize:11, fontWeight:800, color:C.gold, background:`${C.gold}1A`, border:`1px solid ${C.gold}55`, borderRadius:6, padding:"2px 8px", textTransform:"uppercase", letterSpacing:"0.06em" }}>{t("cardtime.oficial")}</div>
       )}
-      {t.escudo_url
-        ? <img src={t.escudo_url} alt={t.nome} style={{ width:96, height:96, borderRadius:"50%", objectFit:"cover", border:`3px solid ${C.gold}`, margin:"0 auto 16px", display:"block" }}/>
+      {time.escudo_url
+        ? <img src={time.escudo_url} alt={time.nome} style={{ width:96, height:96, borderRadius:"50%", objectFit:"cover", border:`3px solid ${C.gold}`, margin:"0 auto 16px", display:"block" }}/>
         : <div style={{ width:96, height:96, borderRadius:"50%", background:C.surf2, border:`3px solid ${C.gold}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", fontSize:36 }}>⚽</div>
       }
-      <div style={{ fontSize:22, fontWeight:800, textTransform:"uppercase", marginBottom:10 }}>{t.nome}</div>
-      {t.data_fundacao && (
-        <div style={{ fontSize:13, color:C.dim, marginBottom:8 }}>Fundado em {new Date(t.data_fundacao).getFullYear()}</div>
+      <div style={{ fontSize:22, fontWeight:800, textTransform:"uppercase", marginBottom:10 }}>{time.nome}</div>
+      {time.data_fundacao && (
+        <div style={{ fontSize:13, color:C.dim, marginBottom:8 }}>{t("cardtime.fundado")} {new Date(time.data_fundacao).getFullYear()}</div>
       )}
-      {t.marca_jogos && (
-        <div style={{ fontSize:15, color:C.dim, marginBottom:6 }}>📋 <span style={{ color:C.cream }}>Marca jogos:</span> {t.marca_jogos}</div>
+      {time.marca_jogos && (
+        <div style={{ fontSize:15, color:C.dim, marginBottom:6 }}>📋 <span style={{ color:C.cream }}>{t("cardtime.marca_jogos")}</span> {time.marca_jogos}</div>
       )}
-      {t.telefone && (
-        <div style={{ fontSize:15, color:C.dim, marginBottom:4 }}>📞 <span style={{ color:C.cream }}>{t.telefone}</span></div>
+      {time.telefone && (
+        <div style={{ fontSize:15, color:C.dim, marginBottom:4 }}>📞 <span style={{ color:C.cream }}>{time.telefone}</span></div>
       )}
-      {t.resp_redes_sociais && (
-        <div style={{ fontSize:15, color:C.dim, marginTop:4 }}>📱 <span style={{ color:C.cream }}>{t.resp_redes_sociais}</span></div>
+      {time.resp_redes_sociais && (
+        <div style={{ fontSize:15, color:C.dim, marginTop:4 }}>📱 <span style={{ color:C.cream }}>{time.resp_redes_sociais}</span></div>
       )}
-      {t.cidade && (
-        <div style={{ fontSize:15, color:C.dim, marginTop:4 }}>📍 <span style={{ color:C.cream }}>{t.cidade.nome}{t.cidade.estado ? ` — ${t.cidade.estado}` : ""}</span></div>
+      {time.cidade && (
+        <div style={{ fontSize:15, color:C.dim, marginTop:4 }}>📍 <span style={{ color:C.cream }}>{time.cidade.nome}{time.cidade.estado ? ` — ${time.cidade.estado}` : ""}</span></div>
       )}
-      {t.campo && (
-        <div style={{ fontSize:15, color:C.dim, marginTop:4 }}>🏟️ <span style={{ color:C.cream }}>{t.campo.nome}</span></div>
+      {time.campo && (
+        <div style={{ fontSize:15, color:C.dim, marginTop:4 }}>🏟️ <span style={{ color:C.cream }}>{time.campo.nome}</span></div>
       )}
     </div>
   );
 }
 
 function SeletorTimes({ onSelect }) {
+  const { t } = useIdioma();
   const [dataRef, setDataRef] = useState(""); // vazio = sem filtro de data
   const [ufRef, setUfRef] = useState("");       // estado de referência do filtro de raio
   const [cidadeRef, setCidadeRef] = useState(""); // id da cidade de referência
@@ -272,9 +275,12 @@ function SeletorTimes({ onSelect }) {
         <Logo size={42}/>
         <div>
           <div style={{ fontSize:20, fontWeight:800, letterSpacing:"0.06em", textTransform:"uppercase", color:C.cream, lineHeight:1 }}>Nerd do Campo</div>
-          <div style={{ fontSize:11, color:C.gold, letterSpacing:"0.1em", textTransform:"uppercase" }}>Estatísticas de Futebol Amador</div>
+          <div style={{ fontSize:11, color:C.gold, letterSpacing:"0.1em", textTransform:"uppercase" }}>{t("home.subtitulo")}</div>
         </div>
-        <a href="/admin" style={{ marginLeft:"auto", background:"none", border:`1px solid ${C.gold}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontWeight:700, fontSize:13, padding:"9px 18px", cursor:"pointer", textDecoration:"none", whiteSpace:"nowrap" }}>🔑 Área do gestor</a>
+        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:10 }}>
+          <SeletorIdioma C={C}/>
+          <a href="/admin" style={{ background:"none", border:`1px solid ${C.gold}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontWeight:700, fontSize:13, padding:"9px 18px", cursor:"pointer", textDecoration:"none", whiteSpace:"nowrap" }}>{t("nav.area_gestor")}</a>
+        </div>
       </header>
 
       <main style={{ maxWidth:900, margin:"0 auto", padding:"48px 24px 60px" }}>
@@ -293,27 +299,27 @@ function SeletorTimes({ onSelect }) {
             Nerd do Campo
           </div>
           <div style={{ fontSize:13, color:C.gold, letterSpacing:"0.12em", textTransform:"uppercase", fontWeight:700, marginBottom:20 }}>
-            Estatísticas de Futebol Amador
+            {t("home.subtitulo")}
           </div>
-          <div style={{ fontSize:15, color:C.dim }}>Selecione um time para ver as estatísticas da temporada</div>
+          <div style={{ fontSize:15, color:C.dim }}>{t("home.selecione")}</div>
         </div>
 
         {/* Hero de apresentação / captação — só quando o cadastro está ativo */}
         {cadastroAtivo && (
           <div style={{ marginBottom:48, background:`linear-gradient(135deg, ${C.surface}, ${C.surf2})`, border:`1px solid ${C.border}`, borderRadius:16, padding:"32px 28px", textAlign:"center" }}>
             <div style={{ fontSize:22, fontWeight:800, color:C.cream, marginBottom:10, lineHeight:1.3 }}>
-              O sistema completo para o seu time amador
+              {t("home.hero.titulo")}
             </div>
             <div style={{ fontSize:14, color:C.dim, marginBottom:28, maxWidth:560, margin:"0 auto 28px", lineHeight:1.6 }}>
-              Organize estatísticas, finanças e presença num só lugar — e mostre os números do seu time numa página como as que você vê abaixo.
+              {t("home.hero.desc")}
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(125px, 1fr))", gap:14, marginBottom:30, maxWidth:760, marginLeft:"auto", marginRight:"auto" }}>
               {[
-                ["📅", "Calendário e adversários", "Agenda da temporada e busca de adversários pelo app.", "/recurso-estatisticas.png"],
-                ["📋", "Ficha completa da partida", "Tático, confirmação pré-jogo e estatísticas pós-jogo.", "/recurso-financeiro.png"],
-                ["💰", "Financeiro robusto", "Mensalidades, gastos e receitas num fluxo de caixa só.", "/recurso-presenca.png"],
-                ["🎟️", "Eventos e venda de cartões", "Do churras à arrecadação, com venda por atleta e convidado.", "/recurso-whatsapp.png"],
-                ["🔒", "Seus dados, suas regras", "Temporada ruim? Deixe as informações privadas.", "/recurso-privacidade.png"],
+                ["📅", t("home.hero.item1_tit"), t("home.hero.item1_desc"), "/recurso-estatisticas.png"],
+                ["📋", t("home.hero.item2_tit"), t("home.hero.item2_desc"), "/recurso-financeiro.png"],
+                ["💰", t("home.hero.item3_tit"), t("home.hero.item3_desc"), "/recurso-presenca.png"],
+                ["🎟️", t("home.hero.item4_tit"), t("home.hero.item4_desc"), "/recurso-whatsapp.png"],
+                ["🔒", t("home.hero.item5_tit"), t("home.hero.item5_desc"), "/recurso-privacidade.png"],
               ].map(([ic, tit, desc, img]) => (
                 <div key={tit} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"18px 16px", textAlign:"left", display:"flex", flexDirection:"column", height:"100%" }}>
                   <div style={{ fontSize:26, marginBottom:8 }}>{ic}</div>
@@ -327,9 +333,9 @@ function SeletorTimes({ onSelect }) {
                       style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}/>
                     <div style={{ display:"none", width:"100%", height:"100%", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:4, color:C.dim, fontSize:11, textAlign:"center", padding:8 }}>
                       <span style={{ fontSize:22, opacity:0.6 }}>{ic}</span>
-                      <span>Imagem em breve</span>
+                      <span>{t("home.hero.img_em_breve")}</span>
                     </div>
-                    <div style={{ position:"absolute", bottom:6, right:6, background:"#000000aa", color:C.cream, fontSize:10, padding:"2px 7px", borderRadius:6 }}>🔍 ampliar</div>
+                    <div style={{ position:"absolute", bottom:6, right:6, background:"#000000aa", color:C.cream, fontSize:10, padding:"2px 7px", borderRadius:6 }}>{t("home.hero.ampliar")}</div>
                   </div>
                 </div>
               ))}
@@ -337,21 +343,21 @@ function SeletorTimes({ onSelect }) {
 
             {/* Destaque do preço — a bola no lugar do zero */}
             <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:5, marginBottom:8, flexWrap:"wrap" }}>
-              <span style={{ fontSize:15, color:C.dim, marginRight:6 }}>E quanto custa?</span>
+              <span style={{ fontSize:15, color:C.dim, marginRight:6 }}>{t("home.preco.pergunta")}</span>
               <span style={{ fontSize:30, fontWeight:900, color:C.cream }}>R$</span>
               <span style={{ fontSize:38, lineHeight:1 }} role="img" aria-label="zero">⚽</span>
               <span style={{ fontSize:30, fontWeight:900, color:C.cream }}>,00</span>
-              <span style={{ fontSize:15, color:C.gold, fontWeight:800, marginLeft:6 }}>(ZERO)</span>
+              <span style={{ fontSize:15, color:C.gold, fontWeight:800, marginLeft:6 }}>{t("home.preco.zero")}</span>
             </div>
-            <div style={{ fontSize:12, color:C.dim, marginBottom:24 }}>Sim, de graça. Aquela bola ali no lugar do zero.</div>
+            <div style={{ fontSize:12, color:C.dim, marginBottom:24 }}>{t("home.preco.legenda")}</div>
 
             <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
               <button onClick={() => setModalCadastro(true)}
                 style={{ background:C.gold, border:"none", borderRadius:10, color:"#0B3D2E", fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"13px 28px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em", boxShadow:`0 6px 20px ${C.gold}44` }}>
-                🏆 Quero o meu time aqui
+                {t("home.cta.principal")}
               </button>
               <a href="/conheca" style={{ background:"none", border:`1px solid ${C.gold}`, borderRadius:10, color:C.gold, fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"13px 28px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em", textDecoration:"none", display:"inline-block" }}>
-                Ver tudo que o app faz
+                {t("home.cta.ver_tudo")}
               </a>
             </div>
           </div>
@@ -364,12 +370,12 @@ function SeletorTimes({ onSelect }) {
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", justifyContent:"center", marginBottom:8 }}>
             <button onClick={() => setTipoFiltro("todos")}
               style={{ background: tipoFiltro==="todos" ? C.gold : C.surface, color: tipoFiltro==="todos" ? "#0B3D2E" : C.dim, border:`1px solid ${tipoFiltro==="todos" ? C.gold : C.border}`, borderRadius:8, padding:"7px 16px", fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>
-              Todos
+              {t("home.filtro.todos")}
             </button>
-            {tiposUnicos.map(t => (
-              <button key={t.id_tipo_time} onClick={() => setTipoFiltro(t.descricao)}
-                style={{ background: tipoFiltro===t.descricao ? C.gold : C.surface, color: tipoFiltro===t.descricao ? "#0B3D2E" : C.dim, border:`1px solid ${tipoFiltro===t.descricao ? C.gold : C.border}`, borderRadius:8, padding:"7px 16px", fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>
-                {t.descricao}
+            {tiposUnicos.map(tp => (
+              <button key={tp.id_tipo_time} onClick={() => setTipoFiltro(tp.descricao)}
+                style={{ background: tipoFiltro===tp.descricao ? C.gold : C.surface, color: tipoFiltro===tp.descricao ? "#0B3D2E" : C.dim, border:`1px solid ${tipoFiltro===tp.descricao ? C.gold : C.border}`, borderRadius:8, padding:"7px 16px", fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", textTransform:"uppercase" }}>
+                {tp.descricao}
               </button>
             ))}
           </div>
@@ -385,19 +391,19 @@ function SeletorTimes({ onSelect }) {
                 <span style={{ fontSize:16 }}>📅</span>
                 <div>
                   <div style={{ fontSize:12, fontWeight:700, color:C.cream, textTransform:"uppercase", letterSpacing:"0.06em" }}>
-                    Filtrar por data
+                    {t("home.filtro.data.titulo")}
                   </div>
                   <div style={{ fontSize:10, color:C.dim, marginTop:1 }}>
                     {dataRef
-                      ? `Times com temporada ativa em ${new Date(dataRef+'T12:00:00').toLocaleDateString('pt-BR')}`
-                      : "Opcional — sem filtro mostra todos os times"}
+                      ? `${t("home.filtro.data.desc_ativo")} ${new Date(dataRef+'T12:00:00').toLocaleDateString('pt-BR')}`
+                      : t("home.filtro.data.desc_vazio")}
                   </div>
                 </div>
               </div>
               {dataRef && (
                 <button onClick={() => setDataRef("")}
                   style={{ background:C.loss+"22", border:`1px solid ${C.loss}44`, borderRadius:6, color:C.loss, cursor:"pointer", fontSize:11, padding:"4px 10px", fontFamily:"inherit", fontWeight:700, flexShrink:0 }}>
-                  ✕ Limpar
+                  {t("home.filtro.limpar")}
                 </button>
               )}
             </div>
@@ -406,7 +412,7 @@ function SeletorTimes({ onSelect }) {
               <input type="date" value={dataRef} onChange={e => setDataRef(e.target.value)}
                 style={{ flex:1, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:16, fontWeight:700, padding:"10px 14px", outline:"none", cursor:"pointer", WebkitAppearance:"none" }}/>
               {!dataRef && (
-                <span style={{ fontSize:11, color:C.dim, fontStyle:"italic", flexShrink:0 }}>ou deixe em branco</span>
+                <span style={{ fontSize:11, color:C.dim, fontStyle:"italic", flexShrink:0 }}>{t("home.filtro.data.deixe_branco")}</span>
               )}
             </div>
           </div>
@@ -421,40 +427,40 @@ function SeletorTimes({ onSelect }) {
                 <span style={{ fontSize:16 }}>📍</span>
                 <div>
                   <div style={{ fontSize:12, fontWeight:700, color:C.cream, textTransform:"uppercase", letterSpacing:"0.06em" }}>
-                    Filtrar por distância
+                    {t("home.filtro.raio.titulo")}
                   </div>
                   <div style={{ fontSize:10, color:C.dim, marginTop:1 }}>
                     {(cidadeRef && raioRef)
-                      ? `Times até ${raioRef} km da cidade escolhida`
-                      : "Opcional — escolha uma cidade e o raio em km"}
+                      ? `${t("home.filtro.raio.desc_ativo")} ${raioRef} ${t("home.filtro.raio.desc_ativo_fim")}`
+                      : t("home.filtro.raio.desc_vazio")}
                   </div>
                 </div>
               </div>
               {(ufRef || cidadeRef || raioRef) && (
                 <button onClick={() => { setUfRef(""); setCidadeRef(""); setRaioRef(""); }}
                   style={{ background:C.loss+"22", border:`1px solid ${C.loss}44`, borderRadius:6, color:C.loss, cursor:"pointer", fontSize:11, padding:"4px 10px", fontFamily:"inherit", fontWeight:700, flexShrink:0 }}>
-                  ✕ Limpar
+                  {t("home.filtro.limpar")}
                 </button>
               )}
             </div>
             <div style={{ padding:"12px 16px", display:"grid", gridTemplateColumns:"1fr 1.5fr 1fr", gap:10 }}>
               <select value={ufRef} onChange={e => { setUfRef(e.target.value); setCidadeRef(""); }}
                 style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px", outline:"none", cursor:"pointer" }}>
-                <option value="">Estado</option>
+                <option value="">{t("home.filtro.raio.estado")}</option>
                 {UFS_BR.map(uf => <option key={uf} value={uf}>{uf}</option>)}
               </select>
               <select value={cidadeRef} onChange={e => setCidadeRef(e.target.value)} disabled={!ufRef}
                 style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px", outline:"none", cursor: ufRef ? "pointer" : "not-allowed", opacity: ufRef ? 1 : 0.5 }}>
-                <option value="">{!ufRef ? "Escolha o estado" : (_cidadesUf == null ? "Carregando..." : "Cidade")}</option>
+                <option value="">{!ufRef ? t("home.filtro.raio.escolha_estado") : (_cidadesUf == null ? t("geral.carregando") : t("home.filtro.raio.cidade"))}</option>
                 {(_cidadesUf||[]).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
               </select>
-              <input type="number" min="1" step="1" value={raioRef} onChange={e => setRaioRef(e.target.value)} placeholder="Raio km"
+              <input type="number" min="1" step="1" value={raioRef} onChange={e => setRaioRef(e.target.value)} placeholder={t("home.filtro.raio.raio_km")}
                 style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:14, fontWeight:700, padding:"10px", outline:"none", WebkitAppearance:"none" }}/>
             </div>
             {cidadeRef && raioRef && (() => {
               const c = (_cidadesUf||[]).find(x => String(x.id_cidade) === String(cidadeRef));
               if (c && (c.latitude == null || c.longitude == null)) {
-                return <div style={{ padding:"0 16px 12px", fontSize:11, color:C.loss }}>⚠️ Esta cidade não tem coordenadas cadastradas, então o filtro de distância pode não funcionar para ela.</div>;
+                return <div style={{ padding:"0 16px 12px", fontSize:11, color:C.loss }}>{t("home.filtro.raio.sem_coordenadas")}</div>;
               }
               return null;
             })()}
@@ -464,55 +470,55 @@ function SeletorTimes({ onSelect }) {
         {timesDestaque.length > 0 && (
           <div style={{ marginBottom:32 }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
-              <span style={{ fontSize:13, fontWeight:800, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em" }}>⭐ Time em destaque</span>
+              <span style={{ fontSize:13, fontWeight:800, color:C.gold, textTransform:"uppercase", letterSpacing:"0.1em" }}>{t("home.destaque.titulo")}</span>
               <div style={{ flex:1, height:1, background:`linear-gradient(to right, ${C.gold}55, transparent)` }} />
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(260px,1fr))", gap:16 }}>
-              {timesDestaque.map(t => <CardTime key={t.id_time} t={t} onSelect={onSelect} destaque />)}
+              {timesDestaque.map(tm => <CardTime key={tm.id_time} t={tm} onSelect={onSelect} destaque />)}
             </div>
           </div>
         )}
 
         {timesDestaque.length > 0 && timesNormais.length > 0 && (
-          <div style={{ fontSize:13, fontWeight:800, color:C.dim, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:16 }}>Todos os times</div>
+          <div style={{ fontSize:13, fontWeight:800, color:C.dim, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:16 }}>{t("home.destaque.todos_times")}</div>
         )}
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(260px,1fr))", gap:16 }}>
-          {timesNormais.map(t => <CardTime key={t.id_time} t={t} onSelect={onSelect} />)}
+          {timesNormais.map(tm => <CardTime key={tm.id_time} t={tm} onSelect={onSelect} />)}
         </div>
       </main>
 
       {/* Conta de demonstração */}
       <div style={{ padding:"0 16px" }}>
         <BlocoDemo
-          titulo="🧪 Tem um time? Experimente o painel"
-          texto={<>Antes de cadastrar o seu, entre na <strong>conta de demonstração</strong> e veja como é administrar um time por dentro.</>}
+          titulo={t("home.demo.titulo")}
+          texto={<>{t("home.demo.texto_antes")}<strong>{t("home.demo.texto_negrito")}</strong>{t("home.demo.texto_depois")}</>}
         />
       </div>
 
       {/* CTA cadastro — controlado por config_sistema */}
       {cadastroAtivo && (
         <div style={{ textAlign:"center", padding:"32px 16px 8px", borderTop:`1px solid ${C.border}`, marginTop:32 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:C.cream, marginBottom:6 }}>Gostou do que viu?</div>
-          <div style={{ fontSize:13, color:C.dim, marginBottom:16 }}>Coloque o seu time aqui também — é rápido para começar.</div>
+          <div style={{ fontSize:16, fontWeight:800, color:C.cream, marginBottom:6 }}>{t("home.gostou.titulo")}</div>
+          <div style={{ fontSize:13, color:C.dim, marginBottom:16 }}>{t("home.gostou.desc")}</div>
           <button onClick={() => setModalCadastro(true)}
             style={{ background:C.gold, border:"none", borderRadius:10,
               color:"#0B3D2E", fontFamily:"inherit", fontWeight:800, fontSize:13,
               padding:"12px 30px", cursor:"pointer", textTransform:"uppercase", letterSpacing:"0.06em",
               boxShadow:`0 6px 20px ${C.gold}44` }}>
-            🏆 Cadastrar meu Time
+            {t("home.gostou.botao")}
           </button>
         </div>
       )}
 
       <footer style={{ textAlign:"center", padding:"24px 20px", color:C.dim, fontSize:12, borderTop:`1px solid ${C.border}`, marginTop:20 }}>
-        <div style={{ marginBottom:8 }}>⚽ Nerd do Campo — Estatísticas de Futebol Amador</div>
+        <div style={{ marginBottom:8 }}>{t("home.footer.assinatura")}</div>
         <div style={{ marginBottom:10, fontSize:13 }}>
-          Dúvidas ou sugestões? Fale com a gente pelo e-mail{" "}
-          <a href="mailto:nerddocampo10@gmail.com" style={{ color:C.gold, textDecoration:"none", fontWeight:700 }}>nerddocampo10@gmail.com</a>{" "}ou no WhatsApp{" "}<a href="https://wa.me/5551994418950" target="_blank" rel="noopener noreferrer" style={{ color:"#4CAF50", textDecoration:"none", fontWeight:700 }}>(51) 99441-8950</a>
+          {t("home.footer.duvidas")}{" "}
+          <a href="mailto:nerddocampo10@gmail.com" style={{ color:C.gold, textDecoration:"none", fontWeight:700 }}>nerddocampo10@gmail.com</a>{" "}{t("home.footer.ou_whatsapp")}{" "}<a href="https://wa.me/5551994418950" target="_blank" rel="noopener noreferrer" style={{ color:"#4CAF50", textDecoration:"none", fontWeight:700 }}>(51) 99441-8950</a>
         </div>
         <div style={{ marginBottom:10 }}>
-          <a href="/admin" style={{ color:C.gold, textDecoration:"none", fontWeight:700, fontSize:13, border:`1px solid ${C.gold}`, borderRadius:8, padding:"8px 18px", display:"inline-block" }}>🔑 Área do gestor — acessar o painel</a>
+          <a href="/admin" style={{ color:C.gold, textDecoration:"none", fontWeight:700, fontSize:13, border:`1px solid ${C.gold}`, borderRadius:8, padding:"8px 18px", display:"inline-block" }}>{t("home.footer.area_gestor")}</a>
         </div>
         <div style={{ fontSize:11, color:C.gold, letterSpacing:"0.08em", opacity:0.85 }}>
           ⚽ Designed by Caxpa Augsten
@@ -1322,6 +1328,7 @@ const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG"
 // Bloco de avaliações/depoimentos — exibe as aprovadas (média + 3 recentes + ver todas).
 // Só aparece com 3+ aprovadas. Escudo em tempo real via join com time.
 function BlocoAvaliacoes() {
+  const { t } = useIdioma();
   const { data: avals } = useQuery(
     () => sb(`avaliacao?status=eq.aprovado&select=id,nota,texto,publicar_identidade,nome_exibicao,nome_time,criado_em,time(nome,escudo_url)&order=criado_em.desc`),
     []
@@ -1338,21 +1345,21 @@ function BlocoAvaliacoes() {
   function tempoRelativo(iso) {
     const d = new Date(iso), agora = new Date();
     const dias = Math.floor((agora - d) / 86400000);
-    if (dias === 0) return "hoje";
-    if (dias === 1) return "há 1 dia";
-    if (dias < 30) return `há ${dias} dias`;
+    if (dias === 0) return t("aval.hoje");
+    if (dias === 1) return t("aval.ha_1_dia");
+    if (dias < 30) return t("aval.ha_dias", { n: dias });
     return d.toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
   }
 
   return (
     <div style={{ maxWidth:760, margin:"0 auto 40px", background:`linear-gradient(135deg, ${C.surface}, ${C.surf2})`, border:`1px solid ${C.border}`, borderRadius:16, padding:"32px 24px" }}>
-      <div style={{ fontSize:22, fontWeight:800, color:C.cream, textAlign:"center", marginBottom:20 }}>O que os gestores estão achando 💬</div>
+      <div style={{ fontSize:22, fontWeight:800, color:C.cream, textAlign:"center", marginBottom:20 }}>{t("aval.titulo")} 💬</div>
       {/* resumo média */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginBottom:24, paddingBottom:20, borderBottom:`1px solid ${C.border}` }}>
         <div style={{ fontSize:56, fontWeight:900, color:C.gold, lineHeight:1 }}>{media}</div>
         <div>
           <div style={{ fontSize:26, color:C.gold, letterSpacing:2 }}>{estrelas(Math.round(media))}</div>
-          <div style={{ fontSize:14, color:C.dim, marginTop:3 }}>{lista.length} avaliações</div>
+          <div style={{ fontSize:14, color:C.dim, marginTop:3 }}>{lista.length} {t("aval.count")}</div>
         </div>
       </div>
       {/* depoimentos */}
@@ -1367,8 +1374,8 @@ function BlocoAvaliacoes() {
                 ? <img src={escudo} alt="" style={{ width:40, height:40, borderRadius:"50%", objectFit:"cover", border:`2px solid ${C.gold}`, flexShrink:0 }} onError={e=>{e.currentTarget.style.display="none";}}/>
                 : <div style={{ width:40, height:40, borderRadius:"50%", background:C.surf2, border:`2px solid ${C.dim}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, fontWeight:900, color:C.cream, flexShrink:0 }}>{av.publicar_identidade ? (av.nome_time?.[0]||"?").toUpperCase() : "?"}</div>}
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:800, color:C.cream }}>{av.publicar_identidade ? (av.nome_exibicao || "Gestor") : "Gestor de time amador"}</div>
-                <div style={{ fontSize:13, color:C.dim }}>{av.publicar_identidade ? (av.nome_time || av.time?.nome || "") : "identidade não divulgada"}</div>
+                <div style={{ fontSize:14, fontWeight:800, color:C.cream }}>{av.publicar_identidade ? (av.nome_exibicao || t("aval.gestor")) : t("aval.gestor_amador")}</div>
+                <div style={{ fontSize:13, color:C.dim }}>{av.publicar_identidade ? (av.nome_time || av.time?.nome || "") : t("aval.identidade_oculta")}</div>
               </div>
               <div style={{ fontSize:12, color:C.dim, whiteSpace:"nowrap" }}>{tempoRelativo(av.criado_em)}</div>
             </div>
@@ -1379,7 +1386,7 @@ function BlocoAvaliacoes() {
         <div style={{ textAlign:"center", marginTop:8 }}>
           <button onClick={() => setVerTodas(true)}
             style={{ background:"none", border:`1px solid ${C.gold}`, color:C.gold, borderRadius:10, fontFamily:"inherit", fontWeight:800, fontSize:14, padding:"12px 28px", cursor:"pointer" }}>
-            Ver todas as {lista.length} avaliações
+            {t("aval.ver_todas")} {lista.length} {t("aval.count")}
           </button>
         </div>
       )}
@@ -1722,6 +1729,14 @@ function ModalSolicitacao({ onClose }) {
 }
 
 export default function App() {
+  return (
+    <IdiomaProvider>
+      <AppConteudo/>
+    </IdiomaProvider>
+  );
+}
+
+function AppConteudo() {
   const [timeSel, setTimeSel] = useState(null);
   const { data: manut, loading: loadManut } = useQuery(() =>
     sb(`config_sistema?chave=eq.sistema_manutencao&select=valor&limit=1`)
@@ -1736,16 +1751,16 @@ export default function App() {
 
 // ── Tela de Manutenção ────────────────────────────────────────
 function TelaManutencao() {
+  const { t } = useIdioma();
   return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", padding:24, fontFamily:"'Oswald','Arial Narrow',Arial,sans-serif" }}>
       <div style={{ textAlign:"center", maxWidth:420 }}>
         <div style={{ fontSize:64, marginBottom:20 }}>🔧</div>
         <div style={{ fontSize:26, fontWeight:800, color:C.cream, marginBottom:14, textTransform:"uppercase", letterSpacing:"0.06em" }}>
-          Sistema em Manutenção
+          {t("manut.titulo")}
         </div>
         <div style={{ fontSize:15, color:C.dim, lineHeight:1.7 }}>
-          Estamos realizando melhorias no Nerd do Campo.
-          Volte em alguns instantes — já já estaremos de volta! ⚽
+          {t("manut.texto")}
         </div>
         <div style={{ fontSize:13, color:C.gold, fontWeight:700, marginTop:24 }}>
           nerddocampo.com.br
