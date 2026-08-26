@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.36.0";
+import { IdiomaProvider, useIdioma, SeletorIdioma } from "./i18n";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.37.0";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -1578,6 +1579,7 @@ function VitrineCaptacao() {
 }
 
 function Login({ onLogin, aviso }) {
+  const { t } = useIdioma();
   const [email, setEmail]   = useState("");
   const [senha, setSenha]   = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -1601,21 +1603,21 @@ function Login({ onLogin, aviso }) {
       if (res.refresh_token) { REFRESH_TOKEN = res.refresh_token; sessionStorage.setItem("ndc_refresh", res.refresh_token); }
       onLogin(res);
     }
-    else setErro("E-mail ou senha incorretos.");
+    else setErro(t("login.erro_credenciais"));
   }
 
   async function enviarRecuperacao() {
     setMsgRec(null);
-    if (!emailRec || !emailRec.includes("@")) { setMsgRec({ tipo:"error", txt:"Informe um e-mail válido." }); return; }
+    if (!emailRec || !emailRec.includes("@")) { setMsgRec({ tipo:"error", txt:t("login.email_invalido") }); return; }
     setEnviandoRec(true);
     try {
       // Dispara o e-mail de recuperação. O redirect_to leva o usuário de volta
       // à raiz do app, onde a tela de redefinição de senha assume.
       await sbAuth("recover", { email: emailRec.trim().toLowerCase(), redirect_to: window.location.origin });
       // O Supabase responde OK mesmo se o e-mail não existir (por segurança). Mensagem genérica.
-      setMsgRec({ tipo:"ok", txt:"Se este e-mail estiver cadastrado, você receberá um link para redefinir a senha. Verifique a caixa de entrada e o spam." });
+      setMsgRec({ tipo:"ok", txt:t("login.recuperacao_enviada") });
     } catch (e) {
-      setMsgRec({ tipo:"error", txt:"Não foi possível enviar agora. Tente novamente em instantes." });
+      setMsgRec({ tipo:"error", txt:t("login.recuperacao_erro") });
     } finally {
       setEnviandoRec(false);
     }
@@ -1624,6 +1626,9 @@ function Login({ onLogin, aviso }) {
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", flexDirection:"column", alignItems: "center", justifyContent: "flex-start", padding: 16, paddingTop:48, fontFamily: "'Oswald','Arial Narrow',Arial,sans-serif" }}>
       <style>{`:focus-visible{outline:2px solid ${C.gold} !important;outline-offset:2px;border-radius:8px;}`}</style>
+      <div style={{ width:"100%", maxWidth:380, display:"flex", justifyContent:"flex-end", marginBottom:10 }}>
+        <SeletorIdioma C={C}/>
+      </div>
       <Card style={{ width: "100%", maxWidth: 380, padding: "32px 24px" }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ display:"inline-block", position:"relative", marginBottom:16 }}>
@@ -1636,26 +1641,26 @@ function Login({ onLogin, aviso }) {
                 boxShadow:`0 8px 28px ${C.gold}44` }}/>
           </div>
           <div style={{ fontSize: 24, fontWeight: 800, color: C.cream, textTransform: "uppercase", letterSpacing: "0.08em" }}>Nerd do Campo</div>
-          <div style={{ fontSize: 12, color: C.gold, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.12em" }}>Painel Admin</div>
+          <div style={{ fontSize: 12, color: C.gold, marginTop: 4, textTransform: "uppercase", letterSpacing: "0.12em" }}>{t("login.painel_admin")}</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <Input label="E-mail" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@seutime.com" />
+          <Input label={t("login.email")} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@seutime.com" />
           <div style={{ position:"relative" }}>
-            <Input label="Senha" type={mostrarSenha ? "text" : "password"} value={senha} onChange={e => setSenha(e.target.value)} placeholder="••••••••"
+            <Input label={t("login.senha")} type={mostrarSenha ? "text" : "password"} value={senha} onChange={e => setSenha(e.target.value)} placeholder="••••••••"
               onKeyDown={e => e.key === "Enter" && handleLogin()} style={{ width:"100%" }} />
             <button type="button" onClick={() => setMostrarSenha(v => !v)}
-              aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+              aria-label={mostrarSenha ? t("login.ocultar_senha") : t("login.mostrar_senha")} title={mostrarSenha ? t("login.ocultar_senha") : t("login.mostrar_senha")}
               style={{ position:"absolute", right:10, bottom:7, background:"none", border:"none", cursor:"pointer", fontSize:17, padding:4, lineHeight:1, color:C.dim }}>
               {mostrarSenha ? "🧤" : "⚽"}
             </button>
           </div>
           {erro && <div style={{ color: C.loss, fontSize: 13, textAlign: "center" }}>{erro}</div>}
           <Btn onClick={handleLogin} disabled={loading} style={{ marginTop: 8, padding: "12px" }}>
-            {loading ? "Entrando..." : "Entrar"}
+            {loading ? t("login.entrando") : t("login.entrar")}
           </Btn>
           <button onClick={() => { setModalRecuperar(true); setEmailRec(email); setMsgRec(null); }}
             style={{ background:"none", border:"none", color:C.dim, fontSize:13, cursor:"pointer", fontFamily:"inherit", marginTop:4, textDecoration:"underline" }}>
-            Esqueci minha senha
+            {t("login.esqueci_senha")}
           </button>
         </div>
         <div style={{ textAlign:"center", marginTop:24, fontSize:11, color:C.dim, letterSpacing:"0.08em" }}>
@@ -1665,12 +1670,12 @@ function Login({ onLogin, aviso }) {
 
       {/* Conta de demonstração: entra com um toque, sem digitar nada */}
       <div style={{ width:"100%", maxWidth:380, marginTop:14, border:`1px dashed ${C.gold}`, background:`${C.gold}12`, borderRadius:12, padding:"14px 16px" }}>
-        <div style={{ fontSize:13, fontWeight:800, color:C.gold, marginBottom:5 }}>🧪 Quer testar antes de criar seu time?</div>
+        <div style={{ fontSize:13, fontWeight:800, color:C.gold, marginBottom:5 }}>{t("login.demo_titulo")}</div>
         <div style={{ fontSize:12, color:C.cream, lineHeight:1.5, marginBottom:10 }}>
-          Entre na <strong>conta de demonstração</strong> e mexa à vontade — tem dois times prontos, com jogos, jogadores e financeiro pra você explorar.
+          {t("login.demo_texto")}
         </div>
         <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"7px 11px", marginBottom:10 }}>
-          {[["email","E-mail",DEMO_EMAIL],["senha","Senha",DEMO_SENHA]].map(([campo, rotulo, valor], idx) => (
+          {[["email",t("login.email"),DEMO_EMAIL],["senha",t("login.senha"),DEMO_SENHA]].map(([campo, rotulo, valor], idx) => (
             <div key={campo} style={{ display:"flex", alignItems:"center", gap:8, padding:"5px 0", borderTop: idx === 0 ? "none" : `1px solid ${C.border}` }}>
               <span style={{ color:C.dim, fontSize:11.5, width:46, flexShrink:0 }}>{rotulo}</span>
               <span style={{ color:C.cream, fontFamily:"monospace", fontSize:11.5, flex:1, wordBreak:"break-all" }}>{valor}</span>
@@ -1682,29 +1687,29 @@ function Login({ onLogin, aviso }) {
             </div>
           ))}
         </div>
-        {copiadoDemo === "erro" && <div style={{ fontSize:11, color:C.dim, marginBottom:8 }}>Não deu pra copiar — segure o texto para selecionar.</div>}
+        {copiadoDemo === "erro" && <div style={{ fontSize:11, color:C.dim, marginBottom:8 }}>{t("login.copiar_erro")}</div>}
         <button onClick={() => { setEmail(DEMO_EMAIL); setSenha(DEMO_SENHA); handleLogin(DEMO_EMAIL, DEMO_SENHA); }} disabled={loading}
           style={{ width:"100%", background:C.gold, color:"#0B3D2E", border:"none", borderRadius:7, padding:"10px 8px", fontSize:12.5, fontWeight:700, cursor:loading?"default":"pointer", fontFamily:"inherit" }}>
-          {loading ? "Entrando..." : "Entrar na demonstração"}
+          {loading ? t("login.entrando") : t("login.demo_botao")}
         </button>
         <div style={{ fontSize:10.5, color:C.dim, marginTop:8, fontStyle:"italic", lineHeight:1.4 }}>
-          É uma conta pública de testes: pode bagunçar sem medo, mas não guarde dados de verdade aí.
+          {t("login.demo_aviso")}
         </div>
       </div>
 
       <VitrineCaptacao />
       <BlocoAvaliacoesLogin />
       <div style={{ textAlign:"center", marginTop:20, marginBottom:8 }}>
-        <a href="/" style={{ color:C.gold, textDecoration:"none", fontWeight:700, fontSize:14, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 22px", display:"inline-block" }}>🌐 Ver os times no app público</a>
+        <a href="/" style={{ color:C.gold, textDecoration:"none", fontWeight:700, fontSize:14, border:`1px solid ${C.border}`, borderRadius:8, padding:"10px 22px", display:"inline-block" }}>{t("login.ver_times_publico")}</a>
       </div>
 
       {modalRecuperar && (
-        <Modal title="Recuperar senha" onClose={() => setModalRecuperar(false)}>
+        <Modal title={t("login.recuperar_senha")} onClose={() => setModalRecuperar(false)}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div style={{ fontSize:13, color:C.dim }}>
-              Informe o e-mail cadastrado. Enviaremos um link para você criar uma nova senha.
+              {t("login.recuperar_instrucao")}
             </div>
-            <Input label="E-mail" type="email" value={emailRec} onChange={e => setEmailRec(e.target.value)} placeholder="seu@email.com"
+            <Input label={t("login.email")} type="email" value={emailRec} onChange={e => setEmailRec(e.target.value)} placeholder="seu@email.com"
               onKeyDown={e => e.key === "Enter" && enviarRecuperacao()} />
             {msgRec && (
               <div style={{ fontSize:13, borderRadius:8, padding:"10px 14px",
@@ -1715,8 +1720,8 @@ function Login({ onLogin, aviso }) {
               </div>
             )}
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:4 }}>
-              <Btn variant="secondary" onClick={() => setModalRecuperar(false)}>Fechar</Btn>
-              <Btn onClick={enviarRecuperacao} disabled={enviandoRec}>{enviandoRec ? "Enviando..." : "Enviar link"}</Btn>
+              <Btn variant="secondary" onClick={() => setModalRecuperar(false)}>{t("login.fechar")}</Btn>
+              <Btn onClick={enviarRecuperacao} disabled={enviandoRec}>{enviandoRec ? t("login.enviando") : t("login.enviar_link")}</Btn>
             </div>
           </div>
         </Modal>
@@ -3763,6 +3768,24 @@ const MENU_BASE = [
   { id:"avaliar",     label:"Avaliar o app", icon:"⭐", grupo:"Acompanhar", hint:"Curtiu? Deixa sua nota. Reclamação também é bem-vinda!" },
   { id:"ajuda",       label:"Ajuda",        icon:"❓", grupo:"Acompanhar", hint:"Empacou? A gente te dá a assistência." },
 ];
+
+// Rótulo de cada item do menu, por chave de tradução. O campo `label` acima
+// (em português) fica como está — é usado só como fallback e em qualquer
+// lugar do código que ainda compare pelo texto original. A EXIBIÇÃO na
+// barra lateral usa este mapa + t(), então muda com o idioma escolhido.
+const MENU_LABEL_KEY = {
+  inicio:"menu.inicio", time:"menu.meutime", temporadas:"menu.temporadas",
+  campos:"menu.campos", posicoes:"menu.posicoes", adversarios:"menu.adversarios",
+  jogadores:"menu.jogadores", premiacao:"menu.premiacao", partidas:"menu.partidas",
+  tiposmov:"menu.tiposmov", mensalidades:"menu.mensalidades", caixa:"menu.caixa",
+  eventos:"menu.eventos", relatorio:"menu.relatorio", app:"menu.visaoapp",
+  dicas:"menu.dicas", indique:"menu.indique", avaliar:"menu.avaliar", ajuda:"menu.ajuda",
+};
+// Grupo (português, chave interna — usada em comparação de lógica) → chave de tradução
+const MENU_GRUPO_KEY = {
+  "Configurar":"menu.grupo.configurar", "Cadastros":"menu.grupo.cadastros", "Jogos":"menu.grupo.jogos",
+  "Financeiro":"menu.grupo.financeiro", "Acompanhar":"menu.grupo.acompanhar",
+};
 
 
 // ══════════════════════════════════════════════════════════════
@@ -7049,6 +7072,15 @@ function CrudEventos({ idTime, show, readOnly }) {
 
 
 export default function AdminAppCompleto() {
+  return (
+    <IdiomaProvider>
+      <AdminAppConteudo/>
+    </IdiomaProvider>
+  );
+}
+
+function AdminAppConteudo() {
+  const { t } = useIdioma();
   const [session, setSession]       = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
   const [idTime, setIdTime]         = useState(() => {
@@ -7323,6 +7355,7 @@ export default function AdminAppCompleto() {
           .header-titulo{display:none !important;}
           .header-badge{display:none !important;}
           .header-sair-desktop{display:none !important;}
+          .header-idioma-desktop{display:none !important;}
           /* Seletor de time (super/meus times) não pode empurrar nada pra fora */
           .header-time-select{max-width:150px !important;}
           /* Colunas secundárias de tabelas densas somem em telas pequenas */
@@ -7419,8 +7452,9 @@ export default function AdminAppCompleto() {
               📝 {time.observacao_super}
             </span>
           )}
+          <span className="header-idioma-desktop"><SeletorIdioma C={C} tamanho={12}/></span>
           <a className="header-link-publico" href="/" target="_blank" rel="noopener noreferrer" title="Abrir o site público" style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontFamily:"inherit", fontSize:11, fontWeight:700, padding:"6px 12px", textDecoration:"none", whiteSpace:"nowrap" }}>🌐 Ver site público</a>
-          <span className="header-sair-desktop"><Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>Sair</Btn></span>
+          <span className="header-sair-desktop"><Btn variant="danger" style={{ fontSize:11, padding:"6px 12px" }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>{t("menu.sair")}</Btn></span>
         </div>
       </header>
 
@@ -7445,7 +7479,7 @@ export default function AdminAppCompleto() {
               fontFamily:"inherit", fontWeight:700, fontSize:12, textTransform:"uppercase",
               letterSpacing:"0.06em", cursor:"pointer", textAlign:"left", transition:"all 0.15s",
             }}>
-              <span aria-hidden="true">{m.icon}</span><span>{m.label}</span>
+              <span aria-hidden="true">{m.icon}</span><span>{t(MENU_LABEL_KEY[m.id] || m.id)}</span>
             </button>
           ))}
           <div style={{ height:1, background:C.border, margin:"8px 0" }}/>
@@ -7454,7 +7488,7 @@ export default function AdminAppCompleto() {
             if (!itens.length) return null;
             return (
               <div key={grupo} className="menu-grupo">
-                <div className="menu-grupo-titulo" style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, padding:"12px 20px 6px" }}>{grupo}</div>
+                <div className="menu-grupo-titulo" style={{ fontSize:10, color:C.dim, textTransform:"uppercase", letterSpacing:"0.12em", fontWeight:700, padding:"12px 20px 6px" }}>{t(MENU_GRUPO_KEY[grupo] || grupo)}</div>
                 {itens.map(m => (
                   <button key={m.id} onClick={() => navMenu(m.id)} title={m.hint || undefined} aria-current={menu===m.id ? "page" : undefined} style={{
                     display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 20px",
@@ -7464,7 +7498,7 @@ export default function AdminAppCompleto() {
                     fontFamily:"inherit", fontWeight:700, fontSize:12, textTransform:"uppercase",
                     letterSpacing:"0.06em", cursor:"pointer", textAlign:"left", transition:"all 0.15s",
                   }}>
-                    <span aria-hidden="true">{m.icon}</span><span>{m.label}</span>
+                    <span aria-hidden="true">{m.icon}</span><span>{t(MENU_LABEL_KEY[m.id] || m.id)}</span>
                   </button>
                 ))}
               </div>
@@ -7475,8 +7509,9 @@ export default function AdminAppCompleto() {
             {time?.nome && <div style={{ fontSize:12, color:C.dim, marginBottom:10 }}>Time: <span style={{ color:C.cream, fontWeight:700 }}>{time.nome}</span></div>}
             <div style={{ fontSize:11, color:C.dim, lineHeight:1.5, marginBottom:10 }}>💬 Bug ou <b style={{color:C.cream}}>sugestão de melhoria</b>? Sua ideia ajuda a evoluir o sistema — escreve pra gente:<br/><a href="mailto:nerddocampo10@gmail.com?subject=Feedback%20Nerd%20do%20Campo" style={{ color:C.gold, fontWeight:700, textDecoration:"none" }}>nerddocampo10@gmail.com</a></div>
             <div style={{ fontSize:11, color:C.dim, lineHeight:1.5, marginBottom:10 }}>📱 WhatsApp: <a href="https://wa.me/5551994418950" target="_blank" rel="noopener noreferrer" style={{ color:C.win, fontWeight:700, textDecoration:"none" }}>(51) 99441-8950</a></div>
+            <div style={{ marginBottom:12 }}><SeletorIdioma C={C} tamanho={13}/></div>
             <a href="/" target="_blank" rel="noopener noreferrer" style={{ display:"block", textAlign:"center", background:"none", border:`1px solid ${C.border}`, borderRadius:8, color:C.gold, fontSize:12, fontWeight:700, padding:"9px 12px", textDecoration:"none", marginBottom:8 }}>🌐 Ver site público</a>
-            <Btn variant="danger" style={{ width:"100%", fontSize:12 }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>Sair</Btn>
+            <Btn variant="danger" style={{ width:"100%", fontSize:12 }} onClick={() => { SESSION_TOKEN=null; REFRESH_TOKEN=null; sessionStorage.removeItem("ndc_token"); sessionStorage.removeItem("ndc_refresh"); setSession(null); }}>{t("menu.sair")}</Btn>
           </div>
         </nav>
 
