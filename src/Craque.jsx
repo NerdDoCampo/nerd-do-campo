@@ -75,7 +75,7 @@ export default function Craque() {
   const jogo = dados?.jogo || {};
   const elegiveis = dados?.elegiveis || [];
   const encerrada = dados?.estado === "encerrada";
-  const dataFmt = jogo.data ? new Date(jogo.data).toLocaleDateString("pt-BR") : "";
+  const dataFmt = jogo.data ? new Date(jogo.data).toLocaleDateString(localeNerd()) : "";
 
   // votação encerrada: mostra o craque coroado
   if (encerrada) {

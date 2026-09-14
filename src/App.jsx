@@ -1,3 +1,4 @@
+const localeNerd = () => { try { const x=localStorage.getItem("nerd_idioma"); return x === "en" ? "en-US" : x === "es" ? "es-ES" : "pt-BR"; } catch(e) { return "pt-BR"; } };
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { IdiomaProvider, useIdioma, SeletorIdioma } from "./i18n";
 
@@ -125,7 +126,7 @@ function resultado(p) {
   if (p.gols_marcados < p.gols_sofridos) return { label:"Derrota", cor:C.loss };
   return { label:"Empate", cor:C.draw };
 }
-function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR", { timeZone:"UTC" }) : "—"; }
+function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString(localeNerd(), { timeZone:"UTC" }) : "—"; }
 // distância em km entre duas coordenadas (haversine)
 function distanciaKm(lat1, lon1, lat2, lon2) {
   if ([lat1, lon1, lat2, lon2].some(v => v == null || isNaN(Number(v)))) return null;
@@ -135,7 +136,7 @@ function distanciaKm(lat1, lon1, lat2, lon2) {
   const a = Math.sin(dLat/2)**2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon/2)**2;
   return Math.round(2 * R * Math.asin(Math.sqrt(a)));
 }
-function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
+function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString(localeNerd(), { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 
 // ── SELETOR DE TIMES ──────────────────────────────────────────
 function CardTime({ t: time, onSelect, destaque = false }) {
@@ -395,7 +396,7 @@ function SeletorTimes({ onSelect }) {
                   </div>
                   <div style={{ fontSize:10, color:C.dim, marginTop:1 }}>
                     {dataRef
-                      ? `${t("home.filtro.data.desc_ativo")} ${new Date(dataRef+'T12:00:00').toLocaleDateString('pt-BR')}`
+                      ? `${t("home.filtro.data.desc_ativo")} ${new Date(dataRef+'T12:00:00').toLocaleDateString(localeNerd())}`
                       : t("home.filtro.data.desc_vazio")}
                   </div>
                 </div>
@@ -672,7 +673,7 @@ function VisaoGeralTurma({ temporada }) {
               <span style={{ fontWeight:800, color:C.gold }}>{g.placar_a} × {g.placar_b}</span>
               <span>{g.nome_b}</span>
               <span style={{ display:"inline-block", width:11, height:11, borderRadius:"50%", background:g.cor_b||C.dim }} />
-              <span style={{ marginLeft:"auto", fontSize:11, color:C.dim }}>{g.data ? new Date(g.data).toLocaleDateString("pt-BR") : ""}</span>
+              <span style={{ marginLeft:"auto", fontSize:11, color:C.dim }}>{g.data ? new Date(g.data).toLocaleDateString(localeNerd()) : ""}</span>
             </div>
           ))}
         </Card>
@@ -1348,7 +1349,7 @@ function BlocoAvaliacoes() {
     if (dias === 0) return t("aval.hoje");
     if (dias === 1) return t("aval.ha_1_dia");
     if (dias < 30) return t("aval.ha_dias", { n: dias });
-    return d.toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+    return d.toLocaleDateString(localeNerd(), { month: "short", year: "numeric" });
   }
 
   return (
@@ -1395,6 +1396,7 @@ function BlocoAvaliacoes() {
 }
 
 function ModalSolicitacao({ onClose }) {
+  const { t } = useIdioma();
   const [form, setForm] = useState({
     nome_time:"", id_tipo_time:"", id_subtipo:"", data_fundacao:"", cidade:"", id_cidade:"",
     nome_responsavel:"", email_responsavel:"", telefone:"", senha:"", hp:"",
@@ -1415,17 +1417,17 @@ function ModalSolicitacao({ onClose }) {
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
   function validar() {
-    if (!form.nome_time.trim())          return "Nome do time é obrigatório.";
-    if (!form.nome_responsavel.trim())   return "Nome do responsável é obrigatório.";
-    if (!form.email_responsavel.trim())  return "E-mail é obrigatório.";
-    if (!/\S+@\S+\.\S+/.test(form.email_responsavel)) return "E-mail inválido.";
-    if (form.telefone.replace(/\D/g, "").length < 10) return "Telefone inválido — informe DDD + número (só dígitos).";
-    if ((form.senha||"").length < 6) return "Crie uma senha com pelo menos 6 caracteres.";
+    if (!form.nome_time.trim())          return t("cadastro.erro.nome_time");
+    if (!form.nome_responsavel.trim())   return t("cadastro.erro.nome_resp");
+    if (!form.email_responsavel.trim())  return t("cadastro.erro.email_obrig");
+    if (!/\S+@\S+\.\S+/.test(form.email_responsavel)) return t("cadastro.erro.email_invalido");
+    if (form.telefone.replace(/\D/g, "").length < 10) return t("cadastro.erro.telefone");
+    if ((form.senha||"").length < 6) return t("cadastro.erro.senha");
     {
-      if (!modoJogo) return "Escolha como seu time joga.";
-      if (!form.id_tipo_time) return "Escolha a modalidade.";
-      const tipoSel = (tipos||[]).find(t => String(t.id_tipo_time) === String(form.id_tipo_time));
-      if (tipoSel?.eh_turma_fechada && !form.id_subtipo) return "Escolha a modalidade da turma (futsal, society, etc.).";
+      if (!modoJogo) return t("cadastro.erro.modo_jogo");
+      if (!form.id_tipo_time) return t("cadastro.erro.modalidade");
+      const tipoSel = (tipos||[]).find(tp => String(tp.id_tipo_time) === String(form.id_tipo_time));
+      if (tipoSel?.eh_turma_fechada && !form.id_subtipo) return t("cadastro.erro.modalidade_turma");
     }
     return "";
   }
@@ -1476,7 +1478,7 @@ function ModalSolicitacao({ onClose }) {
         // Fluxo antigo assumiu (limite/kill-switch): solicitação registrada como pendente.
         setEnviado(true);
       } else {
-        throw new Error(data.error || "Erro ao criar o time. Tente novamente.");
+        throw new Error(data.error || t("cadastro.erro.generico"));
       }
     } catch(e) { setErro(e.message); }
     finally { setSaving(false); }
@@ -1486,10 +1488,10 @@ function ModalSolicitacao({ onClose }) {
     <div style={{ position:"fixed", inset:0, background:"#00000099", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div style={{ background:C.surface, borderRadius:16, padding:40, maxWidth:400, width:"100%", textAlign:"center", border:`1px solid ${C.gold}66` }}>
         <div style={{ fontSize:56, marginBottom:16 }}>🎉</div>
-        <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:12 }}>Seu time está no ar!</div>
+        <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:12 }}>{t("cadastro.entrando.titulo")}</div>
         <div style={{ fontSize:13, color:C.dim, lineHeight:1.6 }}>
-          Conta criada com sucesso. <b style={{color:C.gold}}>Entrando no painel do seu time...</b><br/>
-          Seu login é o e-mail informado, com a senha que você criou.
+          {t("cadastro.entrando.texto1")} <b style={{color:C.gold}}>{t("cadastro.entrando.texto2")}</b><br/>
+          {t("cadastro.entrando.texto3")}
         </div>
       </div>
     </div>
@@ -1499,19 +1501,19 @@ function ModalSolicitacao({ onClose }) {
     <div style={{ position:"fixed", inset:0, background:"#00000099", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
       <div style={{ background:C.surface, borderRadius:16, padding:40, maxWidth:400, width:"100%", textAlign:"center", border:`1px solid ${C.border}` }}>
         <div style={{ fontSize:56, marginBottom:16 }}>✅</div>
-        <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:12 }}>Solicitação enviada!</div>
+        <div style={{ fontSize:20, fontWeight:800, color:C.cream, marginBottom:12 }}>{t("cadastro.enviado.titulo")}</div>
         <div style={{ fontSize:13, color:C.dim, lineHeight:1.7, marginBottom:20 }}>
-          Recebemos os dados do <b style={{ color:C.cream }}>{form.nome_time}</b>.
-          Nossa equipe irá analisar e, em alguns dias, enviar o acesso para o e-mail <b style={{ color:C.gold }}>{form.email_responsavel}</b>.
+          {t("cadastro.enviado.texto1")} <b style={{ color:C.cream }}>{form.nome_time}</b>.
+          {" "}{t("cadastro.enviado.texto2")} <b style={{ color:C.gold }}>{form.email_responsavel}</b>.
         </div>
         <div style={{ fontSize:12, color:C.cream, lineHeight:1.6, marginBottom:24, background:C.loss+"18", border:`1px solid ${C.loss}66`, borderRadius:10, padding:"14px 16px", textAlign:"left" }}>
-          <b style={{ color:C.loss, fontSize:13 }}>⚠️ Importante: procure no SPAM!</b><br/>
-          O e-mail com seu login <b>quase sempre cai na caixa de spam / lixo eletrônico</b> na primeira vez — é normal, por ser uma mensagem automática com dados de acesso.<br/><br/>
-          👉 Nos próximos dias, <b>abra a pasta de spam</b> e busque por <b style={{ color:C.gold }}>"Nerd do Campo"</b>. Ao encontrar, toque em <b>"Não é spam"</b> (ou "Marcar como confiável") para que os próximos avisos cheguem direto na sua caixa de entrada.
+          <b style={{ color:C.loss, fontSize:13 }}>{t("cadastro.enviado.spam_titulo")}</b><br/>
+          {t("cadastro.enviado.spam_texto1")}<br/><br/>
+          {t("cadastro.enviado.spam_texto2")}
         </div>
         <button onClick={onClose}
           style={{ background:C.gold, color:"#0B3D2E", border:"none", borderRadius:10, padding:"12px 32px", fontFamily:"inherit", fontWeight:800, fontSize:14, cursor:"pointer", textTransform:"uppercase" }}>
-          Fechar
+          {t("cadastro.fechar")}
         </button>
       </div>
     </div>
@@ -1523,8 +1525,8 @@ function ModalSolicitacao({ onClose }) {
         {/* Header */}
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
           <div>
-            <div style={{ fontSize:18, fontWeight:800, color:C.cream, textTransform:"uppercase", letterSpacing:"0.06em" }}>🏆 Cadastrar meu Time</div>
-            <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>Passo {step} de 2</div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.cream, textTransform:"uppercase", letterSpacing:"0.06em" }}>{t("cadastro.titulo")}</div>
+            <div style={{ fontSize:12, color:C.dim, marginTop:2 }}>{t("cadastro.passo", { n: step })}</div>
           </div>
           <button onClick={onClose}
             style={{ background:"none", border:"none", color:C.dim, cursor:"pointer", fontSize:22, lineHeight:1 }}>✕</button>
@@ -1540,24 +1542,24 @@ function ModalSolicitacao({ onClose }) {
 
         {step === 1 && (
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", fontWeight:700, letterSpacing:"0.08em", borderLeft:`3px solid ${C.gold}`, paddingLeft:8 }}>Dados do Time</div>
+            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", fontWeight:700, letterSpacing:"0.08em", borderLeft:`3px solid ${C.gold}`, paddingLeft:8 }}>{t("cadastro.passo1.titulo")}</div>
 
             <div>
-              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Nome do Time *</div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>{t("cadastro.nome_time")}</div>
               <input value={form.nome_time} onChange={e => set("nome_time", e.target.value)}
-                placeholder="Ex: Nerd do Campo FC"
+                placeholder={t("cadastro.nome_time_ph")}
                 style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
             </div>
 
             {/* Passo 1: como o time joga — traduz tipo vs turma fechada numa pergunta simples */}
             <div>
-              <div style={{ fontSize:11, color:C.dim, marginBottom:6 }}>Como seu time joga?</div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:6 }}>{t("cadastro.como_joga")}</div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                 {(() => {
-                  const tipoTurma = (tipos||[]).find(t => t.eh_turma_fechada);
+                  const tipoTurma = (tipos||[]).find(tp => tp.eh_turma_fechada);
                   const opcoes = [
-                    { id:"enfrenta", titulo:"Enfrentamos outros times", desc:"Jogos contra adversários (campeonato, amistosos)", emoji:"🆚" },
-                    { id:"entre_si", titulo:"Jogamos entre nós", desc:"Racha / pelada / turma fechada — o grupo joga entre si", emoji:"🤝" },
+                    { id:"enfrenta", titulo:t("cadastro.enfrenta_tit"), desc:t("cadastro.enfrenta_desc"), emoji:"🆚" },
+                    { id:"entre_si", titulo:t("cadastro.entre_si_tit"), desc:t("cadastro.entre_si_desc"), emoji:"🤝" },
                   ];
                   return opcoes.map(op => {
                     const ativo = modoJogo === op.id;
@@ -1588,11 +1590,11 @@ function ModalSolicitacao({ onClose }) {
             {/* Passo 2a: enfrenta outros → escolhe o tipo (sem turma fechada na lista) */}
             {modoJogo === "enfrenta" && (
               <div>
-                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Modalidade</div>
+                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>{t("cadastro.modalidade")}</div>
                 <select value={form.id_tipo_time} onChange={e => { set("id_tipo_time", e.target.value); set("id_subtipo", ""); }}
                   style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px" }}>
-                  <option value="">Selecione...</option>
-                  {(tipos||[]).filter(t => !t.eh_turma_fechada).map(t => <option key={t.id_tipo_time} value={t.id_tipo_time}>{t.descricao}</option>)}
+                  <option value="">{t("cadastro.selecione")}</option>
+                  {(tipos||[]).filter(tp => !tp.eh_turma_fechada).map(tp => <option key={tp.id_tipo_time} value={tp.id_tipo_time}>{tp.descricao}</option>)}
                 </select>
               </div>
             )}
@@ -1600,36 +1602,36 @@ function ModalSolicitacao({ onClose }) {
             {/* Passo 2b: joga entre si → escolhe só a modalidade (subtipo) */}
             {modoJogo === "entre_si" && (
               <div>
-                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Qual a modalidade da turma?</div>
+                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>{t("cadastro.modalidade_turma")}</div>
                 <select value={form.id_subtipo||""} onChange={e => set("id_subtipo", e.target.value)}
                   style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px" }}>
-                  <option value="">Selecione a modalidade...</option>
-                  {(tipos||[]).filter(t => !t.eh_turma_fechada).map(t => <option key={t.id_tipo_time} value={t.id_tipo_time}>{t.descricao}</option>)}
+                  <option value="">{t("cadastro.selecione_modalidade")}</option>
+                  {(tipos||[]).filter(tp => !tp.eh_turma_fechada).map(tp => <option key={tp.id_tipo_time} value={tp.id_tipo_time}>{tp.descricao}</option>)}
                 </select>
-                <div style={{ fontSize:11, color:C.dim, marginTop:4 }}>Ex: futsal, society — define titulares e posições que sua turma vai usar.</div>
+                <div style={{ fontSize:11, color:C.dim, marginTop:4 }}>{t("cadastro.modalidade_turma_ex")}</div>
               </div>
             )}
 
             <div style={{ display:"grid", gridTemplateColumns:"110px 1fr", gap:12 }}>
               <div>
-                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Estado</div>
+                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>{t("cadastro.estado")}</div>
                 <select value={uf} onChange={e => { setUf(e.target.value); set("id_cidade", ""); }}
                   style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}>
                   {UFS_BR.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
               </div>
               <div>
-                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Cidade</div>
+                <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>{t("cadastro.cidade")}</div>
                 <select value={form.id_cidade} onChange={e => set("id_cidade", e.target.value)}
                   style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}>
-                  <option value="">{cidadesUf === null ? "Carregando..." : "Selecione a cidade..."}</option>
+                  <option value="">{cidadesUf === null ? t("cadastro.carregando") : t("cadastro.selecione_cidade")}</option>
                   {(cidadesUf || []).map(c => <option key={c.id_cidade} value={c.id_cidade}>{c.nome}</option>)}
                 </select>
               </div>
             </div>
 
             <div>
-              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Data de Fundação</div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>{t("cadastro.data_fundacao")}</div>
               <input type="date" value={form.data_fundacao} onChange={e => set("data_fundacao", e.target.value)}
                 style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
             </div>
@@ -1641,46 +1643,46 @@ function ModalSolicitacao({ onClose }) {
                 border:"none", borderRadius:10, padding:"13px", fontFamily:"inherit",
                 fontWeight:800, fontSize:14, cursor: form.nome_time.trim() ? "pointer" : "not-allowed",
                 textTransform:"uppercase", marginTop:4 }}>
-              Próximo →
+              {t("cadastro.proximo")}
             </button>
           </div>
         )}
 
         {step === 2 && (
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", fontWeight:700, letterSpacing:"0.08em", borderLeft:`3px solid ${C.gold}`, paddingLeft:8 }}>Dados do Responsável</div>
+            <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", fontWeight:700, letterSpacing:"0.08em", borderLeft:`3px solid ${C.gold}`, paddingLeft:8 }}>{t("cadastro.passo2.titulo")}</div>
 
             <div>
-              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Nome do Responsável *</div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>{t("cadastro.nome_resp")}</div>
               <input value={form.nome_responsavel} onChange={e => set("nome_responsavel", e.target.value)}
-                placeholder="Seu nome completo"
+                placeholder={t("cadastro.nome_resp_ph")}
                 style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
             </div>
 
             <div>
-              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>E-mail *</div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>{t("cadastro.email")}</div>
               <input type="email" value={form.email_responsavel} onChange={e => set("email_responsavel", e.target.value)}
                 placeholder="seu@email.com"
                 style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
-              <div style={{ fontSize:10, color:C.dim, marginTop:4 }}>Será o e-mail de acesso ao painel admin</div>
+              <div style={{ fontSize:10, color:C.dim, marginTop:4 }}>{t("cadastro.email_acesso")}</div>
             </div>
 
             <div>
-              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Telefone / WhatsApp *</div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>{t("cadastro.telefone")}</div>
               <input value={form.telefone} onChange={e => set("telefone", e.target.value.replace(/\D/g, ""))}
                 inputMode="numeric" maxLength={13}
-                placeholder="51999999999 (só números, com DDD)"
+                placeholder={t("cadastro.telefone_ph")}
                 style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 12px", boxSizing:"border-box", outline:"none" }}/>
             </div>
 
             <div>
-              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>Crie sua senha de acesso * <span style={{ color:C.gold }}>(você entra no painel na hora!)</span></div>
+              <div style={{ fontSize:11, color:C.dim, marginBottom:4 }}>{t("cadastro.senha_titulo")} <span style={{ color:C.gold }}>{t("cadastro.senha_aviso")}</span></div>
               <div style={{ position:"relative" }}>
                 <input type={mostrarSenha ? "text" : "password"} value={form.senha} onChange={e => set("senha", e.target.value)}
-                  placeholder="Mínimo 6 caracteres" autoComplete="new-password"
+                  placeholder={t("cadastro.senha_ph")} autoComplete="new-password"
                   style={{ width:"100%", background:C.surf2, border:`1px solid ${C.border}`, borderRadius:8, color:C.cream, fontFamily:"inherit", fontSize:14, padding:"10px 40px 10px 12px", boxSizing:"border-box", outline:"none" }}/>
                 <button type="button" onClick={() => setMostrarSenha(v => !v)}
-                  aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"} title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                  aria-label={mostrarSenha ? t("login.ocultar_senha") : t("login.mostrar_senha")} title={mostrarSenha ? t("login.ocultar_senha") : t("login.mostrar_senha")}
                   style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", fontSize:17, padding:4, lineHeight:1 }}>
                   {mostrarSenha ? "🧤" : "⚽"}
                 </button>
@@ -1693,12 +1695,12 @@ function ModalSolicitacao({ onClose }) {
 
             {/* Resumo */}
             <div style={{ background:C.surf2, borderRadius:10, padding:14, border:`1px solid ${C.border}` }}>
-              <div style={{ fontSize:11, color:C.gold, fontWeight:700, marginBottom:8 }}>📋 Resumo da solicitação</div>
+              <div style={{ fontSize:11, color:C.gold, fontWeight:700, marginBottom:8 }}>{t("cadastro.resumo")}</div>
               <div style={{ fontSize:12, color:C.dim, lineHeight:1.8 }}>
-                <b style={{ color:C.cream }}>Time:</b> {form.nome_time}<br/>
-                {form.id_cidade && (() => { const c = (cidadesUf||[]).find(x => String(x.id_cidade) === String(form.id_cidade)); return c ? <><b style={{ color:C.cream }}>Cidade:</b> {c.nome} - {c.estado}<br/></> : null; })()}
-                {form.id_tipo_time && (tipos||[]).find(t=>String(t.id_tipo_time)===String(form.id_tipo_time)) && (
-                  <><b style={{ color:C.cream }}>Tipo:</b> {(tipos||[]).find(t=>String(t.id_tipo_time)===String(form.id_tipo_time))?.descricao}<br/></>
+                <b style={{ color:C.cream }}>{t("cadastro.resumo_time")}</b> {form.nome_time}<br/>
+                {form.id_cidade && (() => { const c = (cidadesUf||[]).find(x => String(x.id_cidade) === String(form.id_cidade)); return c ? <><b style={{ color:C.cream }}>{t("cadastro.resumo_cidade")}</b> {c.nome} - {c.estado}<br/></> : null; })()}
+                {form.id_tipo_time && (tipos||[]).find(tp=>String(tp.id_tipo_time)===String(form.id_tipo_time)) && (
+                  <><b style={{ color:C.cream }}>{t("cadastro.resumo_tipo")}</b> {(tipos||[]).find(tp=>String(tp.id_tipo_time)===String(form.id_tipo_time))?.descricao}<br/></>
                 )}
               </div>
             </div>
@@ -1710,7 +1712,7 @@ function ModalSolicitacao({ onClose }) {
                 style={{ flex:1, background:C.surf2, color:C.dim, border:`1px solid ${C.border}`,
                   borderRadius:10, padding:"13px", fontFamily:"inherit", fontWeight:700,
                   fontSize:13, cursor:"pointer", textTransform:"uppercase" }}>
-                ← Voltar
+                {t("cadastro.voltar")}
               </button>
               <button onClick={enviar} disabled={saving}
                 style={{ flex:2, background: saving ? C.surf2 : C.gold,
@@ -1718,7 +1720,7 @@ function ModalSolicitacao({ onClose }) {
                   borderRadius:10, padding:"13px", fontFamily:"inherit",
                   fontWeight:800, fontSize:14, cursor: saving ? "not-allowed" : "pointer",
                   textTransform:"uppercase" }}>
-                {saving ? "Criando seu time..." : "🏆 Criar meu time agora"}
+                {saving ? t("cadastro.criando") : t("cadastro.criar_agora")}
               </button>
             </div>
           </div>

@@ -349,14 +349,14 @@ function VisaoGeralSuper({ totalTimes, totalUsuarios, solPendentes, novosSelf=0,
   const qtdPago = Number(_tot?.qtd_pago || 0);
   const qtdNaoPago = Number(_tot?.qtd_nao_pago || 0);
   const pctPago = esperado > 0 ? Math.round((recebido / esperado) * 100) : 0;
-  const fmt = (n) => n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = (n) => n.toLocaleString(localeNerd(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const cards = [
-    { ic:"🛡️", num: totalTimes.toLocaleString("pt-BR"), lbl:"Times cadastrados", cor:C.cream },
-    { ic:"✅", num: qtdPago.toLocaleString("pt-BR"), lbl:`Pagantes em ${nomesMes[mes-1]}`, cor:C.win },
+    { ic:"🛡️", num: totalTimes.toLocaleString(localeNerd()), lbl:"Times cadastrados", cor:C.cream },
+    { ic:"✅", num: qtdPago.toLocaleString(localeNerd()), lbl:`Pagantes em ${nomesMes[mes-1]}`, cor:C.win },
     { ic:"💰", num: `R$ ${fmt(recebido)}`, lbl:"Recebido este mês", cor:C.gold },
-    { ic:"📬", num: solPendentes.toLocaleString("pt-BR"), lbl:"Solicitações pendentes", cor: solPendentes > 0 ? C.loss : C.cream },
-    { ic:"🆕", num: novosSelf.toLocaleString("pt-BR"), lbl:"Times por autocadastro (7 dias)", cor: novosSelf > 0 ? C.gold : C.cream },
+    { ic:"📬", num: solPendentes.toLocaleString(localeNerd()), lbl:"Solicitações pendentes", cor: solPendentes > 0 ? C.loss : C.cream },
+    { ic:"🆕", num: novosSelf.toLocaleString(localeNerd()), lbl:"Times por autocadastro (7 dias)", cor: novosSelf > 0 ? C.gold : C.cream },
   ];
 
   return (
@@ -393,7 +393,7 @@ function VisaoGeralSuper({ totalTimes, totalUsuarios, solPendentes, novosSelf=0,
       <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:24 }}>
         <div style={{ fontSize:14, fontWeight:700, textTransform:"uppercase", letterSpacing:"1px", color:C.cream, marginBottom:16 }}>⚠️ Precisa de atenção</div>
         {[
-          { nm:`${qtdNaoPago.toLocaleString("pt-BR")} times com mensalidade em aberto`, sub:`Referente a ${nomesMes[mes-1]}`, mostra: qtdNaoPago > 0, cor:C.loss },
+          { nm:`${qtdNaoPago.toLocaleString(localeNerd())} times com mensalidade em aberto`, sub:`Referente a ${nomesMes[mes-1]}`, mostra: qtdNaoPago > 0, cor:C.loss },
           { nm:`${solPendentes} solicitações de cadastro`, sub:"Aguardando sua aprovação", mostra: solPendentes > 0, cor:C.gold },
         ].filter(x => x.mostra).map((x,i) => (
           <div key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 0", borderBottom: i===0 ? `1px solid ${C.border}` : "none" }}>
@@ -425,7 +425,7 @@ function VisaoGeralSuper({ totalTimes, totalUsuarios, solPendentes, novosSelf=0,
               <div style={{ fontSize:14, fontWeight:600, color:C.cream }}>{x.nm}{x.faixa && onVerRisco && <span style={{ fontSize:11, color:x.cor, marginLeft:8 }}>→ ver lista</span>}</div>
               <div style={{ fontSize:12, color:C.dim }}>{x.sub}</div>
             </div>
-            <div style={{ fontSize:22, fontWeight:800, color:x.cor }}>{x.cnt.toLocaleString("pt-BR")}</div>
+            <div style={{ fontSize:22, fontWeight:800, color:x.cor }}>{x.cnt.toLocaleString(localeNerd())}</div>
           </div>
         ))}
       </div>
@@ -515,7 +515,7 @@ function DashboardSuper() {
       Status: t.status || "",
       Temporadas: (t.temporada||[]).length,
       Admins: (t.usuario_time||[]).length,
-      UltimaAtividade: t.ultima_atividade ? new Date(t.ultima_atividade).toLocaleDateString("pt-BR") : "",
+      UltimaAtividade: t.ultima_atividade ? new Date(t.ultima_atividade).toLocaleDateString(localeNerd()) : "",
       Fundacao: t.data_fundacao || "",
     }));
     if (!linhas.length) { show("Nada para exportar."); return; }
@@ -861,7 +861,7 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
         {(vinculos||[]).filter(v => !filtroEmail || (v.email||"").toLowerCase().includes(filtroEmail.toLowerCase())).map((v,i) => (
           <tr key={v.id} style={{ background:i%2===0?C.surface:C.bg }}>
             <td style={{ padding:"12px 16px", color:C.cream, fontSize:13 }}>{v.email || v.user_id?.substring(0,8)+"..."}</td>
-            <td style={{ padding:"12px 16px", color:C.dim, fontSize:12 }}>{v.last_sign_in_at ? new Date(v.last_sign_in_at).toLocaleDateString("pt-BR") : "Nunca"}</td>
+            <td style={{ padding:"12px 16px", color:C.dim, fontSize:12 }}>{v.last_sign_in_at ? new Date(v.last_sign_in_at).toLocaleDateString(localeNerd()) : "Nunca"}</td>
             <td style={{ padding:"12px 16px", fontWeight:700, color:C.cream }}>{v.nome_time||"—"}</td>
             <td style={{ padding:"12px 16px", whiteSpace:"nowrap", fontSize:12 }}>{(() => {
               const tel = mapaTelAdmin[v.id] || mapaTelUsu[v.id_time];
@@ -875,7 +875,7 @@ function UsuariosTable({ times, reload, show, onPermissoes }) {
                 {v.role}
               </span>
             </td>
-            <td style={{ padding:"12px 16px", color:C.dim, fontSize:13 }}>{new Date(v.criado_em).toLocaleDateString("pt-BR")}</td>
+            <td style={{ padding:"12px 16px", color:C.dim, fontSize:13 }}>{new Date(v.criado_em).toLocaleDateString(localeNerd())}</td>
             <td style={{ padding:"12px 16px", display:"flex", gap:6 }}>
               {v.role !== "superadmin" && (
                 <Btn variant="secondary" style={{ fontSize:11, padding:"4px 10px" }}
@@ -1294,7 +1294,7 @@ function GestaoAvaliacoes({ show, onMudou }) {
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:12, color:C.cream, fontWeight:700 }}>{identidade}</div>
                 <div style={{ fontSize:11, color:C.dim }}>
-                  {av.publicar_identidade ? "🌐 identidade pública" : "🔒 identidade oculta"} · enviada {new Date(av.criado_em).toLocaleDateString("pt-BR")}
+                  {av.publicar_identidade ? "🌐 identidade pública" : "🔒 identidade oculta"} · enviada {new Date(av.criado_em).toLocaleDateString(localeNerd())}
                 </div>
               </div>
             </div>
@@ -1360,7 +1360,7 @@ function CrudErros({ show, onMudou }) {
     finally { setSaving(false); }
   }
 
-  const fmtDT = (iso) => iso ? new Date(iso).toLocaleString("pt-BR", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : "—";
+  const fmtDT = (iso) => iso ? new Date(iso).toLocaleString(localeNerd(), { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : "—";
   const APPS = [["todos","Todos"],["publico","🌐 Público"],["admin","🟢 Admin"],["super","👑 Super"],["confirmar","🙋 Confirmação"],["conheca","📣 Conheça"],["recuperar","🔑 Recuperar"]];
 
   return (
@@ -1553,7 +1553,7 @@ Abraço do Nerd!`,
                 Time: <b style={{color:C.cream}}>{s.time?.nome || "—"}</b> · 📱 {fmtTel(s.telefone)}
               </div>
               <div style={{ fontSize:11, color:C.dim, marginTop:2 }}>
-                Pedido por {s.solicitado_por || "—"} · {s.criado_em ? new Date(s.criado_em).toLocaleDateString("pt-BR") : ""}
+                Pedido por {s.solicitado_por || "—"} · {s.criado_em ? new Date(s.criado_em).toLocaleDateString(localeNerd()) : ""}
               </div>
             </div>
             <span style={{ fontSize:11, fontWeight:700, color: STATUS_SOL[s.status]?.cor, border:`1px solid ${STATUS_SOL[s.status]?.cor}55`, background:`${STATUS_SOL[s.status]?.cor}18`, borderRadius:6, padding:"3px 10px", whiteSpace:"nowrap" }}>{STATUS_SOL[s.status]?.label || s.status}</span>
@@ -1845,7 +1845,7 @@ nerddocampo.com.br/admin`;
                 const ehSelf = s.origem === "self";
                 return (
                   <tr key={s.id} style={{ background:i%2===0?C.surface:C.bg }}>
-                    <td style={{ padding:"11px 14px", color:C.dim, fontSize:11, whiteSpace:"nowrap" }}>{new Date(s.criado_em).toLocaleDateString("pt-BR")}</td>
+                    <td style={{ padding:"11px 14px", color:C.dim, fontSize:11, whiteSpace:"nowrap" }}>{new Date(s.criado_em).toLocaleDateString(localeNerd())}</td>
                     <td style={{ padding:"11px 14px", fontWeight:700, color:C.cream }}>{s.nome_time}</td>
                     <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{(tipos||[]).find(t => String(t.id_tipo_time) === String(s.id_tipo_time))?.descricao || "—"}</td>
                     <td style={{ padding:"11px 14px", color:C.dim, fontSize:12 }}>{s.cidade || "—"}</td>
@@ -1890,7 +1890,7 @@ nerddocampo.com.br/admin`;
                   ["Tipo",          (tipos||[]).find(t => String(t.id_tipo_time) === String(modalSol.id_tipo_time))?.descricao || "—"],
                   ...(modalSol.id_subtipo ? [["Modalidade (subtipo)", (tipos||[]).find(t => String(t.id_tipo_time) === String(modalSol.id_subtipo))?.descricao || "—"]] : []),
                   ["Cidade",        modalSol.cidade || "—"],
-                  ["Fundação",      modalSol.data_fundacao ? new Date(modalSol.data_fundacao+"T12:00:00").toLocaleDateString("pt-BR") : "—"],
+                  ["Fundação",      modalSol.data_fundacao ? new Date(modalSol.data_fundacao+"T12:00:00").toLocaleDateString(localeNerd()) : "—"],
                   ["Responsável",   modalSol.nome_responsavel],
                   ["E-mail",        modalSol.email_responsavel],
                   ["Telefone",      modalSol.telefone],
@@ -3431,7 +3431,7 @@ function CrudTipoTime({ show }) {
 export default function SuperApp() {
   const [session, setSession] = useState(SESSION_TOKEN ? {access_token: SESSION_TOKEN} : null);
   const [sessaoExpirou, setSessaoExpirou] = useState(false);
-  const APP_VERSION = process.env.REACT_APP_VERSION || "1.37.0";
+  const APP_VERSION = process.env.REACT_APP_VERSION || "1.38.0";
   if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 
   useEffect(() => {
