@@ -1,3 +1,4 @@
+const localeNerd = () => { try { const x=localStorage.getItem("nerd_idioma"); return x === "en" ? "en-US" : x === "es" ? "es-ES" : "pt-BR"; } catch(e) { return "pt-BR"; } };
 
 import { useState, useEffect } from "react";
 import { IdiomaProvider, useIdioma, SeletorIdioma } from "./i18n";
@@ -243,7 +244,7 @@ function BlocoDepoimentos() {
     if (dias <= 0) return t("aval.hoje");
     if (dias === 1) return t("aval.ha_1_dia");
     if (dias < 30) return t("aval.ha_dias", { n: dias });
-    return new Date(iso).toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+    return new Date(iso).toLocaleDateString(localeNerd(), { month: "short", year: "numeric" });
   };
 
   return (
@@ -376,7 +377,7 @@ function ConhecaConteudo() {
 
         {/* Manual do usuário — disponível para quem quer se aprofundar antes */}
         <div style={{ textAlign:"center", marginBottom:40 }}>
-          <a href={`/manual.pdf?v=1.37.0`} target="_blank" rel="noopener noreferrer"
+          <a href={`/manual.pdf?v=1.38.0`} target="_blank" rel="noopener noreferrer"
             style={{ display:"inline-flex", alignItems:"center", gap:10, background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:"16px 24px", color:C.cream, textDecoration:"none", fontSize:14, fontWeight:700 }}>
             <span style={{ fontSize:24 }}>📖</span>
             <span style={{ textAlign:"left" }}>

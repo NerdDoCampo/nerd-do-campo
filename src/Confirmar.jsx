@@ -96,10 +96,10 @@ export default function Confirmar() {
     if (!q) return null;
     try {
       const d = new Date(q);
-      const data = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+      const data = d.toLocaleDateString(localeNerd(), { weekday: "long", day: "2-digit", month: "long" });
       // se tiver hora significativa (não meia-noite), mostra
       const temHora = d.getHours() !== 0 || d.getMinutes() !== 0;
-      const hora = temHora ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : null;
+      const hora = temHora ? d.toLocaleTimeString(localeNerd(), { hour: "2-digit", minute: "2-digit" }) : null;
       return hora ? `${data} às ${hora}` : data;
     } catch { return null; }
   }

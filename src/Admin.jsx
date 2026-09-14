@@ -1,6 +1,7 @@
+const localeNerd = () => { try { const x=localStorage.getItem("nerd_idioma"); return x === "en" ? "en-US" : x === "es" ? "es-ES" : "pt-BR"; } catch(e) { return "pt-BR"; } };
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { IdiomaProvider, useIdioma, SeletorIdioma } from "./i18n";
-const APP_VERSION = process.env.REACT_APP_VERSION || "1.37.0";
+const APP_VERSION = process.env.REACT_APP_VERSION || "1.38.0";
 if (typeof window !== "undefined") window.__NDC_VERSAO = APP_VERSION; // usado pelo monitor de erros (index.js)
 const UFS_BR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
@@ -291,7 +292,7 @@ function ImageUpload({ label, value, onUpload, bucket, nomeArquivo }) {
 
 
 // Funções auxiliares compartilhadas
-function fmtDataP(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
+function fmtDataP(ts) { return ts ? new Date(ts).toLocaleDateString(localeNerd()) : "—"; }
 // ── Tratamento de HORA — "hora da parede" (Caminho A) ──
 // Convenção: a hora é gravada e lida literalmente em UTC, sem conversão
 // de fuso. Assim "14h" digitado é "14h" em qualquer lugar do mundo.
@@ -313,7 +314,7 @@ function dataDeTS(ts) {
   if (!ts) return "";
   return String(ts).slice(0,10);
 }
-function fmtHoraP(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
+function fmtHoraP(ts) { return ts ? new Date(ts).toLocaleTimeString(localeNerd(), { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 function resultadoP(p) {
   if (p.cancelada === "S") return { label:"Cancelado", cor:C.dim };
   if (p.gols_marcados === null) return { label:"Aguardando", cor:C.gold };
@@ -332,7 +333,7 @@ function BadgeP({ label, cor }) {
 // VISÃO DO APP PÚBLICO — espelhada no admin
 // ══════════════════════════════════════════════════════════════
 
-function fmtDataA(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR", { timeZone:"UTC" }) : "—"; }
+function fmtDataA(ts) { return ts ? new Date(ts).toLocaleDateString(localeNerd(), { timeZone:"UTC" }) : "—"; }
 // valida link de localização: aceita vazio, ou texto que CONTENHA uma URL
 function extrairURL(v) {
   if (!v) return null;
@@ -354,7 +355,7 @@ function linkLocalValido(v) {
 function normalizarLink(v) {
   return extrairURL(v); // retorna a URL pronta, ou null se não achar
 }
-function fmtHoraA(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
+function fmtHoraA(ts) { return ts ? new Date(ts).toLocaleTimeString(localeNerd(), { hour:"2-digit", minute:"2-digit", timeZone:"UTC" }) : "—"; }
 function resultadoA(p) {
   if (p.cancelada === "S") return { label:"Cancelado", cor:C.dim };
   if (p.gols_marcados === null) return { label:"Aguardando", cor:C.gold };
@@ -1427,8 +1428,8 @@ function useQuery(fetcher, deps = []) {
 }
 
 const _semAcento = (s) => String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString("pt-BR") : "—"; }
-function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone:"UTC" }) : "—"; }
+function fmtData(ts) { return ts ? new Date(ts).toLocaleDateString(localeNerd()) : "—"; }
+function fmtHora(ts) { return ts ? new Date(ts).toLocaleTimeString(localeNerd(), { hour: "2-digit", minute: "2-digit", timeZone:"UTC" }) : "—"; }
 function resultado(p) {
   if (p.cancelada === "S")      return { label: "Cancelado", cor: C.dim };
   if (p.gols_marcados === null) return { label: "Pendente",  cor: C.dim };
@@ -1460,7 +1461,7 @@ function BlocoAvaliacoesLogin() {
     if (dias === 0) return "hoje";
     if (dias === 1) return "há 1 dia";
     if (dias < 30) return `há ${dias} dias`;
-    return d.toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+    return d.toLocaleDateString(localeNerd(), { month: "short", year: "numeric" });
   }
 
   return (
@@ -1809,7 +1810,7 @@ function ListaPartidas({ temporada, onSelect, onNova, adversarios, campos, show:
               (partidas||[]).map(p => ({
                 id_partida: p.id_partida,
                 adversario: p.adversario?.nome||"",
-                data: p.data ? new Date(p.data).toLocaleDateString("pt-BR") : "",
+                data: p.data ? new Date(p.data).toLocaleDateString(localeNerd()) : "",
                 hora: horaDeTS(p.data),
                 em_casa: p.em_casa==="S"?"SIM":"NAO",
                 cancelada: p.cancelada==="S"?"SIM":"NAO",
@@ -2133,7 +2134,7 @@ function CompartilharResultado({ partida, gols, jogadores, time, temporada, idTi
     ctx.fillStyle = DIM; ctx.font = "18px Arial";
     ctx.fillText("mandante", W*0.23, cy+22);
     ctx.fillText("visitante", W*0.77, cy+22);
-    const dataFmt = partida.data ? new Date(partida.data).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) : "";
+    const dataFmt = partida.data ? new Date(partida.data).toLocaleDateString(localeNerd(),{day:"2-digit",month:"2-digit"}) : "";
     ctx.fillText(`${dataFmt}${partida.campo?.nome ? " · "+partida.campo.nome : ""}`.slice(0,40), W/2, cy+62);
 
     // gols e assistências — encolhe a fonte pra caber na largura do card (nunca vaza a borda)
@@ -2356,8 +2357,8 @@ function ConvocarPartida({ partida, time, idTime, show }) {
     // infos: data, horário, local
     const dt = partida.data ? new Date(partida.data) : null;
     const dias = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
-    const dataTxt = dt ? `${dias[dt.getUTCDay()]}, ${dt.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",timeZone:"UTC"})}` : "A definir";
-    const horaTxt = dt ? dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"}).replace(":","h") : "A definir";
+    const dataTxt = dt ? `${dias[dt.getUTCDay()]}, ${dt.toLocaleDateString(localeNerd(),{day:"2-digit",month:"2-digit",timeZone:"UTC"})}` : "A definir";
+    const horaTxt = dt ? dt.toLocaleTimeString(localeNerd(),{hour:"2-digit",minute:"2-digit",timeZone:"UTC"}).replace(":","h") : "A definir";
     const localTxt = partida.campo?.nome || (emCasa ? (cidade||"A definir") : "Fora");
     const infos = [["📅","DATA",dataTxt],["⏰","HORÁRIO",horaTxt],["📍","LOCAL",localTxt]];
     infos.forEach(([ic,lbl,val]) => {
@@ -2550,9 +2551,9 @@ function CompartilharPresenca({ tipo, idRef, idTime, titulo, data, local, linkLo
     const dt = data ? new Date(data) : null;
     const dias = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
     const temHora = data && String(data).length > 10; // TIMESTAMPTZ tem hora; DATE não
-    const dataTxt = dt ? `${dias[dt.getUTCDay()]}, ${dt.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",timeZone:"UTC"})}` : "A definir";
+    const dataTxt = dt ? `${dias[dt.getUTCDay()]}, ${dt.toLocaleDateString(localeNerd(),{day:"2-digit",month:"2-digit",timeZone:"UTC"})}` : "A definir";
     const infos = [["📅","DATA",dataTxt]];
-    if (temHora && dt) infos.push(["⏰","HORÁRIO", dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"}).replace(":","h")]);
+    if (temHora && dt) infos.push(["⏰","HORÁRIO", dt.toLocaleTimeString(localeNerd(),{hour:"2-digit",minute:"2-digit",timeZone:"UTC"}).replace(":","h")]);
     if (local && local.trim()) infos.push(["📍","LOCAL", local.trim()]);
 
     const caber = (txt, base, maxW, weight="") => {
@@ -5586,7 +5587,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
     if (m.origem==="evento") return `🎉 ${m.evento?.nome || "Evento"}`;
     if (m.origem==="venda_evento") return `🎟️ ${m.evento?.nome || "Venda de cartões"}`;
     if (m.origem==="partida") return `📅 vs ${m.partida?.adversario?.nome || "Adversário"}`;
-    if (m.origem==="encontro") return `🤝 Encontro${m.encontro?.data ? " " + new Date(m.encontro.data).toLocaleDateString("pt-BR") : ""}`;
+    if (m.origem==="encontro") return `🤝 Encontro${m.encontro?.data ? " " + new Date(m.encontro.data).toLocaleDateString(localeNerd()) : ""}`;
     return m.origem;
   }
 
@@ -5595,7 +5596,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
     if (m.origem==="evento") return `Evento: ${m.evento?.nome || ""}`;
     if (m.origem==="venda_evento") return `Venda de cartões: ${m.evento?.nome || ""}`;
     if (m.origem==="partida") return `Partida vs ${m.partida?.adversario?.nome || ""}`;
-    if (m.origem==="encontro") return `Encontro${m.encontro?.data ? " de " + new Date(m.encontro.data).toLocaleDateString("pt-BR") : ""}`;
+    if (m.origem==="encontro") return `Encontro${m.encontro?.data ? " de " + new Date(m.encontro.data).toLocaleDateString(localeNerd()) : ""}`;
     return m.origem;
   }
 
@@ -5605,7 +5606,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
     return filtrados.map(m => {
       a += m.natureza==="receita" ? Number(m.valor||0) : -Number(m.valor||0);
       return {
-        Data: new Date(m.data_movimento+"T12:00:00").toLocaleDateString("pt-BR"),
+        Data: new Date(m.data_movimento+"T12:00:00").toLocaleDateString(localeNerd()),
         Descrição: m.tipo_movimento?.descricao || "",
         Origem: origemTexto(m),
         Tipo: m.natureza==="receita" ? "Receita" : "Despesa",
@@ -5667,7 +5668,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
       <td style="text-align:right">${brl(l.Valor)}</td>
       <td style="text-align:right">${brl(l.Saldo)}</td>
       <td>${l.Observação}</td><td>${l["Lançado por"]||""}</td></tr>`).join("");
-    const periodo = (dataDe||dataAte) ? `Período: ${dataDe?new Date(dataDe+"T12:00:00").toLocaleDateString("pt-BR"):"início"} a ${dataAte?new Date(dataAte+"T12:00:00").toLocaleDateString("pt-BR"):"hoje"}` : "Período: completo";
+    const periodo = (dataDe||dataAte) ? `Período: ${dataDe?new Date(dataDe+"T12:00:00").toLocaleDateString(localeNerd()):"início"} a ${dataAte?new Date(dataAte+"T12:00:00").toLocaleDateString(localeNerd()):"hoje"}` : "Período: completo";
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Extrato de Caixa</title>
       <style>
         body{font-family:Arial,sans-serif;color:#222;padding:24px;}
@@ -5684,7 +5685,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
         .assinatura{margin-top:24px;text-align:center;color:#E8A020;font-size:11px;}
       </style></head><body>
       <h1>⚽ Extrato de Caixa — ${timeData?.[0]?.nome || ""}</h1>
-      <div class="sub">${periodo} · Gerado em ${new Date().toLocaleDateString("pt-BR")}</div>
+      <div class="sub">${periodo} · Gerado em ${new Date().toLocaleDateString(localeNerd())}</div>
       <div class="resumo">
         <div class="box"><span>Saldo Inicial</span><b>${brl(saldoInicial)}</b></div>
         <div class="box"><span>Receitas</span><b style="color:#2e7d32">${brl(totR)}</b></div>
@@ -5816,7 +5817,7 @@ function CrudCaixa({ idTime, show, readOnly }) {
             <tbody>
               {extrato.map((m,i) => (
                 <tr key={m.id_movimento} style={{ background:i%2===0?C.surface:C.bg }}>
-                  <td style={{ padding:"10px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{new Date(m.data_movimento+"T12:00:00").toLocaleDateString("pt-BR")}</td>
+                  <td style={{ padding:"10px 14px", color:C.dim, fontSize:12, whiteSpace:"nowrap" }}>{new Date(m.data_movimento+"T12:00:00").toLocaleDateString(localeNerd())}</td>
                   <td style={{ padding:"10px 14px", color:C.cream }}>{m.tipo_movimento?.descricao || "—"}</td>
                   <td style={{ padding:"10px 14px", color:C.dim, fontSize:12 }}>{origemLabel(m)}</td>
                   <td style={{ padding:"10px 14px", fontWeight:700, whiteSpace:"nowrap", color: m.natureza==="receita"?C.win:C.loss }}>
@@ -6445,7 +6446,7 @@ function RelatorioVendas({ evento, idTime, onClose }) {
     return acc;
   }, { cartoes:0, venda:0, complemento:0, entregue:0, comMeta:0, bateram:0, acertados:0, abertos:0 });
 
-  const dataStr = evento.data_evento ? new Date(evento.data_evento+"T12:00:00").toLocaleDateString("pt-BR") : "sem data";
+  const dataStr = evento.data_evento ? new Date(evento.data_evento+"T12:00:00").toLocaleDateString(localeNerd()) : "sem data";
 
   function exportarCSV() {
     if (!linhas.length) return;
@@ -7692,7 +7693,7 @@ function TabelaJogadores({ grupo, lista, onEditar, onInativar, onReativar, readO
           const nomeExib = j.apelido || j.nome;
           const posTxt = j.posicao?.nome ? (j.posicao.id_posicao_pai && mapaPosJog[j.posicao.id_posicao_pai] ? `${mapaPosJog[j.posicao.id_posicao_pai]} › ${j.posicao.nome}` : j.posicao.nome) : null;
           const idade = calcularIdade(j.data_nascimento);
-          const fmtData = (d) => { if (!d) return "—"; const s = String(d); return new Date(s.length === 10 ? s + "T12:00:00" : s).toLocaleDateString("pt-BR"); };
+          const fmtData = (d) => { if (!d) return "—"; const s = String(d); return new Date(s.length === 10 ? s + "T12:00:00" : s).toLocaleDateString(localeNerd()); };
           const forcaTxt = `${NIVEIS_FORCA[j.forca||2]?.estrelas || "⭐⭐"} ${NIVEIS_FORCA[j.forca||2]?.nome || ""}`.trim();
           // Todos os campos do cadastro — sempre exibidos, na mesma ordem, independente da ordenação
           const campos = [
@@ -8409,8 +8410,8 @@ function CrudTimesInternos({ idTime, show, readOnly }) {
                   </div>
                   <div style={{ fontSize:12, color:C.dim, marginTop:4 }}>
                     {inativo
-                      ? `${t.data_inicio ? new Date(t.data_inicio).toLocaleDateString("pt-BR") : "—"} — ${new Date(t.data_fim).toLocaleDateString("pt-BR")}`
-                      : (t.data_inicio ? `Desde ${new Date(t.data_inicio).toLocaleDateString("pt-BR")}` : "—")}
+                      ? `${t.data_inicio ? new Date(t.data_inicio).toLocaleDateString(localeNerd()) : "—"} — ${new Date(t.data_fim).toLocaleDateString(localeNerd())}`
+                      : (t.data_inicio ? `Desde ${new Date(t.data_inicio).toLocaleDateString(localeNerd())}` : "—")}
                   </div>
                 </div>
                 {!readOnly && <Btn variant="secondary" style={{ fontSize:11, padding:"6px 12px", flexShrink:0 }} onClick={() => abrirEditar(t)}>Editar</Btn>}
@@ -8577,7 +8578,7 @@ function LinkConfirmacao({ tipo, idRef, idTime, dataRef, show, embutido }) {
             <Btn onClick={copiar}>Copiar</Btn>
           </div>
           <div style={{ fontSize:11, color:C.dim }}>
-            {link.expira_em ? `Expira em ${new Date(link.expira_em).toLocaleDateString("pt-BR")} ${new Date(link.expira_em).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}.` : "Sem data de expiração."} Qualquer pessoa com o link pode responder pelos nomes da lista.
+            {link.expira_em ? `Expira em ${new Date(link.expira_em).toLocaleDateString(localeNerd())} ${new Date(link.expira_em).toLocaleTimeString(localeNerd(),{hour:"2-digit",minute:"2-digit"})}.` : "Sem data de expiração."} Qualquer pessoa com o link pode responder pelos nomes da lista.
           </div>
         </div>
       )}
@@ -9767,7 +9768,7 @@ function CrudTemporadas({ idTime, show, readOnly, ehTurmaFechada }) {
             const ini = t.data_inicio ? String(t.data_inicio).split("T")[0] : null;
             const fim = t.data_fim ? String(t.data_fim).split("T")[0] : null;
             const atual = ini && ini <= h && (!fim || fim >= h);
-            const fmt = (d) => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+            const fmt = (d) => d ? new Date(d).toLocaleDateString(localeNerd()) : "—";
             const uniformes = [
               { url: t.uniforme_1_url, label:"Uniforme 1" },
               { url: t.uniforme_2_url, label:"Uniforme 2" },
@@ -10457,7 +10458,7 @@ function BlocoCraque({ tipo, idRef, idTime, placarPronto, estado, idCraque, eleg
     ctx.fillStyle = GOLD; ctx.font = "800 44px Arial";
     ctx.fillText(`🏆 CRAQUE ${tipo === "encontro" ? "DO ENCONTRO" : "DA PARTIDA"}`, W/2, 92);
     ctx.fillStyle = DIM; ctx.font = "26px Arial";
-    const dataFmt = dataRef ? new Date(dataRef).toLocaleDateString("pt-BR") : "";
+    const dataFmt = dataRef ? new Date(dataRef).toLocaleDateString(localeNerd()) : "";
     ctx.fillText([subtitulo, dataFmt].filter(Boolean).join(" · ").slice(0, 48), W/2, 134);
 
     // foto circular com borda dourada
