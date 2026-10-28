@@ -1,5 +1,15 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useId } from "react";
 
+// Formatação regional usada nos painéis do Super.
+const localeNerd = () => {
+  try {
+    const idioma = localStorage.getItem("nerd_idioma");
+    return idioma === "en" ? "en-US" : idioma === "es" ? "es-ES" : "pt-BR";
+  } catch (e) {
+    return "pt-BR";
+  }
+};
+
 // ── Supabase ──────────────────────────────────────────────────
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || "https://nxztffulmvohduvudbhg.supabase.co";
 const SUPABASE_KEY = process.env.REACT_APP_SUPABASE_ANON || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54enRmZnVsbXZvaGR1dnVkYmhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODY5ODMsImV4cCI6MjA5NTA2Mjk4M30.CwEmjukApMTJhkbKh1jlp4Q-IYrM26u-5SYx9p20nsg";
