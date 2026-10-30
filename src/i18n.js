@@ -694,18 +694,49 @@ export function useIdioma() {
 // ── Seletor visual (bandeiras) ────────────────────────────────────
 // C = paleta de cores do arquivo que está chamando (cada app tem a sua,
 // mas todas usam os mesmos nomes: gold, dim, border, cream, surf2).
+function BandeiraIdioma({ codigo, tamanho = 20 }) {
+  // SVGs próprios evitam que as bandeiras sejam exibidas como letras (BR/US/ES)
+  // em computadores Windows sem suporte a emojis de bandeira.
+  const comum = { width: tamanho, height: Math.round(tamanho * 0.68), viewBox: "0 0 30 20", role: "img", "aria-hidden": true, focusable: "false" };
+  if (codigo === "pt") return (
+    <svg {...comum}>
+      <rect width="30" height="20" rx="2" fill="#009739" />
+      <path d="M15 2.3 27 10 15 17.7 3 10Z" fill="#FFDF00" />
+      <circle cx="15" cy="10" r="4.4" fill="#002776" />
+      <path d="M11.2 8.9 Q15 7.8 18.8 10.3" fill="none" stroke="#FFFFFF" strokeWidth="0.75" />
+    </svg>
+  );
+  if (codigo === "en") return (
+    <svg {...comum}>
+      <rect width="30" height="20" rx="2" fill="#FFFFFF" />
+      <path d="M0 0H30V2H0ZM0 4H30V6H0ZM0 8H30V10H0ZM0 12H30V14H0ZM0 16H30V18H0Z" fill="#B22234" />
+      <rect width="13" height="10.8" rx="1" fill="#3C3B6E" />
+      {Array.from({ length: 9 }, (_, n) => <circle key={n} cx={1.7 + (n % 3) * 4} cy={1.6 + Math.floor(n / 3) * 3.2} r="0.55" fill="#FFFFFF" />)}
+    </svg>
+  );
+  return (
+    <svg {...comum}>
+      <rect width="30" height="20" rx="2" fill="#AA151B" />
+      <path d="M0 5H30V15H0Z" fill="#F1BF00" />
+    </svg>
+  );
+}
+
 export function SeletorIdioma({ C, tamanho = 15 }) {
   const { idioma, setIdioma } = useIdioma();
   return (
-    <div style={{ display: "flex", gap: 4 }}>
+    <div role="group" aria-label="Selecionar idioma" style={{ display: "flex", alignItems: "center", gap: 5 }}>
       {IDIOMAS.map(i => (
-        <button key={i.codigo} onClick={() => setIdioma(i.codigo)} title={i.nome} aria-label={i.nome}
+        <button key={i.codigo} type="button" onClick={() => setIdioma(i.codigo)} title={i.nome} aria-label={i.nome}
+          aria-pressed={idioma === i.codigo}
           style={{
-            fontSize: tamanho + 3, lineHeight: 1, background: idioma === i.codigo ? `${C.gold}22` : "transparent",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            minWidth: tamanho + 12, minHeight: tamanho + 8,
+            background: idioma === i.codigo ? `${C.gold}22` : "transparent",
             border: `1px solid ${idioma === i.codigo ? C.gold : "transparent"}`, borderRadius: 7,
-            padding: "4px 6px", cursor: "pointer", opacity: idioma === i.codigo ? 1 : 0.5,
+            padding: "4px 6px", cursor: "pointer", opacity: idioma === i.codigo ? 1 : 0.82,
           }}>
-          {i.bandeira}
+          <BandeiraIdioma codigo={i.codigo} tamanho={tamanho + 5} />
         </button>
       ))}
     </div>
